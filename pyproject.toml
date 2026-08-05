@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "om3dthermal"
+version = "0.1.0"
+description = "Geometry front-end for axis-aligned 3D thermal models"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "matplotlib>=3.8",
+  "pint>=0.23",
+  "pydantic>=2.6",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+om3dthermal = "om3dthermal.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/om3dthermal"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

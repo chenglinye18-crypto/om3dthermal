@@ -1,0 +1,183 @@
+{
+  "total_boxes": 106,
+  "boxes_by_material": {
+    "Base_Die": 4,
+    "Bonding": 44,
+    "Copper_Lid": 1,
+    "DRAM_Si": 48,
+    "GPU_Si": 1,
+    "Interposer": 1,
+    "Microbump": 1,
+    "Package_Substrate": 1,
+    "TIM": 2,
+    "Underfill": 3
+  },
+  "stack_heights_m": {
+    "foundation_stack": 0.0013,
+    "gpu_stack": 0.0007999999999999999,
+    "hbm_12hi": 0.000755,
+    "short_memory_stack": 0.0006,
+    "top_stack": 0.00105
+  },
+  "stack_heights_display": {
+    "foundation_stack": "1.3 mm",
+    "gpu_stack": "800 um",
+    "hbm_12hi": "755 um",
+    "short_memory_stack": "600 um",
+    "top_stack": "1.05 mm"
+  },
+  "component_bounds_m": {
+    "foundation": {
+      "x": [
+        -0.0325,
+        0.0325
+      ],
+      "y": [
+        -0.0325,
+        0.0325
+      ],
+      "z": [
+        0.0,
+        0.0013
+      ]
+    },
+    "gpu": {
+      "x": [
+        -0.01,
+        0.01
+      ],
+      "y": [
+        -0.01,
+        0.01
+      ],
+      "z": [
+        0.0013,
+        0.0021
+      ]
+    },
+    "memory_column:filled_short_column": {
+      "x": [
+        -0.013,
+        -0.009
+      ],
+      "y": [
+        0.013,
+        0.017
+      ],
+      "z": [
+        0.0021,
+        0.002855
+      ]
+    },
+    "memory_column:hbm_east": {
+      "x": [
+        0.012,
+        0.02
+      ],
+      "y": [
+        -0.004,
+        0.004
+      ],
+      "z": [
+        0.0021,
+        0.0028549999999999977
+      ]
+    },
+    "memory_column:hbm_north": {
+      "x": [
+        -0.004,
+        0.004
+      ],
+      "y": [
+        0.011,
+        0.019
+      ],
+      "z": [
+        0.0021,
+        0.0028549999999999977
+      ]
+    },
+    "memory_column:hbm_south": {
+      "x": [
+        -0.004,
+        0.004
+      ],
+      "y": [
+        -0.019,
+        -0.011
+      ],
+      "z": [
+        0.0021,
+        0.0028549999999999977
+      ]
+    },
+    "memory_column:hbm_west": {
+      "x": [
+        -0.02,
+        -0.012
+      ],
+      "y": [
+        -0.004,
+        0.004
+      ],
+      "z": [
+        0.0021,
+        0.0028549999999999977
+      ]
+    },
+    "memory_column:matched_underfill": {
+      "x": [
+        0.009,
+        0.013
+      ],
+      "y": [
+        0.013,
+        0.017
+      ],
+      "z": [
+        0.0021,
+        0.002855
+      ]
+    },
+    "memory_zone_background": {
+      "x": [
+        -0.024,
+        0.024
+      ],
+      "y": [
+        -0.022,
+        0.022
+      ],
+      "z": [
+        0.0021,
+        0.002855
+      ]
+    },
+    "top": {
+      "x": [
+        -0.0325,
+        0.0325
+      ],
+      "y": [
+        -0.0325,
+        0.0325
+      ],
+      "z": [
+        0.002855,
+        0.003905
+      ]
+    }
+  },
+  "minimum_dimension_m": 1.0000000000000026e-05,
+  "maximum_dimension_m": 0.065,
+  "minimum_dimension_display": "10 um",
+  "maximum_dimension_display": "65 mm",
+  "scene_bounds_m": {
+    "x0": -0.0325,
+    "x1": 0.0325,
+    "y0": -0.0325,
+    "y1": 0.0325,
+    "z0": 0.0,
+    "z1": 0.003905
+  }
+}
