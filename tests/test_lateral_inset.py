@@ -181,6 +181,33 @@ def test_invalid_lateral_inset_unit_is_rejected_by_schema():
         LateralInset.model_validate({"x_minus": "3 seconds"})
 
 
+# ---------------------------------------------------------------------------
+# Hardening: the validator must not mutate the caller's mapping.
+# ---------------------------------------------------------------------------
+
+def test_lateral_inset_validator_does_not_mutate_input_mapping():
+    original = {"x": "0.5 mm", "y_minus": "0.2 mm"}
+    snapshot = {k: v for k, v in original.items()}
+    inset = LateralInset.model_validate(original)
+    # Original dict is left exactly as the caller passed it.
+    assert original == snapshot
+    # The normalised model is what we expect.
+    assert inset.x_minus == pytest.approx(0.5e-3)
+    assert inset.x_plus  == pytest.approx(0.5e-3)
+    assert inset.y_minus == pytest.approx(0.2e-3)
+    assert inset.y_plus  == 0.0
+    # The returned model object does not alias the caller's mapping.
+    assert inset.model_dump() != original
+
+
+def test_lateral_inset_validator_does_not_mutate_explicit_input():
+    original = {"x_minus": "1 mm", "x_plus": "2 mm",
+                "y_minus": "3 mm", "y_plus": "4 mm"}
+    snapshot = {k: v for k, v in original.items()}
+    LateralInset.model_validate(original)
+    assert original == snapshot
+
+
 def test_builder_rejects_inset_that_erases_central():
     # x_min + x_plus == parent width (10 mm) -> no room for central.
     cfg = _single_column_config(
@@ -440,6 +467,173 @@ def test_benchmark_total_scene_height_unchanged():
     z1_max = max(b.z1 for b in scene.boxes)
     # 300 (Laminate) + 73.265 (GPU) + 775 (memory) + 3200 (top) = 4348.265 um.
     assert z1_max - z0_min == pytest.approx(4348.265e-6)
+
+
+# ---------------------------------------------------------------------------
+# Hardening: tolerance helpers + z-level clustering do not depend on
+# ``round()`` or any fixed quantisation grid. Tests use non-integer
+# nanometre boundaries to make sure the partition and continuity logic
+# survives arbitrary z values.
+# ---------------------------------------------------------------------------
+
+def test_length_close_respects_absolute_and_relative_tol():
+    from om3dthermal.geometry.horizontal_columns import _length_close
+    # Within 1 pm => close.
+    assert _length_close(0.0, 5e-13)
+    # 1 pm apart on a 1 mm quantity => close (relative tolerance 1e-10).
+    assert _length_close(1e-3, 1e-3 + 1e-12)
+    # 1 nm apart on a 1 mm quantity => not close (1e-9 > 1e-13 relative tol).
+    assert not _length_close(1e-3, 1e-3 + 1e-9)
+    # 1 mm apart on a 1 mm quantity => not close.
+    assert not _length_close(0.0, 1e-3)
+
+
+def test_area_close_respects_absolute_and_relative_tol():
+    from om3dthermal.geometry.horizontal_columns import _area_close
+    # Tiny absolute floor protects degenerate regions.
+    assert _area_close(1e-30, 5e-31)
+    # Relative ceiling kicks in for large regions.
+    assert not _area_close(1e-6, 2e-6)
+
+
+def test_boxes_overlap_3d_uses_length_tol():
+    from om3dthermal.geometry.horizontal_columns import _boxes_overlap_3d, _LENGTH_TOL
+    a = AxisAlignedBox(name="a", material="M", x0=0, x1=1, y0=0, y1=1,
+                       z0=0, z1=1, tags={}, source_path="a")
+    b = AxisAlignedBox(name="b", material="M", x0=0.5, x1=1.5, y0=0.5, y1=1.5,
+                       z0=0.5, z1=1.5, tags={}, source_path="b")
+    assert _boxes_overlap_3d(a, b)
+    # Sliding b so the overlap is below the absolute length tolerance
+    # makes the boxes no longer overlap.
+    b_shifted = b.model_copy(update={"x0": 1.0 + 0.5 * _LENGTH_TOL,
+                                     "x1": 1.5 + 0.5 * _LENGTH_TOL})
+    assert not _boxes_overlap_3d(a, b_shifted)
+
+
+def test_cluster_by_groups_within_length_tol():
+    from om3dthermal.geometry.horizontal_columns import _cluster_by
+    # Values within 1 pm of the cluster seed stay in the cluster; values
+    # further than 1 pm start a new cluster.
+    boxes = [
+        AxisAlignedBox(name=f"b{i}", material="M",
+                       x0=0, x1=1, y0=0, y1=1, z0=z, z1=z + 1e-6,
+                       tags={}, source_path=f"b{i}")
+        for i, z in enumerate([0.0, 5e-13, 9e-13, 1.0e-3, 1.0e-3 + 5e-13])
+    ]
+    groups = _cluster_by(boxes, key=lambda b: b.z0, tol=1e-12)
+    z_per_group = [[b.z0 for b in group] for group in groups]
+    assert z_per_group[0] == pytest.approx([0.0, 5e-13, 9e-13])
+    assert z_per_group[1] == pytest.approx([1.0e-3, 1.0e-3 + 5e-13])
+    # A box 1 mm above the second cluster must NOT join either of them.
+    boxes.append(AxisAlignedBox(name="far", material="M",
+                                x0=0, x1=1, y0=0, y1=1,
+                                z0=1.0e-2, z1=1.0e-2 + 1e-6,
+                                tags={}, source_path="far"))
+    groups = _cluster_by(boxes, key=lambda b: b.z0, tol=1e-12)
+    assert len(groups) == 3
+    assert groups[0][0].z0 == pytest.approx(0.0)
+    assert groups[1][0].z0 == pytest.approx(1.0e-3)
+    assert groups[2][0].z0 == pytest.approx(1.0e-2)
+
+
+def test_validate_continuity_accepts_non_integer_nm_z_boundaries():
+    """Build a Scene with a single column whose z values are 0.3333,
+    0.7777 and 1.2345 um above the foundation/gpu, none of which are
+    integer nanometres. The continuity check must still treat them as
+    four consecutive z-levels with no gap or overlap.
+    """
+    from om3dthermal.geometry.horizontal_columns import HorizontalColumnsBuilder, _length_close
+    builder = HorizontalColumnsBuilder(_single_column_config(
+        items=[
+            {"kind": "layer", "name": "a", "material": "Silicon",
+             "thickness": "0.3333 um"},
+            {"kind": "layer", "name": "b", "material": "Silicon",
+             "thickness": "0.4444 um"},  # 0.3333 + 0.4444 = 0.7777
+            {"kind": "layer", "name": "c", "material": "Silicon",
+             "thickness": "0.4568 um"},  # 0.7777 + 0.4568 = 1.2345
+        ],
+    ))
+    scene = builder.build()
+    column_boxes = scene.filter(component="memory_column:test")
+    column_boxes.sort(key=lambda b: b.z0)
+    # The column spans 0.3333 + 0.4444 + 0.4568 = 1.2345 um above the gpu.
+    expected_height = 0.3333e-6 + 0.4444e-6 + 0.4568e-6
+    assert column_boxes[-1].z1 - column_boxes[0].z0 == pytest.approx(expected_height, abs=1e-15)
+    # The builder's z-level cluster should not have raised: every adjacent
+    # pair of layer boundaries must agree within the length tolerance.
+    for lower, upper in zip(column_boxes, column_boxes[1:]):
+        assert _length_close(lower.z1, upper.z0), \
+            f"z gap between {lower.name!r} (z1={lower.z1}) and {upper.name!r} (z0={upper.z0})"
+
+
+def test_validate_continuity_rejects_real_z_gap_above_tol():
+    """Two boxes whose z gap is well above the length tolerance must be
+    rejected by the continuity check. We bypass the builder and feed
+    a Scene directly to the validator to avoid column-height invariants
+    in the rest of the pipeline.
+    """
+    from om3dthermal.geometry.horizontal_columns import HorizontalColumnsBuilder
+    from om3dthermal.geometry.scene import Scene
+    cfg = _single_column_config(
+        items=[{"kind": "layer", "name": "a", "material": "Silicon",
+                "thickness": "0.3333 um"}],
+    )
+    builder = HorizontalColumnsBuilder(cfg)
+    # Add two well-separated boxes directly to the scene.
+    builder.scene.add(AxisAlignedBox(
+        name="memory_column:test.a", material="Silicon",
+        x0=0, x1=10e-3, y0=0, y1=10e-3, z0=0.0, z1=0.3333e-6,
+        tags={"component": "memory_column:test"}, source_path="a",
+    ))
+    builder.scene.add(AxisAlignedBox(
+        name="memory_column:test.b", material="Silicon",
+        x0=0, x1=10e-3, y0=0, y1=10e-3, z0=0.5e-6, z1=0.6e-6,
+        tags={"component": "memory_column:test"}, source_path="b",
+    ))
+    with pytest.raises(ValueError, match="z gap"):
+        builder._validate_continuity("memory_column:test", 0.0, 0.6e-6)
+
+
+def test_validate_layer_partition_groups_boxes_at_same_z_with_float_drift():
+    """Central + 4 fills at the same z slice, where the central's z range
+    has a 1 pm float-rounding drift away from the fills' z range. The
+    length tolerance must accept it as one consistent z slice; the
+    partition invariant must still hold.
+    """
+    from om3dthermal.geometry.horizontal_columns import validate_layer_partition
+    parent = Footprint.model_validate({
+        "name": "fp", "center_x": "0 mm", "center_y": "0 mm",
+        "size_x": "10 mm", "size_y": "10 mm",
+    })
+    central = AxisAlignedBox(
+        name="c", material="Silicon",
+        x0=parent.x0 + 1e-3, x1=parent.x1 - 1e-3,
+        y0=parent.y0 + 1e-3, y1=parent.y1 - 1e-3,
+        z0=0.0, z1=0.5e-6 + 5e-13, tags={}, source_path="c",
+    )
+    fills = [
+        AxisAlignedBox(name="L", material="Mold",
+                       x0=parent.x0, x1=parent.x0 + 1e-3,
+                       y0=parent.y0, y1=parent.y1, z0=0.0, z1=0.5e-6,
+                       tags={}, source_path="L"),
+        AxisAlignedBox(name="R", material="Mold",
+                       x0=parent.x1 - 1e-3, x1=parent.x1,
+                       y0=parent.y0, y1=parent.y1, z0=0.0, z1=0.5e-6,
+                       tags={}, source_path="R"),
+        AxisAlignedBox(name="B", material="Mold",
+                       x0=parent.x0 + 1e-3, x1=parent.x1 - 1e-3,
+                       y0=parent.y0, y1=parent.y0 + 1e-3, z0=0.0, z1=0.5e-6,
+                       tags={}, source_path="B"),
+        AxisAlignedBox(name="T", material="Mold",
+                       x0=parent.x0 + 1e-3, x1=parent.x1 - 1e-3,
+                       y0=parent.y1 - 1e-3, y1=parent.y1, z0=0.0, z1=0.5e-6,
+                       tags={}, source_path="T"),
+    ]
+    # The 1 pm drift on the central's z1 is within _LENGTH_TOL, so the
+    # partition should still hold; the area overlap check uses the
+    # central's effective footprint (0 .. 0.5 um + 5e-13 m), which is
+    # essentially the same as the fills' (0 .. 0.5 um).
+    validate_layer_partition(parent, central, fills)  # no exception
 
 
 # ---------------------------------------------------------------------------

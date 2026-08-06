@@ -35,6 +35,9 @@ class LateralInset(BaseModel):
     def expand_shorthand(cls, data):
         if not isinstance(data, dict):
             raise TypeError("lateral_inset must be a mapping")
+        # Copy the input so we never mutate the caller's dict (e.g. the
+        # raw YAML mapping or any downstream user-side reference).
+        data = dict(data)
         if "x" in data:
             x = data["x"]
             data.setdefault("x_minus", x)
