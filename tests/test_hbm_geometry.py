@@ -19,12 +19,28 @@ def _boxes_by_role(scene, *, component: str, role: str) -> list:
 
 def test_geometry_z_order_continuity_and_identity_rotation():
     scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
+    tolerance = 1e-12
     for component in {box.tags.get("component") for box in scene.boxes
                       if str(box.tags.get("component", "")).startswith("memory_column:")}:
-        boxes = sorted(scene.filter(component=component), key=lambda box: box.z0)
-        for lower, upper in zip(boxes, boxes[1:]):
-            assert lower.z1 == pytest.approx(upper.z0)
-        assert boxes[-1].z1 - boxes[0].z0 == pytest.approx(775e-6)
+        boxes = list(scene.filter(component=component))
+        # Total z extent must match the HBM reference height (775 um) for
+        # HBM columns; thermal_silicon matches it by construction.
+        z0_min = min(b.z0 for b in boxes)
+        z1_max = max(b.z1 for b in boxes)
+        assert z1_max - z0_min == pytest.approx(775e-6)
+        # No 3D overlap between any two boxes in the same column.
+        for i, a in enumerate(boxes):
+            for b in boxes[i + 1:]:
+                assert not (
+                    a.x1 - b.x0 > tolerance and a.x0 - b.x1 < -tolerance
+                    and a.y1 - b.y0 > tolerance and a.y0 - b.y1 < -tolerance
+                    and a.z1 - b.z0 > tolerance and a.z0 - b.z1 < -tolerance
+                ), f"{a.name} and {b.name} overlap in 3D"
+        # z contiguity: adjacent z-levels must meet exactly.
+        z_levels = sorted({round(b.z0, 9) for b in boxes})
+        for i in range(1, len(z_levels)):
+            prev_z1 = max(b.z1 for b in boxes if round(b.z0, 9) == z_levels[i - 1])
+            assert abs(prev_z1 - z_levels[i]) <= tolerance
     assert all(box.rotation == ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
                for box in scene.boxes)
 
@@ -77,11 +93,14 @@ def test_foundation_gpu_memory_top_are_derived_in_order():
     scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
     foundation_top = max(box.z1 for box in scene.filter(component="foundation"))
     gpu = scene.filter(component="gpu")
-    memory = scene.filter(component="memory_zone_background")
+    # The memory zone no longer emits a single background slab: its z range
+    # is now defined by the union of the memory_column boxes.
+    memory_boxes = [b for b in scene.boxes
+                    if str(b.tags.get("component", "")).startswith("memory_column:")]
     top = scene.filter(component="top")
     assert min(box.z0 for box in gpu) == pytest.approx(foundation_top)
-    assert memory[0].z0 == pytest.approx(max(box.z1 for box in gpu))
-    assert min(box.z0 for box in top) == pytest.approx(memory[0].z1)
+    assert min(b.z0 for b in memory_boxes) == pytest.approx(max(box.z1 for box in gpu))
+    assert min(box.z0 for box in top) == pytest.approx(max(b.z1 for b in memory_boxes))
 
 
 def test_summary_and_cli_outputs(tmp_path):
@@ -96,14 +115,20 @@ def test_summary_and_cli_outputs(tmp_path):
     dram_si          = sum(1 for b in scene.boxes if b.tags.get("role") == "dram_si")
     dram_beol        = sum(1 for b in scene.boxes if b.tags.get("role") == "dram_beol")
     hybrid_bonding   = sum(1 for b in scene.boxes if b.tags.get("role") == "hybrid_bonding")
+    lateral_fills    = sum(1 for b in scene.boxes if b.tags.get("role") == "lateral_fill")
     assert dram_si == 48
     assert dram_beol == 48
     assert hybrid_bonding == 48
+    # 4 HBM columns * 36 inset layers * 4 fill sides = 576 mold fill boxes.
+    assert lateral_fills == 4 * 36 * 4
+    assert summary["boxes_by_material"]["Mold"] == lateral_fills
     assert summary["stack_heights_m"]["hbm_12hi"] == pytest.approx(775e-6)
     assert summary["stack_heights_m"]["thermal_silicon_stack"] == pytest.approx(775e-6)
     assert summary["minimum_dimension_m"] > 0
     assert summary["maximum_dimension_m"] >= summary["minimum_dimension_m"]
-    assert {"foundation", "gpu", "memory_zone_background", "top"} <= set(summary["component_bounds_m"])
+    assert {"foundation", "gpu", "top"} <= set(summary["component_bounds_m"])
+    assert all(name.startswith("memory_column:") for name in summary["component_bounds_m"]
+               if name not in {"foundation", "gpu", "top"})
 
 
 def test_footprint_outside_package_is_rejected():

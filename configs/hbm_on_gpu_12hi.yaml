@@ -128,6 +128,12 @@ stack_templates:
     # Hybrid Bonding -> DRAM BEOL -> DRAM Si substrate, so a regular die
     # below the top die is built as HB (2 um) then BEOL (3 um) then Si (41 um).
     # Total = 40 + 5 + 50 + 11*(2+3+41) + 2 + 3 + 169 = 775 um.
+    # The 11 regular DRAM dies and the top DRAM die each sit 0.5 mm in
+    # from the 11x11 mm HBM base-die footprint on every side, leaving a
+    # 1 mm wide lateral cavity that is automatically filled with mold
+    # compound (see metadata.dram_lateral_inset). The HBM base die, base
+    # BEOL and GPU-HBM uBump keep the full 11x11 mm footprint because
+    # the base die is the outermost structure.
     items:
       - {kind: layer, name: gpu_hbm_ubump, material: GPU_HBM_uBump, thickness: 40 um, tags: {role: gpu_hbm_interface}}
       - {kind: layer, name: hbm_base_beol, material: HBM_Base_BEOL, thickness:  5 um, tags: {role: hbm_base}}
@@ -135,12 +141,12 @@ stack_templates:
       - kind: repeat
         count: 11
         layers:
-          - {kind: layer, name: hybrid_bonding, material: Hybrid_Bonding, thickness: 2  um, tags: {role: hybrid_bonding}}
-          - {kind: layer, name: dram_beol,      material: DRAM_BEOL,      thickness: 3  um, tags: {role: dram_beol}}
-          - {kind: layer, name: dram_si,        material: Silicon,        thickness: 41 um, tags: {role: dram_si}}
-      - {kind: layer, name: top_hybrid_bonding, material: Hybrid_Bonding, thickness: 2   um, tags: {role: hybrid_bonding}}
-      - {kind: layer, name: top_dram_beol,      material: DRAM_BEOL,      thickness: 3   um, tags: {role: dram_beol}}
-      - {kind: layer, name: top_dram_si,        material: Silicon,        thickness: 169 um, tags: {role: dram_si, top_die: true}}
+          - {kind: layer, name: hybrid_bonding, material: Hybrid_Bonding, thickness: 2  um, tags: {role: hybrid_bonding}, lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
+          - {kind: layer, name: dram_beol,      material: DRAM_BEOL,      thickness: 3  um, tags: {role: dram_beol},      lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
+          - {kind: layer, name: dram_si,        material: Silicon,        thickness: 41 um, tags: {role: dram_si},        lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
+      - {kind: layer, name: top_hybrid_bonding, material: Hybrid_Bonding, thickness: 2   um, tags: {role: hybrid_bonding}, lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
+      - {kind: layer, name: top_dram_beol,      material: DRAM_BEOL,      thickness: 3   um, tags: {role: dram_beol},      lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
+      - {kind: layer, name: top_dram_si,        material: Silicon,        thickness: 169 um, tags: {role: dram_si, top_die: true}, lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
   thermal_silicon_stack:
     # Central thermal silicon block per Fig. 3(a)/(b). Sits on top of GPU
     # BEOL_MXY; bottom 1 um oxide interface plus 774 um thermal silicon.
@@ -194,3 +200,12 @@ metadata:
     footprint: memory_zone
     status: DERIVED_FROM_PAPER_FIGURE
     reason: Fig. 3(b) shows TIM and lid over the HBM/thermal-silicon device region, not the full package footprint
+  dram_lateral_inset:
+    value_per_side: 0.5 mm
+    status: DERIVED_FROM_PAPER_FIGURE
+    reason: >-
+      Fig. 3(a) shows a ~1 mm total mold-filled width associated with the
+      HBM stack footprint mismatch. The paper does not report a complete
+      per-edge DRAM footprint; the 0.5 mm per-side value is a first-pass
+      benchmark assumption that must be swept before any thermal-solver
+      integration.

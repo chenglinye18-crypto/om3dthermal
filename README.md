@@ -42,7 +42,8 @@ package footprint.
 - `stack_templates`: bottom-to-top `items`. Plain entries are
   `kind: layer`; repeated entries are `kind: repeat` with a positive integer
   `count` and a list of inner layers. Expanded layer names are suffixed with
-  `_01`, `_02`, ... so they remain unique.
+  `_01`, `_02`, ... so they remain unique. A layer can carry an optional
+  `lateral_inset` (see "Per-layer lateral footprints" below).
 - `horizontal.foundation`: footprint and stack of the package foundation.
 - `horizontal.gpu`: GPU footprint and stack sitting on top of the foundation.
 - `horizontal.memory_zone`: GPU-top memory zone, with a reference stack
@@ -226,28 +227,63 @@ are not invented here.
 
 ## Known limitations
 
-- **Per-layer lateral insets are not modelled.** Every layer in the
-  `hbm_12hi` stack currently reuses the same 11 × 11 mm footprint as the
-  HBM base die. Per Fig. 3(a) the HBM DRAM dies are smaller than the
-  HBM base die, so the lateral cavity around each DRAM die should be
-  filled with mold compound; this ~1 mm gap per die is the physical
-  source of the mold-induced thermal barriers that the paper's
-  "HBM stack merging" mitigation removes. The shipped config only
-  models a single 30 × 22 mm nominal placement envelope — the per-layer
-  mold gaps are flattened into a low-priority `Mold` background slab
-  covering the whole memory zone.
-- **TODO before thermal-solver integration:** add per-layer lateral
-  insets (DRAM-die footprint vs base-die footprint) and an automatic
-  mold-fill region in `HorizontalColumnsBuilder` so the 30 × 22 mm
-  memory zone is a real tiling instead of a nominal envelope.
+- The lateral inset value `0.5 mm per side` for DRAM dies is
+  `DERIVED_FROM_PAPER_FIGURE` (see `metadata.dram_lateral_inset` in the
+  YAML). Fig. 3(a) indicates approximately 1 mm of total mold-filled
+  width around each HBM stack, but the paper does not report a complete
+  per-edge DRAM footprint. A sensitivity sweep over the inset value is
+  required before any thermal-solver work. The current 0.5 mm value is a
+  first-pass benchmark assumption.
 
 ## Current boundaries
 
 `HorizontalColumnsBuilder` is a dedicated builder, not a general-purpose
-CAD / boolean engine. The unoccupied parts of the memory zone are represented
-by a low-priority `Mold` background slab; columns are drawn on top of it in
-the visualizations. The future `OrthogonalBladesBuilder` should emit the
+CAD / boolean engine. The future `OrthogonalBladesBuilder` should emit the
 same `AxisAlignedBox` set, but it is not implemented yet.
+
+## Per-layer lateral footprints
+
+Per Fig. 3(a), the HBM DRAM dies are slightly smaller than the HBM base
+die; the lateral cavity between the DRAM die and the base-die sidewall
+is filled with mold compound. `HorizontalColumnsBuilder` represents this
+by giving each `Layer` an optional `lateral_inset` against the parent
+column footprint:
+
+```yaml
+- kind: layer
+  name: dram_si
+  material: Silicon
+  thickness: 41 um
+  lateral_inset:
+    x: 0.5 mm   # shorthand for x_minus = x_plus = 0.5 mm
+    y: 0.5 mm
+```
+
+The explicit four-edge form `lateral_inset: {x_minus, x_plus, y_minus,
+y_plus}` is also accepted; all four edges must be `>= 0`, and a builder-side
+check rejects insets whose per-axis sum is greater than or equal to the
+parent extent (which would erase the central entity).
+
+When a layer carries a non-zero `lateral_inset`, the builder emits a
+single central entity box at the inset coordinates plus up to four
+lateral fill boxes (left / right / bottom / top strips) that share the
+layer's z range. The fill material is the column's parent footprint
+material, defaulting to `memory_zone.background_material` (currently
+`Mold`). Every fill is tagged with `role: lateral_fill`, `fill_material`,
+`parent_layer`, `parent_column` and `inset_side`; the central entity is
+tagged with `lateral_inset_applied: true` and `parent_footprint`. A
+`validate_layer_partition(...)` helper enforces: no 3D overlap between
+central and any fill, no overlap between any two fills, complete area
+coverage of the parent footprint at the layer's z range, and no fill
+extending past the parent bounds.
+
+The shipped benchmark uses `lateral_inset: {x: 0.5 mm, y: 0.5 mm}` on
+the 11 regular DRAM layers and the 3 top DRAM layers. The HBM base die,
+base BEOL and GPU-HBM uBump keep the full 11 × 11 mm footprint because
+the base die is the outermost structure. The `memory_zone_background`
+slab is no longer emitted: the four HBM parent footprints and the
+central thermal-silicon footprint together tile the 30 × 22 mm memory
+zone, and the per-layer mold fill is the only mold region in the scene.
 
 ## Build artifacts
 
