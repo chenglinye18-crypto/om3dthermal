@@ -15,6 +15,50 @@ from .units import parse_length
 Length = Annotated[float, BeforeValidator(parse_length)]
 
 
+class LateralInset(BaseModel):
+    """Per-edge lateral inset applied to a ``Layer``'s parent footprint.
+
+    The shorthand form ``{"x": v, "y": v}`` is normalised to the explicit
+    four-edge form ``{"x_minus": v, "x_plus": v, "y_minus": v, "y_plus": v}``.
+    The four values are all non-negative; their pairwise sums on each axis
+    must leave a strictly positive remainder for the central entity.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    x_minus: Length = 0.0
+    x_plus: Length = 0.0
+    y_minus: Length = 0.0
+    y_plus: Length = 0.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def expand_shorthand(cls, data):
+        if not isinstance(data, dict):
+            raise TypeError("lateral_inset must be a mapping")
+        if "x" in data:
+            x = data["x"]
+            data.setdefault("x_minus", x)
+            data.setdefault("x_plus", x)
+            del data["x"]
+        if "y" in data:
+            y = data["y"]
+            data.setdefault("y_minus", y)
+            data.setdefault("y_plus", y)
+            del data["y"]
+        return data
+
+    @field_validator("x_minus", "x_plus", "y_minus", "y_plus")
+    @classmethod
+    def non_negative(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("lateral_inset edge values must be >= 0")
+        return value
+
+    def is_zero(self) -> bool:
+        return (self.x_minus == 0 and self.x_plus == 0
+                and self.y_minus == 0 and self.y_plus == 0)
+
+
 class Layer(BaseModel):
     model_config = ConfigDict(extra="forbid")
     kind: Literal["layer"] = "layer"
@@ -22,6 +66,7 @@ class Layer(BaseModel):
     material: str
     thickness: Length
     tags: dict[str, Any] = Field(default_factory=dict)
+    lateral_inset: LateralInset | None = None
 
     @field_validator("thickness")
     @classmethod
@@ -54,6 +99,7 @@ class ExpandedLayer(BaseModel):
     thickness: float
     tags: dict[str, Any]
     source_suffix: str
+    lateral_inset: LateralInset | None = None
 
 
 class StackTemplate(BaseModel):
@@ -73,7 +119,8 @@ class StackTemplate(BaseModel):
             if isinstance(item, Layer):
                 expanded.append(ExpandedLayer(
                     name=item.name, material=item.material, thickness=item.thickness,
-                    tags=dict(item.tags), source_suffix=f"items[{item_index}]"))
+                    tags=dict(item.tags), source_suffix=f"items[{item_index}]",
+                    lateral_inset=item.lateral_inset))
             else:
                 for repeat_index in range(1, item.count + 1):
                     for layer_index, layer in enumerate(item.layers):
@@ -82,7 +129,8 @@ class StackTemplate(BaseModel):
                             thickness=layer.thickness,
                             tags={**layer.tags, "repeat_index": repeat_index},
                             source_suffix=(f"items[{item_index}].layers[{layer_index}]"
-                                           f"#repeat={repeat_index}")))
+                                           f"#repeat={repeat_index}"),
+                            lateral_inset=layer.lateral_inset))
         names = [layer.name for layer in expanded]
         if len(names) != len(set(names)):
             raise ValueError("expanded layer names are not unique")
