@@ -166,6 +166,11 @@ discretization:
     z: 100 um
   preserve_box_boundaries: true
 
+thermal_conductance:
+  rotation_policy: axis_aligned_only
+  default_interface_areal_resistance: 0 m^2*K/W
+  interfaces: []
+
 horizontal:
   foundation: {footprint: package, stack: foundation_stack}
   gpu:        {footprint: gpu,     stack: gpu_stack}
@@ -222,3 +227,10 @@ metadata:
   z_resolution:
     value: 100 um
     status: MODELING_CHOICE
+  interface_areal_resistance:
+    default: 0 m^2*K/W
+    status: MODELING_CHOICE
+    reason: >-
+      The benchmark explicitly models bonding and interface regions as
+      finite-thickness materials. No additional pairwise contact resistance
+      is applied without source data.

@@ -10,9 +10,11 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_valida
 
 from .geometry.primitives import Footprint
 from .materials import Material
-from .units import parse_length
+from .units import parse_areal_thermal_resistance, parse_length
 
 Length = Annotated[float, BeforeValidator(parse_length)]
+ArealThermalResistance = Annotated[
+    float, BeforeValidator(parse_areal_thermal_resistance)]
 
 
 class LateralInset(BaseModel):
@@ -227,6 +229,38 @@ class DiscretizationConfig(BaseModel):
         return value
 
 
+class InterfaceResistanceConfig(BaseModel):
+    """Optional per-material-pair interface areal resistance.
+
+    ``materials`` is treated as an **unordered** pair; ``[A, B]`` and
+    ``[B, A]`` are equivalent and the registry will reject duplicates.
+    Same-material pairs are accepted but the default
+    ``R'' = 0 m^2*K/W`` is the only sane choice for internal faces.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    materials: tuple[str, str]
+    areal_resistance: ArealThermalResistance
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ThermalConductanceConfig(BaseModel):
+    """Settings for the per-edge internal face conductance.
+
+    Only the ``axis_aligned_only`` rotation policy is implemented in
+    this stage. The default interface ``R''`` is applied when no
+    explicit unordered pair rule matches. Setting a non-axis-aligned
+    rotation on a ``ThermalCell`` will raise
+    :class:`UnsupportedMaterialRotationError` at conductance build
+    time.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    rotation_policy: Literal["axis_aligned_only"] = "axis_aligned_only"
+    default_interface_areal_resistance: ArealThermalResistance = 0.0
+    interfaces: list[InterfaceResistanceConfig] = Field(default_factory=list)
+
+
 class SimulationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str
@@ -236,6 +270,7 @@ class SimulationConfig(BaseModel):
     stack_templates: dict[str, StackTemplate]
     horizontal: HorizontalStructureConfig
     discretization: DiscretizationConfig | None = None
+    thermal_conductance: ThermalConductanceConfig | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")

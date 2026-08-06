@@ -16,6 +16,7 @@ python -m pip install -e ".[test]"
 python -m pytest
 python -m om3dthermal.cli build configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_iedm2025
 python -m om3dthermal.cli discretize configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_mesh
+python -m om3dthermal.cli conductance configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_conductance
 ```
 
 The `build` command writes (under the directory given by `--out`, which
@@ -404,6 +405,154 @@ module:
 - KCL / steady-state temperature solve;
 - adaptive mesh refinement.
 
+## Internal face thermal conductance
+
+The `conductance` CLI command runs the discretiser then computes the
+per-edge two-point face thermal conductance and writes a columnar
+`ConductanceTable`. The mesh is still purely geometric from
+`discretize`; `conductance` is the first place material physics
+enters the picture. **No boundary conditions, power, KCL matrix or
+temperature solve is implemented here** — only the per-edge numbers
+that a future steady-state solver would consume.
+
+### Data flow
+
+```
+YAML
+  -> AxisAlignedBox Scene
+  -> ThermalCell mesh
+  -> AdjacencyEdge
+  -> Material tensor projection
+  -> ConductanceTable
+  -> future KCL assembly
+  -> future steady-state temperature
+```
+
+### Physics
+
+For each material the local conductivity tensor is diagonal:
+
+```
+K_local = diag(kx, ky, ky)    # units W/(m*K)
+```
+
+The cell's rotation matrix `R` carries the material to world
+coordinates:
+
+```
+K_global = R K_local R^T
+```
+
+For an axis-aligned face with normal `n`, the per-cell normal
+conductivity collapses to a one-line expression
+
+```
+k_n = sum_m k_local[m] * R[n, m]^2
+```
+
+For a shared face between cells `a` and `b` with face area `A`,
+half-extents `d_a` / `d_b` along the normal, and an optional per-pair
+areal interface resistance `R''` (m²·K/W):
+
+```
+G_ab = A / ( d_a / k_na + R''_ab + d_b / k_nb )   [W/K]
+R_ab = 1 / G_ab                                  [K/W]
+```
+
+Hard invariants enforced at write time:
+
+- `G_ab > 0`, finite, symmetric under `(a, b)` swap;
+- `A > 0`, `d_a > 0`, `d_b > 0`, `k_na > 0`, `k_nb > 0`,
+  `R''_ab >= 0`;
+- materials with `k_local is None` raise
+  `MissingThermalConductivityError` naming the cell, parent box and
+  edge id.
+
+### Rotation support
+
+This stage supports **signed axis permutations only**: identity and
+0/90/180/270-degree rotations about any axis. Arbitrary-angle
+rotations are rejected with
+`UnsupportedMaterialRotationError` because the two-point face
+conductance
+
+```
+k_n = n^T K_global n
+```
+
+captures the normal flux but not the tangential coupling terms a full
+anisotropic FVM would include. Supporting general rotations requires
+a non-orthogonal / multi-point flux scheme that is explicitly out of
+scope of this stage. The shipped benchmark uses the identity
+rotation everywhere.
+
+### Interface resistance rules
+
+Per-material-pair `R''` is configured under
+`thermal_conductance.interfaces`. The pair `(A, B)` is treated as
+**unordered**; `[A, B]` and `[B, A]` are the same rule and a
+duplicate is rejected. The `default_interface_areal_resistance`
+field is the fallback when no explicit pair rule matches. The
+shipped HBM benchmark uses an empty `interfaces` list and
+`default_interface_areal_resistance: 0 m^2*K/W` because Hybrid
+Bonding, TIM, BEOL, Oxide and Mold are already modelled as
+finite-thickness material layers and an additional contact `R''`
+would double-count them.
+
+### Configuration
+
+```yaml
+thermal_conductance:
+  rotation_policy: axis_aligned_only
+  default_interface_areal_resistance: 0 m^2*K/W
+  interfaces: []   # list of { materials: [A, B], areal_resistance: <value>, metadata: ... }
+```
+
+`ArealThermalResistance` accepts strings in SI m²·K/W (e.g.
+`"0 m^2*K/W"`, `"1e-8 m^2*K/W"`, `"2 mm^2*K/W"`) or bare numbers
+(SI). Negative, NaN, infinite and non-`m²·K/W` values are rejected
+at parse time.
+
+### Output
+
+`om3dthermal.cli conductance configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_conductance`
+writes (under git-ignored `runs/`):
+
+- the three discretisation CSVs and the mesh summary (re-emitted for
+  self-containment);
+- `conductance_edges.npz` — columnar NumPy arrays, one entry per
+  edge (the canonical machine-readable form);
+- `conductance_summary.json` — counts, k_n / G / R ranges, the
+  cache entry count, default / per-pair `R''` usage and timings;
+- `conductance_edges.csv` — only when `--write-conductance-csv` is
+  passed (the benchmark is ~790 k rows; CSV is wasteful when NPZ is
+  available).
+
+### ConductanceTable columns
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `edge_id` | int64 | index in the adjacency edge list |
+| `cell_a` / `cell_b` | int64 | cell ids |
+| `axis` | int8 (0=x, 1=y, 2=z) | normal axis of the shared face |
+| `face_area_m2` | float64 | shared face area |
+| `half_distance_a_m` / `half_distance_b_m` | float64 | half-extent along the normal |
+| `k_normal_a_W_mK` / `k_normal_b_W_mK` | float64 | per-cell normal conductivity |
+| `interface_areal_resistance_m2K_W` | float64 | `R''` for the (a, b) material pair |
+| `resistance_K_W` | float64 | `R_ab` in K/W |
+| `conductance_W_K` | float64 | `G_ab` in W/K |
+| `material_interface` | bool | `material_a != material_b` |
+| `interface_rule_index` | int32 | which rule was used (`-1` for default) |
+
+### Algorithm complexity
+
+`build_conductance_table` walks the edge list once. Per-edge cost is
+`O(1)` thanks to a per-`(material, canonical_rotation, axis)` `k_n`
+cache (15 materials × 4 distinct rotation signatures × 3 axes = at
+most 45 cache slots for the benchmark) and a pre-built unordered-pair
+`R''` dict. The conductance arithmetic is done in vectorised NumPy
+over a Python loop of one iteration per edge.
+
 ## Build artifacts
 
 `runs/` is git-ignored. The `build` command above regenerates the four
@@ -411,4 +560,7 @@ output files (`regions.csv`, `geometry_summary.json`, `top_view.png`,
 `xz_section.png`, `yz_section.png`) locally on demand; they are not
 committed. The `discretize` command regenerates the four mesh files
 (`thermal_cells.csv`, `adjacency_edges.csv`, `boundary_faces.csv`,
-`mesh_summary.json`) likewise locally.
+`mesh_summary.json`) likewise locally. The `conductance` command
+re-emits the four mesh files plus `conductance_edges.npz` and
+`conductance_summary.json` (and `conductance_edges.csv` only when
+`--write-conductance-csv` is set).
