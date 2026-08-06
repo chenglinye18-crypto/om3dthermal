@@ -159,6 +159,13 @@ stack_templates:
       - {kind: layer, name: tim, material: TIM, thickness: 200  um}
       - {kind: layer, name: lid, material: Lid, thickness: 3000 um}
 
+discretization:
+  max_cell_size:
+    x: 0.5 mm
+    y: 0.5 mm
+    z: 100 um
+  preserve_box_boundaries: true
+
 horizontal:
   foundation: {footprint: package, stack: foundation_stack}
   gpu:        {footprint: gpu,     stack: gpu_stack}
@@ -209,3 +216,9 @@ metadata:
       per-edge DRAM footprint; the 0.5 mm per-side value is a first-pass
       benchmark assumption that must be swept before any thermal-solver
       integration.
+  x_y_resolution:
+    value: 0.5 mm
+    status: PAPER_REPORTED_POWER_MAP_RESOLUTION
+  z_resolution:
+    value: 100 um
+    status: MODELING_CHOICE
