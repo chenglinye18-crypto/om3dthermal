@@ -10,11 +10,21 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_valida
 
 from .geometry.primitives import Footprint
 from .materials import Material
-from .units import parse_areal_thermal_resistance, parse_length
+from .units import (
+    parse_areal_thermal_resistance,
+    parse_heat_transfer_coefficient,
+    parse_length,
+    parse_power,
+    parse_temperature,
+)
 
 Length = Annotated[float, BeforeValidator(parse_length)]
 ArealThermalResistance = Annotated[
     float, BeforeValidator(parse_areal_thermal_resistance)]
+Power = Annotated[float, BeforeValidator(parse_power)]
+HeatTransferCoefficient = Annotated[
+    float, BeforeValidator(parse_heat_transfer_coefficient)]
+Temperature = Annotated[float, BeforeValidator(parse_temperature)]
 
 
 class LateralInset(BaseModel):
@@ -261,6 +271,144 @@ class ThermalConductanceConfig(BaseModel):
     interfaces: list[InterfaceResistanceConfig] = Field(default_factory=list)
 
 
+class BoundarySelector(BaseModel):
+    """Selector for matching a ``BoundaryFace`` to a rule.
+
+    All fields are optional; a face is matched if every non-``None``
+    field agrees. ``priority`` decides which of the matching rules
+    wins (highest first); ties on the same selector fields are a
+    config error.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    component: str | None = None
+    material: str | None = None
+    layer: str | None = None
+    axis: Literal["x", "y", "z"] | None = None
+    side: Literal["minus", "plus"] | None = None
+    classification: Literal[
+        "scene_outer_boundary", "exposed_internal_boundary"] | None = None
+    tags: dict[str, Any] = Field(default_factory=dict)
+    priority: int = 0
+
+
+class BoundaryConditionConfig(BaseModel):
+    """A single boundary condition rule.
+
+    The three kinds have mutually exclusive parameter sets:
+
+    - ``adiabatic``: no ``h``, ``ambient_temperature`` or
+      ``surface_temperature`` may be set.
+    - ``convection``: requires ``heat_transfer_coefficient`` and
+      ``ambient_temperature``; no ``surface_temperature``.
+    - ``fixed_temperature``: requires ``surface_temperature``; no
+      ``h`` or ``ambient_temperature``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    kind: Literal["adiabatic", "convection", "fixed_temperature"]
+    selector: BoundarySelector
+    heat_transfer_coefficient: HeatTransferCoefficient | None = None
+    ambient_temperature: Temperature | None = None
+    surface_temperature: Temperature | None = None
+    areal_resistance: ArealThermalResistance = 0.0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def kind_specific_fields(self):
+        if self.kind == "adiabatic":
+            forbidden = {
+                "heat_transfer_coefficient": self.heat_transfer_coefficient,
+                "ambient_temperature": self.ambient_temperature,
+                "surface_temperature": self.surface_temperature,
+            }
+            offenders = [k for k, v in forbidden.items() if v is not None]
+            if offenders:
+                raise ValueError(
+                    f"adiabatic rule {self.name!r} must not set "
+                    f"{offenders}")
+        elif self.kind == "convection":
+            if self.heat_transfer_coefficient is None:
+                raise ValueError(
+                    f"convection rule {self.name!r} requires "
+                    "heat_transfer_coefficient")
+            if self.ambient_temperature is None:
+                raise ValueError(
+                    f"convection rule {self.name!r} requires "
+                    "ambient_temperature")
+            if self.surface_temperature is not None:
+                raise ValueError(
+                    f"convection rule {self.name!r} must not set "
+                    "surface_temperature")
+        elif self.kind == "fixed_temperature":
+            if self.surface_temperature is None:
+                raise ValueError(
+                    f"fixed_temperature rule {self.name!r} requires "
+                    "surface_temperature")
+            if self.heat_transfer_coefficient is not None:
+                raise ValueError(
+                    f"fixed_temperature rule {self.name!r} must not set "
+                    "heat_transfer_coefficient")
+            if self.ambient_temperature is not None:
+                raise ValueError(
+                    f"fixed_temperature rule {self.name!r} must not set "
+                    "ambient_temperature")
+        return self
+
+
+class ThermalBoundaryConditionsConfig(BaseModel):
+    """The boundary conditions block.
+
+    ``default`` must be ``adiabatic`` in this stage (the
+    anchored-component check refuses to solve a network that has no
+    non-adiabatic boundary link in any connected component).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    default: Literal["adiabatic"] = "adiabatic"
+    rules: list[BoundaryConditionConfig] = Field(default_factory=list)
+
+
+class PowerSelector(BaseModel):
+    """Selector for matching a ``ThermalCell`` to a power source.
+
+    The ``tags`` field matches when every key / value in the rule is
+    present in the cell's tags dict. ``layer`` is matched against the
+    parent box's name (which is the unique expanded layer name for
+    cells emitted from stack templates).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    component: str | None = None
+    material: str | None = None
+    layer: str | None = None
+    tags: dict[str, Any] = Field(default_factory=dict)
+
+
+class PowerSourceConfig(BaseModel):
+    """A single power source.
+
+    Only ``uniform_volume`` is supported in this stage. The total
+    power is split across the selected cells in proportion to their
+    volumes; multiple sources covering the same cell are additive.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    total_power: Power
+    selector: PowerSelector
+    distribution: Literal["uniform_volume"] = "uniform_volume"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ThermalPowerSourcesConfig(BaseModel):
+    """Container for the list of power sources."""
+
+    model_config = ConfigDict(extra="forbid")
+    sources: list[PowerSourceConfig] = Field(default_factory=list)
+
+
 class SimulationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str
@@ -271,6 +419,8 @@ class SimulationConfig(BaseModel):
     horizontal: HorizontalStructureConfig
     discretization: DiscretizationConfig | None = None
     thermal_conductance: ThermalConductanceConfig | None = None
+    thermal_boundary_conditions: ThermalBoundaryConditionsConfig | None = None
+    thermal_power_sources: ThermalPowerSourcesConfig | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")

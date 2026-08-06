@@ -17,6 +17,7 @@ python -m pytest
 python -m om3dthermal.cli build configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_iedm2025
 python -m om3dthermal.cli discretize configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_mesh
 python -m om3dthermal.cli conductance configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_conductance
+python -m om3dthermal.cli solve-steady configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_steady --method pcg
 ```
 
 The `build` command writes (under the directory given by `--out`, which
@@ -553,6 +554,170 @@ most 45 cache slots for the benchmark) and a pre-built unordered-pair
 `R''` dict. The conductance arithmetic is done in vectorised NumPy
 over a Python loop of one iteration per edge.
 
+## Matrix-free steady-state solver
+
+The `solve-steady` CLI command runs the discretiser + conductance
++ boundary links + power + matrix-free steady-state solver, all
+without ever materialising a dense or sparse matrix on the
+production path. **No boundary conditions, power mapping, KCL
+matrix, or temperature solve is implemented here** without
+explicit physics; the output is the per-cell temperature vector
+a future nonlinear steady-state solver would consume.
+
+### Data flow
+
+```
+YAML
+  -> AxisAlignedBox Scene
+  -> ThermalCell mesh
+  -> Internal Conductance
+  -> BoundaryLink / PowerVector
+  -> MatrixFreeThermalOperator
+  -> Weighted Jacobi or PCG
+  -> Steady-State Temperature
+```
+
+### Matrix-free operator
+
+The per-edge conductance table is consumed directly. For each
+internal edge ``(a, b)`` we accumulate ``G_ab * (T_a - T_b)``
+into ``(A T)_a`` and subtract it from ``(A T)_b``; for each active
+boundary link on cell ``i`` we add ``G_ib * T_i``. The
+implementation uses `numpy.bincount` / `numpy.add.at`, so a single
+``apply(T)`` is ``O(N_edges + N_boundary_links)`` with no Python
+per-edge object creation. The diagonal ``D = diag(A)`` and the
+right-hand side ``b = P + sum_b G_ib * T_ref`` are precomputed once
+when the operator is built, so an iteration is one ``apply`` plus
+trivial vector arithmetic.
+
+### Solvers
+
+Two solvers share the same matrix-free operator:
+
+- **Weighted Jacobi** with the textbook local-residual step
+
+  ```
+  T_new = T + omega * (b - A T) / D        omega in (0, 1]
+  ```
+
+  Convergence requires **both** ``||b - A T|| < rtol * ||b||`` and
+  ``max |delta T| < temperature_update_tolerance`` to be satisfied
+  in the same check window. NaN / inf and temperatures below 0 K
+  are divergence signals that abort the iteration.
+
+- **Matrix-free PCG** (default) is the standard
+  `scipy.sparse.linalg.cg` wrapped around the same
+  ``apply`` as a `LinearOperator.matvec`, with a Jacobi
+  preconditioner ``M^-1 x = x / D``. PCG is what the shipped HBM
+  benchmark uses because the convergence rate is far better than
+  Jacobi on 272 k cells.
+
+Jacobi iteration count has **no time meaning**: it is the number
+of linear-algebra refinements, not seconds of physical time. A
+transient / capacity-based extension is explicitly out of scope
+of this stage.
+
+### Boundary heat link
+
+The face temperature is unknown (it sits at the cell boundary, not
+the cell centre), so the per-link resistance includes the half-cell
+bulk:
+
+```
+R_cell_to_ambient = d_i / (k_n A) + R'' / A + 1 / (h A)   [convection]
+R_cell_to_face    = d_i / (k_n A) + R'' / A               [fixed T]
+G_i               = A / R                                  [W/K]
+```
+
+`R''` defaults to `0 m^2*K/W`; adiabatic faces contribute
+`G = 0` and are excluded from the active `BoundaryLinkTable`.
+
+### Power source mapping
+
+Only `uniform_volume` is supported. ``P_i = P_total * V_i /
+sum V_selected``; multiple sources covering the same cell are
+additive. Total mapped power must equal configured total within
+`1e-9` relative tolerance.
+
+### Anchored-component check
+
+Before the solver runs, `validate_anchored_components` runs a
+union-find over the internal edge list and flags every connected
+component that has at least one non-adiabatic boundary link.
+Components with only adiabatic faces are rejected with
+`UnanchoredThermalComponentError` because their temperature is
+not uniquely defined. The error names the offending component
+indices, cell counts, representative cell ids, and total power
+(even if the power is zero — the singularity remains).
+
+### Global energy balance
+
+After the solve, the summary reports
+
+- `Q_input = sum P_i` (must equal the configured power total);
+- `Q_boundary = sum_b G_ib * (T_i - T_ref)` (the heat leaving
+  through active links);
+- `global_power_imbalance = Q_input - Q_boundary`;
+- `relative_power_imbalance = |imbalance| / max(|Q_input|, eps)`.
+
+A converged steady state drives this to floating-point precision;
+the shipped HBM benchmark's `relative_power_imbalance` is below
+`1e-7` once PCG reaches its tolerance.
+
+### HBM benchmark (paper-parameter-aligned uniform-power baseline)
+
+`om3dthermal.cli solve-steady configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_steady --method pcg --rtol 1e-8 --max-iterations 2000`
+
+| Quantity | Value |
+|----------|-------|
+| Cells | 272,460 |
+| Internal edges | 790,964 (x: 268,374 / y: 267,030 / z: 255,560) |
+| Active boundary links | 19,540 |
+| Adiabatic boundary faces | 33,292 |
+| Total input power | **574.0 W** (414 W GPU + 4 × 40 W HBM) |
+| GPU power | 414.0 W |
+| HBM power (4 columns) | 160.0 W |
+| Lid top HTC | 30 000 W/m²·K at 293.15 K (PAPER_REPORTED) |
+| Laminate bottom HTC | 200 W/m²·K at 293.15 K (PAPER_REPORTED) |
+| Solver | PCG with Jacobi preconditioner |
+| Iteration cap | 2 000 |
+| Final relative residual | 5.41 × 10⁻⁸ |
+| Final absolute residual | 6.11 × 10⁻⁶ W |
+| Relative power imbalance | 1.07 × 10⁻⁸ |
+| Min / max / mean T | 293.40 / 409.18 / 344.12 K |
+| Min / max T in °C | 20.25 / 136.03 °C |
+| Hottest cell | id 58 553 at 409.18 K |
+| Discretisation time | ~6.5 s |
+| Boundary build time | ~16.3 s |
+| Operator build time | ~0.22 s |
+| PCG solve time | ~30 s |
+| Total wall time | ~46 s |
+
+`benchmark_label = "paper-parameter-aligned uniform-power baseline"`,
+`strict_paper_temperature_reproduction = false`. The result is
+explicitly **not** a claim that the code reproduces the paper's
+141.7 °C number: the paper does not publish the per-layer 0.5 mm
+non-uniform power map, and the GPU power is allocated to the FEOL
+layer and the HBM power to the DRAM_BEOL layer as a modelling
+choice. A sensitivity sweep over the allocation rule is required
+before that claim can be made.
+
+### Not implemented yet
+
+The matrix-free steady-state solver emits the per-cell temperature
+vector. The following are explicit non-goals of this stage and
+will live in a downstream thermal-solver module:
+
+- transient heat capacity / time stepping;
+- temperature-dependent `k(T)` and `P(T)` (would require an
+  outer Picard / Newton loop);
+- radiation;
+- arbitrary-angle non-orthogonal FVM with full off-diagonal
+  flux coupling;
+- adaptive mesh refinement;
+- inlet / outlet fluid loops for two-phase cooling;
+- multi-physics coupling (mechanical, electrical).
+
 ## Build artifacts
 
 `runs/` is git-ignored. The `build` command above regenerates the four
@@ -563,4 +728,8 @@ committed. The `discretize` command regenerates the four mesh files
 `mesh_summary.json`) likewise locally. The `conductance` command
 re-emits the four mesh files plus `conductance_edges.npz` and
 `conductance_summary.json` (and `conductance_edges.csv` only when
-`--write-conductance-csv` is set).
+`--write-conductance-csv` is set). The `solve-steady` command
+runs the matrix-free steady-state thermal solver and writes
+`temperature_cells.npz`, `temperature_cells.csv`,
+`boundary_heat_flows.csv`, `power_cells.npz`,
+`solver_history.csv` and `steady_state_summary.json`.
