@@ -15,6 +15,7 @@ Python 3.10+ is required:
 python -m pip install -e ".[test]"
 python -m pytest
 python -m om3dthermal.cli build configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_iedm2025
+python -m om3dthermal.cli discretize configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_mesh
 ```
 
 The `build` command writes (under the directory given by `--out`, which
@@ -26,6 +27,20 @@ is git-ignored by default — see "Build artifacts" below):
   bounds and extremal dimensions;
 - `top_view.png` — footprint names and mm coordinates;
 - `xz_section.png`, `yz_section.png` — z-stacked material layers in µm.
+
+The `discretize` command writes the block-structured mesh artifacts (see
+"Block-structured thermal discretisation" below):
+
+- `thermal_cells.csv` — one row per cell, with grid indices, SI coordinates,
+  material, parent-box provenance and tags;
+- `adjacency_edges.csv` — face-shared neighbour pairs with geometric
+  quantities (face area, half distances, interface coordinate, material
+  interface flag);
+- `boundary_faces.csv` — cell faces with no neighbour, classified as
+  `scene_outer_boundary` or `exposed_internal_boundary`;
+- `mesh_summary.json` — cut / cell / edge / boundary counts, volume and
+  surface-area conservation, material / component / axis breakdowns, and
+  build / adjacency timings.
 
 ## Configuration structure
 
@@ -285,9 +300,115 @@ slab is no longer emitted: the four HBM parent footprints and the
 central thermal-silicon footprint together tile the 30 × 22 mm memory
 zone, and the per-layer mold fill is the only mold region in the scene.
 
+## Block-structured thermal discretisation
+
+Once the `AxisAlignedBox` scene is built, `discretize` partitions the
+material regions into a regular, conformally meshed set of `ThermalCell`
+nodes and emits the face adjacency graph and the boundary face
+inventory. **No thermal state (temperature, power, conductance,
+resistance) is computed here** — only the geometric input a future
+KCL / steady-state solver would consume.
+
+### Data flow
+
+```
+YAML
+  -> AxisAlignedBox Scene
+  -> Global Cut Planes  (per-axis union of every box boundary
+                         + per-box uniform subdivisions <= max_cell_size)
+  -> ThermalCell        (one per voxel inside a box)
+  -> AdjacencyEdge      (face-shared neighbour pairs)
+  -> BoundaryFace       (cell faces with no neighbour)
+  -> future conductance matrix
+  -> future steady-state solver
+```
+
+### Why global cut planes
+
+Each axis keeps a single strictly-increasing array of cut positions.
+Every `AxisAlignedBox` boundary (`x0/x1/y0/y1/z0/z1`) is a cut. For each
+box interior, a uniform subdivision is added so no resulting cell
+exceeds `max_cell_size`. Cuts within `_LENGTH_TOL` are merged (so a
+real material boundary that happens to coincide with a subdivision
+plane is not duplicated). Because the cuts contain every material
+boundary, the mesh is **conformal**: a T-junction where one large face
+meets two smaller ones is automatically split into two smaller
+adjacency edges whose `face_area`s sum to the original big face.
+
+### What gets exported
+
+| File | Row = | Carries |
+|------|-------|---------|
+| `thermal_cells.csv`    | one cell        | `(ix, iy, iz)`, SI extents, `material`, `parent_box_id`/`_name`, `component`, `source_path`, `rotation`, `tags` (JSON) |
+| `adjacency_edges.csv`  | one shared face | `axis`, `interface_coordinate`, `face_area`, `half_distance_a`/`_b`, `center_distance`, `material_a`/`_b`, `is_material_interface` |
+| `boundary_faces.csv`   | one open face   | `axis`, `side`, `coordinate`, `area`, `normal`, `component`, `material`, `classification` |
+| `mesh_summary.json`    | — (single object) | counts, conservation metrics, timings, breakdowns by material / component / axis |
+
+### Configuration
+
+`SimulationConfig.discretization` is optional. When present, the
+discretiser refuses `preserve_box_boundaries: false` rather than
+silently merging real material boundaries. The shipped benchmark uses:
+
+```yaml
+discretization:
+  max_cell_size:
+    x: 0.5 mm   # PAPER_REPORTED_POWER_MAP_RESOLUTION (IEDM Fig. 3 power map grid)
+    y: 0.5 mm
+    z: 100 um   # MODELING_CHOICE
+  preserve_box_boundaries: true
+```
+
+The 0.5 mm x/y is the published IEDM power-map grid; the 100 µm z is a
+modelling choice that ensures every layer thicker than 100 µm is
+subdivided, while 0.15 µm FEOL, 1 µm oxide and 1.4 µm BEOL_MXY layers
+are kept intact as single cells along z.
+
+### Conservation guarantees
+
+The discretiser enforces two hard invariants at write time:
+
+1. **Volume conservation** — for every `AxisAlignedBox`, the sum of its
+   child `ThermalCell` volumes equals the box volume (within a
+   relative tolerance of `1e-9`); the scene total of cell volumes
+   equals the scene total of box volumes.
+2. **Surface area partition** — for every `ThermalCell`, the sum of
+   shared face areas (counted on this cell's side) plus the sum of
+   boundary face areas equals the analytic surface area
+   `2 * (sx*sy + sx*sz + sy*sz)`.
+
+A geometry overlap between two boxes is a hard
+`GeometryOverlapError` that names both boxes and the offending voxel
+— never a silent priority override.
+
+### Algorithm complexity
+
+Cell generation walks the global cut grid once per box:
+`O(sum_over_boxes(voxels_in_box))`. Adjacency and boundary face
+construction walk the integer grid once per cell: `O(N_cells)`. The
+worst case is bounded by the per-axis cut count; no `O(N²)` pairwise
+cell comparison is ever performed.
+
+### Not implemented yet
+
+The discretiser emits the geometry only. The following are explicit
+non-goals of this stage and will live in a downstream thermal-solver
+module:
+
+- material conductivity tensors in world coordinates;
+- face / cell conductance `G_ij`, normal conductance, interface
+  resistance;
+- power mapping (the paper's 0.5 mm power map is recorded in
+  `metadata` but not yet assigned to cells);
+- boundary conditions (adiabatic, HTC, fixed temperature);
+- KCL / steady-state temperature solve;
+- adaptive mesh refinement.
+
 ## Build artifacts
 
 `runs/` is git-ignored. The `build` command above regenerates the four
 output files (`regions.csv`, `geometry_summary.json`, `top_view.png`,
 `xz_section.png`, `yz_section.png`) locally on demand; they are not
-committed.
+committed. The `discretize` command regenerates the four mesh files
+(`thermal_cells.csv`, `adjacency_edges.csv`, `boundary_faces.csv`,
+`mesh_summary.json`) likewise locally.

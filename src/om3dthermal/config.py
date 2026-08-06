@@ -187,6 +187,46 @@ class HorizontalStructureConfig(BaseModel):
     top: StackPlacement
 
 
+class CellSizeConfig(BaseModel):
+    """Per-axis uniform maximum cell size. All three must be strictly
+    positive; equality is rejected so the discretisation always
+    introduces at least one subdivision plane per axis.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    x: Length
+    y: Length
+    z: Length
+
+    @field_validator("x", "y", "z")
+    @classmethod
+    def strictly_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("max_cell_size.{x,y,z} must be strictly positive")
+        return value
+
+
+class DiscretizationConfig(BaseModel):
+    """Discretisation settings. Only the boundary-preserving mode is
+    supported in this stage; setting ``preserve_box_boundaries=False``
+    raises ``NotImplementedError`` at discretisation time so the
+    behaviour is explicit rather than silent.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    max_cell_size: CellSizeConfig
+    preserve_box_boundaries: bool = True
+
+    @field_validator("preserve_box_boundaries")
+    @classmethod
+    def only_boundary_preserving_supported(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("preserve_box_boundaries = false is not "
+                             "implemented yet; this stage only supports the "
+                             "boundary-preserving mode")
+        return value
+
+
 class SimulationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str
@@ -195,6 +235,7 @@ class SimulationConfig(BaseModel):
     footprints: dict[str, Footprint]
     stack_templates: dict[str, StackTemplate]
     horizontal: HorizontalStructureConfig
+    discretization: DiscretizationConfig | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
