@@ -242,6 +242,11 @@ def solve_weighted_jacobi(
                     and last_update < max_temperature_update_tolerance):
                 converged = True
                 break
+    # Always include the final residual / update in the history so the
+    # last entry is the actual converged value (the every-check-interval
+    # samples above may otherwise miss the last few iterations).
+    history.append(last_relative)
+    update_history.append(last_update)
     elapsed = time.perf_counter() - t0
     q_input, q_out, imbalance, rel_imbalance = _global_power_balance(
         operator, boundary, T)
@@ -324,6 +329,11 @@ def solve_pcg(
     residual_history: list[float] = [initial_residual]
 
     def callback(xk):
+        # scipy.cg invokes the callback once per iteration; the
+        # ``iterations`` field on the result must therefore be the
+        # true iteration count, not the residual-sampling count.
+        # Sample the residual less often so the history stays
+        # compact for plotting.
         iteration_counter["k"] += 1
         if iteration_counter["k"] % 10 == 0:
             residual_history.append(operator.relative_residual(xk))
@@ -336,6 +346,10 @@ def solve_pcg(
     elapsed = time.perf_counter() - t0
     final_relative = operator.relative_residual(T_solution)
     final_absolute = float(np.linalg.norm(operator.residual(T_solution)))
+    # Always include the final residual in the history so the last
+    # entry is the actual converged value (not the last every-10th
+    # sample, which may sit just before a very small last update).
+    residual_history.append(final_relative)
     # scipy.cg reports ``info == 0`` only when it hits the requested
     # tolerance using its internal residual measure. We additionally
     # check the actual relative residual against the requested
