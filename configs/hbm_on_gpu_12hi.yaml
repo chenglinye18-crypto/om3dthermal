@@ -171,6 +171,82 @@ thermal_conductance:
   default_interface_areal_resistance: 0 m^2*K/W
   interfaces: []
 
+thermal_boundary_conditions:
+  default: adiabatic
+  rules:
+    - name: lid_top_convection
+      kind: convection
+      selector:
+        component: top
+        material: Lid
+        axis: z
+        side: plus
+        priority: 100
+      heat_transfer_coefficient: 30000 W/m^2/K
+      ambient_temperature: 293.15 K
+      metadata:
+        status: PAPER_REPORTED
+    - name: laminate_bottom_convection
+      kind: convection
+      selector:
+        component: foundation
+        material: Laminate
+        axis: z
+        side: minus
+        priority: 100
+      heat_transfer_coefficient: 200 W/m^2/K
+      ambient_temperature: 293.15 K
+      metadata:
+        status: PAPER_REPORTED
+
+thermal_power_sources:
+  sources:
+    - name: gpu_total
+      total_power: 414 W
+      selector:
+        component: gpu
+        material: FEOL
+      distribution: uniform_volume
+      metadata:
+        status: PAPER_REPORTED
+        note: 414 W is the IEDM-reported total; the FEOL layer is the modeling choice.
+    - name: hbm_left_top
+      total_power: 40 W
+      selector:
+        component: memory_column:hbm_left_top
+        tags:
+          role: dram_beol
+      distribution: uniform_volume
+      metadata:
+        status: PAPER_REPORTED
+    - name: hbm_left_bottom
+      total_power: 40 W
+      selector:
+        component: memory_column:hbm_left_bottom
+        tags:
+          role: dram_beol
+      distribution: uniform_volume
+      metadata:
+        status: PAPER_REPORTED
+    - name: hbm_right_top
+      total_power: 40 W
+      selector:
+        component: memory_column:hbm_right_top
+        tags:
+          role: dram_beol
+      distribution: uniform_volume
+      metadata:
+        status: PAPER_REPORTED
+    - name: hbm_right_bottom
+      total_power: 40 W
+      selector:
+        component: memory_column:hbm_right_bottom
+        tags:
+          role: dram_beol
+      distribution: uniform_volume
+      metadata:
+        status: PAPER_REPORTED
+
 horizontal:
   foundation: {footprint: package, stack: foundation_stack}
   gpu:        {footprint: gpu,     stack: gpu_stack}
@@ -234,3 +310,21 @@ metadata:
       The benchmark explicitly models bonding and interface regions as
       finite-thickness materials. No additional pairwise contact resistance
       is applied without source data.
+  steady_state_baseline:
+    label: paper-parameter-aligned uniform-power baseline
+    gpu_power_W: 414
+    hbm_total_power_W: 160
+    total_input_power_W: 574
+    lid_top_htc_W_m2K: 30000
+    laminate_bottom_htc_W_m2K: 200
+    ambient_temperature_C: 20
+    gpu_power_allocation: FEOL
+    hbm_power_allocation: dram_beol
+    allocation_status: MODELING_CHOICE
+    allocation_reason: >-
+      The paper does not publish the per-layer power map; FEOL/dram_beol
+      is the most thermally active layer in each component for the
+      uniform-power baseline. This is NOT a strict reproduction of the
+      paper's 141.7 C number; sensitivity sweeps over the allocation
+      rule are required before that claim can be made.
+    strict_paper_temperature_reproduction: false

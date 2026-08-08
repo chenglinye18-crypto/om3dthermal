@@ -75,3 +75,109 @@ def parse_areal_thermal_resistance(value: Any) -> float:
         raise ValueError(
             f"areal thermal resistance must be non-negative, got {value!r}")
     return result
+
+
+def parse_power(value: Any) -> float:
+    """Parse a power and return SI watts.
+
+    Negative, NaN and infinite values are rejected. Bare numeric
+    inputs are interpreted as SI W.
+    """
+    if isinstance(value, bool):
+        raise TypeError("boolean is not a power")
+    if isinstance(value, (int, float)):
+        result = float(value)
+    elif isinstance(value, str):
+        try:
+            quantity = ureg.Quantity(value)
+        except (pint.PintError, ValueError) as exc:
+            raise ValueError(f"invalid power {value!r}") from exc
+        try:
+            converted = quantity.to("W")
+        except pint.DimensionalityError as exc:
+            raise ValueError(
+                f"power must have units of W, got {value!r}") from exc
+        result = float(converted.magnitude)
+    else:
+        raise TypeError(
+            f"power must be a number or unit string, got "
+            f"{type(value).__name__}")
+    if math.isnan(result) or math.isinf(result):
+        raise ValueError(f"power must be finite, got {value!r}")
+    if result < 0:
+        raise ValueError(f"power must be non-negative, got {value!r}")
+    return result
+
+
+def parse_heat_transfer_coefficient(value: Any) -> float:
+    """Parse a heat transfer coefficient and return SI W/(m^2*K).
+
+    Bare numeric values are interpreted as SI W/(m²·K). The function
+    rejects zero, negative, NaN and infinite values; this stage
+    requires a strictly positive ``h``.
+    """
+    if isinstance(value, bool):
+        raise TypeError("boolean is not a heat transfer coefficient")
+    if isinstance(value, (int, float)):
+        result = float(value)
+    elif isinstance(value, str):
+        try:
+            quantity = ureg.Quantity(value)
+        except (pint.PintError, ValueError) as exc:
+            raise ValueError(
+                f"invalid heat transfer coefficient {value!r}") from exc
+        try:
+            converted = quantity.to("W / (m^2 * K)")
+        except pint.DimensionalityError as exc:
+            raise ValueError(
+                f"heat transfer coefficient must have units of W/(m^2*K), "
+                f"got {value!r}") from exc
+        result = float(converted.magnitude)
+    else:
+        raise TypeError(
+            "heat transfer coefficient must be a number or unit string, "
+            f"got {type(value).__name__}")
+    if math.isnan(result) or math.isinf(result):
+        raise ValueError(
+            f"heat transfer coefficient must be finite, got {value!r}")
+    if result <= 0:
+        raise ValueError(
+            f"heat transfer coefficient must be strictly positive, "
+            f"got {value!r}")
+    return result
+
+
+def parse_temperature(value: Any) -> float:
+    """Parse a temperature and return SI kelvin.
+
+    Accepts delta and absolute temperatures, including strings like
+    ``"20 degC"``. NaN and infinite values are rejected. The result
+    is converted to K via Pint's offset handling; the converted
+    magnitude is rejected if it falls below 0 K.
+    """
+    if isinstance(value, bool):
+        raise TypeError("boolean is not a temperature")
+    if isinstance(value, (int, float)):
+        result = float(value)
+    elif isinstance(value, str):
+        try:
+            quantity = ureg.Quantity(value)
+        except (pint.PintError, ValueError) as exc:
+            raise ValueError(f"invalid temperature {value!r}") from exc
+        try:
+            converted = quantity.to("K")
+        except pint.DimensionalityError as exc:
+            raise ValueError(
+                f"temperature must have units of K (or degC / degF), "
+                f"got {value!r}") from exc
+        result = float(converted.magnitude)
+    else:
+        raise TypeError(
+            f"temperature must be a number or unit string, got "
+            f"{type(value).__name__}")
+    if math.isnan(result) or math.isinf(result):
+        raise ValueError(f"temperature must be finite, got {value!r}")
+    if result < 0:
+        raise ValueError(
+            f"temperature must be non-negative (>= 0 K), got {result}")
+    return result

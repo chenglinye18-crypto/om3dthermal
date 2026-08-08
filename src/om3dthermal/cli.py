@@ -23,13 +23,30 @@ from .discretization.export import (
     write_mesh_summary_json,
 )
 from .geometry.horizontal_columns import HorizontalColumnsBuilder
-from .thermal import build_conductance_table
+from .thermal import (
+    build_boundary_link_table,
+    build_conductance_table,
+    build_matrix_free_operator,
+    map_power_sources,
+    solve_pcg,
+    solve_weighted_jacobi,
+    validate_anchored_components,
+)
 from .thermal.export import (
     build_conductance_summary,
     write_conductance_csv,
     write_conductance_npz,
     write_conductance_summary_json,
 )
+from .thermal.solution_export import (
+    build_solver_summary,
+    write_boundary_heat_flows_csv,
+    write_solver_history_csv,
+    write_solver_summary_json,
+    write_temperature_csv,
+    write_temperature_npz,
+)
+from .units import parse_temperature
 from .visualization import write_visualizations
 
 
@@ -178,6 +195,164 @@ def conductance(config_path: str | Path, output_dir: str | Path,
     return summary
 
 
+def solve_steady(
+    config_path: str | Path,
+    output_dir: str | Path,
+    *,
+    method: str = "pcg",
+    omega: float = 0.7,
+    max_iterations: int = 10_000,
+    rtol: float = 1e-8,
+    initial_temperature: float = 293.15,
+) -> dict:
+    """End-to-end steady-state thermal solve without ever
+    materialising a dense or sparse matrix on the production path.
+    """
+    import numpy as np
+    config = load_config(config_path)
+    if config.discretization is None:
+        raise ValueError(
+            "config has no 'discretization' block; add one before running "
+            "om3dthermal.cli solve-steady")
+    if config.thermal_conductance is None:
+        raise ValueError(
+            "config has no 'thermal_conductance' block; add one before "
+            "running om3dthermal.cli solve-steady")
+    if config.thermal_boundary_conditions is None:
+        raise ValueError(
+            "config has no 'thermal_boundary_conditions' block; add one "
+            "before running om3dthermal.cli solve-steady")
+    if config.thermal_power_sources is None:
+        raise ValueError(
+            "config has no 'thermal_power_sources' block; add one before "
+            "running om3dthermal.cli solve-steady")
+    scene = HorizontalColumnsBuilder(config).build()
+    boxes = list(scene.boxes)
+
+    # Discretise.
+    t0 = time.perf_counter()
+    grid = build_global_grid(boxes, config.discretization.max_cell_size)
+    cells = generate_cells(boxes, grid)
+    edges = build_adjacency(cells, grid)
+    boundary_faces = build_boundary_faces(cells, grid)
+    validate_volume_conservation(cells, boxes)
+    validate_cell_surface_partition(cells, edges, boundary_faces)
+    t1 = time.perf_counter()
+
+    # Conductance + boundary links + power.
+    t2 = time.perf_counter()
+    conductance_table = build_conductance_table(
+        cells=cells, adjacency_edges=edges,
+        materials=config.materials,
+        config=config.thermal_conductance,
+    )
+    boundary_table = build_boundary_link_table(
+        boundary_faces=boundary_faces, cells=cells,
+        materials=config.materials,
+        config=config.thermal_boundary_conditions,
+    )
+    power = map_power_sources(cells=cells, config=config.thermal_power_sources)
+    t3 = time.perf_counter()
+
+    # Operator + anchored check.
+    t4 = time.perf_counter()
+    operator = build_matrix_free_operator(
+        conductance=conductance_table, boundary=boundary_table,
+        power_W=power.power_W,
+    )
+    validate_anchored_components(
+        cell_count=operator.cell_count,
+        internal_cell_a=operator.internal_cell_a,
+        internal_cell_b=operator.internal_cell_b,
+        boundary=boundary_table,
+    )
+    t5 = time.perf_counter()
+
+    # Solve.
+    initial_T = np.full(operator.cell_count, initial_temperature,
+                        dtype=np.float64)
+    if method == "pcg":
+        result = solve_pcg(
+            operator, initial_T, boundary_table,
+            relative_residual_tolerance=rtol,
+            max_iterations=max_iterations,
+        )
+    elif method == "jacobi":
+        result = solve_weighted_jacobi(
+            operator, initial_T, boundary_table,
+            omega=omega,
+            relative_residual_tolerance=rtol,
+            max_iterations=max_iterations,
+        )
+    else:
+        raise ValueError(
+            f"unknown method {method!r}; expected 'pcg' or 'jacobi'")
+
+    # Compute per-source power breakdown.
+    gpu_power = 0.0
+    hbm_power = 0.0
+    for source_name, distributed in power.power_by_source.items():
+        if source_name.lower().startswith("gpu"):
+            gpu_power += distributed
+        elif source_name.lower().startswith("hbm"):
+            hbm_power += distributed
+
+    # Write outputs.
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_temperature_npz(result, cells, output_dir / "temperature_cells.npz")
+    write_temperature_csv(result, cells, power,
+                          output_dir / "temperature_cells.csv")
+    write_boundary_heat_flows_csv(
+        boundary_table, result, cells, boundary_faces,
+        output_dir / "boundary_heat_flows.csv",
+    )
+    write_solver_history_csv(result, output_dir / "solver_history.csv")
+    # Power per cell.
+    np.savez(
+        output_dir / "power_cells.npz",
+        cell_id=np.array([c.id for c in cells], dtype=np.int64),
+        power_W=power.power_W,
+    )
+    cell_by_id = {c.id: c for c in cells}
+    adiabatic_face_count = sum(
+        1 for f in boundary_faces
+        if not _face_matches_selector_for_summary(f, cell_by_id, config)
+    )
+    summary = build_solver_summary(
+        result=result,
+        cell_count=len(cells),
+        internal_edge_count=len(edges),
+        active_boundary_link_count=boundary_table.link_count,
+        adiabatic_boundary_face_count=adiabatic_face_count,
+        boundary_build_seconds=t3 - t2,
+        power_mapping_seconds=0.0,
+        operator_build_seconds=t5 - t4,
+        gpu_power_W=gpu_power,
+        hbm_power_W=hbm_power,
+    )
+    # Surface the individual stage timings for diagnostics.
+    summary["discretization_seconds"] = t1 - t0
+    summary["power_mapping_seconds"] = 0.0
+    write_solver_summary_json(summary, output_dir / "steady_state_summary.json")
+    return summary
+
+
+def _face_matches_selector_for_summary(face, cell_by_id, config):
+    """Heuristic: a face is ``adiabatic`` if no rule matches it and
+    the default is ``adiabatic``. Used for the count only.
+    """
+    from .thermal.boundary import select_boundary_rule
+    if config.thermal_boundary_conditions is None:
+        return False
+    cell = cell_by_id.get(face.cell_id)
+    if cell is None:
+        return False
+    return select_boundary_rule(
+        face, cell,
+        config.thermal_boundary_conditions.rules) is not None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="om3dthermal")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -196,6 +371,19 @@ def main(argv: list[str] | None = None) -> int:
     conductance_parser.add_argument(
         "--write-conductance-csv", action="store_true",
         help="also write a 790k-row conductance_edges.csv (off by default)")
+    solve_parser = subparsers.add_parser(
+        "solve-steady",
+        help="matrix-free steady-state thermal solve (PCG or Jacobi)")
+    solve_parser.add_argument("config", type=Path)
+    solve_parser.add_argument("--out", type=Path, required=True)
+    solve_parser.add_argument(
+        "--method", choices=["pcg", "jacobi"], default="pcg")
+    solve_parser.add_argument("--omega", type=float, default=0.7)
+    solve_parser.add_argument("--max-iterations", type=int, default=10_000)
+    solve_parser.add_argument("--rtol", type=float, default=1e-8)
+    solve_parser.add_argument(
+        "--initial-temperature", type=parse_temperature, default=293.15,
+        help="uniform starting temperature in K (default 20 degC = 293.15 K)")
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -211,6 +399,22 @@ def main(argv: list[str] | None = None) -> int:
                               write_csv=args.write_conductance_csv)
         print(f"Built {summary['conductance_edge_count']} conductance edges "
               f"({summary['edges_by_axis']}) in {args.out}")
+    elif args.command == "solve-steady":
+        summary = solve_steady(
+            args.config, args.out,
+            method=args.method, omega=args.omega,
+            max_iterations=args.max_iterations, rtol=args.rtol,
+            initial_temperature=args.initial_temperature,
+        )
+        print(
+            f"Solved {summary['cell_count']} cells with {args.method} "
+            f"in {summary['iterations']} iterations: "
+            f"T=[{summary['min_temperature_K']:.2f}, "
+            f"{summary['max_temperature_K']:.2f}] K, "
+            f"rel residual={summary['final_relative_residual']:.2e}, "
+            f"power imbalance="
+            f"{summary['relative_power_imbalance']:.2e}"
+        )
     return 0
 
 
