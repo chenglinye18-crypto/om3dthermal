@@ -1,330 +1,87 @@
-# 3D HBM-on-GPU benchmark configuration.
-# All paper parameters are sourced from:
-#   Yukai Chen et al., "Breaking Thermal Bottleneck in 3D HBM-on-GPU Integration
-#   via System-Technology Co-Optimization", IEDM 2025,
-#   DOI: 10.1109/IEDM50572.2025.11353711
-# Layer thicknesses and most material conductivities come from Fig. 3(c).
-# Lateral layout follows Fig. 3(a). Mold compound conductivity comes from
-# Section II-A. The geometry assumes the explicit tiling in Fig. 3(a)
-# (30 mm x 22 mm HBM-on-GPU effective region) rather than the text-reported
-# 32 mm x 20 mm GPU die size; see metadata.geometry_choice.
+# Paper-anchored 3D HBM-on-GPU benchmark, IEDM 2025 Fig. 3.
+# All paper citations, source locations and modelling assumptions
+# live in docs/benchmarks/hbm_on_gpu_12hi.md.
 name: hbm_on_gpu_12hi
-package_footprint: package
 
+# Material conductivities in W/(m*K). Scalar = isotropic;
+# 3-list = (kx, ky, kz) diagonal of the local conductivity tensor.
 materials:
-  Lid:
-    name: Lid
-    k_local: [400, 400, 400]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  TIM:
-    name: TIM
-    k_local: [9.71, 9.71, 9.71]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  Silicon:
-    name: Silicon
-    k_local: [140, 140, 140]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  DRAM_BEOL:
-    name: DRAM_BEOL
-    k_local: [0.85, 0.85, 0.85]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  Hybrid_Bonding:
-    name: Hybrid_Bonding
-    k_local: [4.8, 4.8, 4.8]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  HBM_Base_BEOL:
-    name: HBM_Base_BEOL
-    k_local: [1.5, 1.5, 1.5]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  GPU_HBM_uBump:
-    name: GPU_HBM_uBump
-    k_local: [0.59, 0.59, 19.28]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  Oxide:
-    name: Oxide
-    k_local: [1.5, 1.5, 1.5]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  BEOL_MXY:
-    name: BEOL_MXY
-    k_local: [1.5, 1.5, 1.5]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  FEOL:
-    name: FEOL
-    k_local: [7.9, 7.9, 7.9]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  BSPDN:
-    name: BSPDN
-    k_local: [83, 83, 71]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  Cu_Pillar_Bump:
-    name: Cu_Pillar_Bump
-    k_local: [0.54, 0.54, 13.25]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  Laminate:
-    name: Laminate
-    k_local: [13, 13, 13]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  Thermal_Silicon:
-    name: Thermal_Silicon
-    k_local: [140, 140, 140]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Fig. 3(c)"
-  Mold:
-    name: Mold
-    k_local: [3, 3, 3]
-    metadata:
-      source: "Chen et al., IEDM 2025"
-      source_location: "Section II-A"
+  Lid:                400
+  TIM:                9.71
+  Silicon:            140
+  Thermal_Silicon:    140
+  DRAM_BEOL:          0.85
+  HBM_Base_BEOL:      1.5
+  BEOL_MXY:           1.5
+  Oxide:              1.5
+  FEOL:               7.9
+  BSPDN:              [83, 83, 71]
+  Cu_Pillar_Bump:     [0.54, 0.54, 13.25]
+  GPU_HBM_uBump:      [0.59, 0.59, 19.28]
+  Hybrid_Bonding:     4.8
+  Laminate:           13
+  Mold:               3
 
-footprints:
-  package:         {name: package,         center_x:  0    mm, center_y:  0    mm, size_x: 65 mm, size_y: 65 mm}
-  gpu:             {name: gpu,             center_x:  0    mm, center_y:  0    mm, size_x: 30 mm, size_y: 22 mm}
-  memory_zone:     {name: memory_zone,     center_x:  0    mm, center_y:  0    mm, size_x: 30 mm, size_y: 22 mm}
-  thermal_silicon: {name: thermal_silicon, center_x:  0    mm, center_y:  0    mm, size_x:  8 mm, size_y: 22 mm}
-  hbm_left_top:     {name: hbm_left_top,     center_x: -9.5 mm, center_y:  5.5 mm, size_x: 11 mm, size_y: 11 mm}
-  hbm_left_bottom:  {name: hbm_left_bottom,  center_x: -9.5 mm, center_y: -5.5 mm, size_x: 11 mm, size_y: 11 mm}
-  hbm_right_top:    {name: hbm_right_top,    center_x:  9.5 mm, center_y:  5.5 mm, size_x: 11 mm, size_y: 11 mm}
-  hbm_right_bottom: {name: hbm_right_bottom, center_x:  9.5 mm, center_y: -5.5 mm, size_x: 11 mm, size_y: 11 mm}
+# 2-D footprints (centred on origin unless `centers` overrides).
+# `hbm` is parametric: the same 11x11 mm footprint is placed at each
+# (x, y) in `centers`, and every DRAM layer uses `inset`.
+geometry:
+  package:         { size: [65 mm, 65 mm] }
+  gpu:             { size: [30 mm, 22 mm] }
+  memory_zone:     { size: [30 mm, 22 mm] }
+  thermal_silicon: { size: [8 mm, 22 mm] }
+  hbm:
+    size:    [11 mm, 11 mm]
+    inset:   0.5 mm
+    centers:
+      hbm_left_top:     [-9.5 mm,  5.5 mm]
+      hbm_left_bottom:  [-9.5 mm, -5.5 mm]
+      hbm_right_top:    [ 9.5 mm,  5.5 mm]
+      hbm_right_bottom: [ 9.5 mm, -5.5 mm]
 
-stack_templates:
-  foundation_stack:
-    items:
-      - {kind: layer, name: laminate, material: Laminate, thickness: 300 um}
-  gpu_stack:
-    items:
-      - {kind: layer, name: cu_pillar_bump, material: Cu_Pillar_Bump, thickness: 70   um}
-      - {kind: layer, name: bspdn,          material: BSPDN,          thickness: 1.715 um}
-      - {kind: layer, name: feol,           material: FEOL,           thickness: 0.15  um}
-      - {kind: layer, name: beol_mxy,       material: BEOL_MXY,       thickness: 1.4   um}
-  hbm_12hi:
-    # Bottom-to-top per Fig. 3(b). Within each DRAM die the order is
-    # Hybrid Bonding -> DRAM BEOL -> DRAM Si substrate, so a regular die
-    # below the top die is built as HB (2 um) then BEOL (3 um) then Si (41 um).
-    # Total = 40 + 5 + 50 + 11*(2+3+41) + 2 + 3 + 169 = 775 um.
-    # The 11 regular DRAM dies and the top DRAM die each sit 0.5 mm in
-    # from the 11x11 mm HBM base-die footprint on every side, leaving a
-    # 1 mm wide lateral cavity that is automatically filled with mold
-    # compound (see metadata.dram_lateral_inset). The HBM base die, base
-    # BEOL and GPU-HBM uBump keep the full 11x11 mm footprint because
-    # the base die is the outermost structure.
-    items:
-      - {kind: layer, name: gpu_hbm_ubump, material: GPU_HBM_uBump, thickness: 40 um, tags: {role: gpu_hbm_interface}}
-      - {kind: layer, name: hbm_base_beol, material: HBM_Base_BEOL, thickness:  5 um, tags: {role: hbm_base}}
-      - {kind: layer, name: hbm_base_si,   material: Silicon,       thickness: 50 um, tags: {role: hbm_base}}
-      - kind: repeat
-        count: 11
-        layers:
-          - {kind: layer, name: hybrid_bonding, material: Hybrid_Bonding, thickness: 2  um, tags: {role: hybrid_bonding}, lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
-          - {kind: layer, name: dram_beol,      material: DRAM_BEOL,      thickness: 3  um, tags: {role: dram_beol},      lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
-          - {kind: layer, name: dram_si,        material: Silicon,        thickness: 41 um, tags: {role: dram_si},        lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
-      - {kind: layer, name: top_hybrid_bonding, material: Hybrid_Bonding, thickness: 2   um, tags: {role: hybrid_bonding}, lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
-      - {kind: layer, name: top_dram_beol,      material: DRAM_BEOL,      thickness: 3   um, tags: {role: dram_beol},      lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
-      - {kind: layer, name: top_dram_si,        material: Silicon,        thickness: 169 um, tags: {role: dram_si, top_die: true}, lateral_inset: {x: 0.5 mm, y: 0.5 mm}}
-  thermal_silicon_stack:
-    # Central thermal silicon block per Fig. 3(a)/(b). Sits on top of GPU
-    # BEOL_MXY; bottom 1 um oxide interface plus 774 um thermal silicon.
-    # Total = 1 + 774 = 775 um, matching the hbm_12hi reference height.
-    items:
-      - {kind: layer, name: thermal_silicon_oxide, material: Oxide,          thickness: 1   um}
-      - {kind: layer, name: thermal_silicon,       material: Thermal_Silicon, thickness: 774 um}
-  top_stack:
-    items:
-      - {kind: layer, name: tim, material: TIM, thickness: 200  um}
-      - {kind: layer, name: lid, material: Lid, thickness: 3000 um}
+# Stack templates, bottom-to-top. Each entry is [material, thickness].
+# The HBM stack is split into base, repeated DRAM block, top die.
+stacks:
+  foundation:    { layers: [[Laminate, 300 um]] }
 
-discretization:
-  max_cell_size:
-    x: 0.5 mm
-    y: 0.5 mm
-    z: 100 um
-  preserve_box_boundaries: true
+  gpu:
+    layers:
+      - [Cu_Pillar_Bump, 70 um]
+      - [BSPDN,          1.715 um]
+      - [FEOL,           0.15 um]
+      - [BEOL_MXY,       1.4 um]
 
-thermal_conductance:
-  rotation_policy: axis_aligned_only
-  default_interface_areal_resistance: 0 m^2*K/W
-  interfaces: []
+  hbm:
+    base:  { layers: [[GPU_HBM_uBump, 40 um], [HBM_Base_BEOL, 5 um], [Silicon, 50 um]] }
+    dram:
+      repeat: 11
+      layers: [[Hybrid_Bonding, 2 um], [DRAM_BEOL, 3 um], [Silicon, 41 um]]
+    top:   { layers: [[Hybrid_Bonding, 2 um], [DRAM_BEOL, 3 um], [Silicon, 169 um]] }
 
-thermal_boundary_conditions:
-  default: adiabatic
-  rules:
-    - name: lid_top_convection
-      kind: convection
-      selector:
-        component: top
-        material: Lid
-        axis: z
-        side: plus
-        priority: 100
-      heat_transfer_coefficient: 30000 W/m^2/K
-      ambient_temperature: 293.15 K
-      metadata:
-        status: PAPER_REPORTED
-    - name: laminate_bottom_convection
-      kind: convection
-      selector:
-        component: foundation
-        material: Laminate
-        axis: z
-        side: minus
-        priority: 100
-      heat_transfer_coefficient: 200 W/m^2/K
-      ambient_temperature: 293.15 K
-      metadata:
-        status: PAPER_REPORTED
+  thermal_silicon:
+    layers: [[Oxide, 1 um], [Thermal_Silicon, 774 um]]
 
-thermal_power_sources:
-  sources:
-    - name: gpu_total
-      total_power: 414 W
-      selector:
-        component: gpu
-        material: FEOL
-      distribution: uniform_volume
-      metadata:
-        status: PAPER_REPORTED
-        note: 414 W is the IEDM-reported total; the FEOL layer is the modeling choice.
-    - name: hbm_left_top
-      total_power: 40 W
-      selector:
-        component: memory_column:hbm_left_top
-        tags:
-          role: dram_beol
-      distribution: uniform_volume
-      metadata:
-        status: PAPER_REPORTED
-    - name: hbm_left_bottom
-      total_power: 40 W
-      selector:
-        component: memory_column:hbm_left_bottom
-        tags:
-          role: dram_beol
-      distribution: uniform_volume
-      metadata:
-        status: PAPER_REPORTED
-    - name: hbm_right_top
-      total_power: 40 W
-      selector:
-        component: memory_column:hbm_right_top
-        tags:
-          role: dram_beol
-      distribution: uniform_volume
-      metadata:
-        status: PAPER_REPORTED
-    - name: hbm_right_bottom
-      total_power: 40 W
-      selector:
-        component: memory_column:hbm_right_bottom
-        tags:
-          role: dram_beol
-      distribution: uniform_volume
-      metadata:
-        status: PAPER_REPORTED
+  top:    { layers: [[TIM, 200 um], [Lid, 3000 um]] }
 
-horizontal:
-  foundation: {footprint: package, stack: foundation_stack}
-  gpu:        {footprint: gpu,     stack: gpu_stack}
-  memory_zone:
-    footprint: memory_zone
-    reference_stack: hbm_12hi
-    background_material: Mold
-    background_priority: 0
-    columns:
-      - {name: hbm_left_top,     footprint: hbm_left_top,     stack: hbm_12hi,             priority: 10}
-      - {name: hbm_left_bottom,  footprint: hbm_left_bottom,  stack: hbm_12hi,             priority: 10}
-      - {name: hbm_right_top,    footprint: hbm_right_top,    stack: hbm_12hi,             priority: 10}
-      - {name: hbm_right_bottom, footprint: hbm_right_bottom, stack: hbm_12hi,             priority: 10}
-      - {name: thermal_silicon,  footprint: thermal_silicon,  stack: thermal_silicon_stack, priority: 10}
-  top:         {footprint: memory_zone, stack: top_stack}
+# Discretisation.
+mesh:
+  dx:     0.5 mm
+  dy:     0.5 mm
+  dz_max: 100 um
 
-metadata:
-  paper:
-    title: "Breaking Thermal Bottleneck in 3D HBM-on-GPU Integration via System-Technology Co-Optimization"
-    venue: "IEDM 2025"
-    doi: "10.1109/IEDM50572.2025.11353711"
-  geometry_choice:
-    text_reported_gpu_size: "approximately 32 mm x 20 mm"
-    figure_3_layout_size:   "30 mm x 22 mm"
-    geometry_choice:        "figure_3_layout_size"
-    reason:                 "explicit tiling dimensions in Fig. 3(a)"
-  reported_operating_conditions:
-    gpu_power_total_W: 414
-    hbm_stack_count: 4
-    hbm_power_per_stack_W: 40
-    ambient_temperature_C: 20
-    lid_side_htc_W_m2K: 30000
-    laminate_side_htc_W_m2K: 200
-    remaining_boundaries: adiabatic
-    power_map_resolution_mm: 0.5
-    power_map_type: non_uniform_commercial_profile
-    status: stored_for_future_solver_not_yet_applied
-  top_footprint:
-    footprint: memory_zone
-    status: DERIVED_FROM_PAPER_FIGURE
-    reason: Fig. 3(b) shows TIM and lid over the HBM/thermal-silicon device region, not the full package footprint
-  dram_lateral_inset:
-    value_per_side: 0.5 mm
-    status: DERIVED_FROM_PAPER_FIGURE
-    reason: >-
-      Fig. 3(a) shows a ~1 mm total mold-filled width associated with the
-      HBM stack footprint mismatch. The paper does not report a complete
-      per-edge DRAM footprint; the 0.5 mm per-side value is a first-pass
-      benchmark assumption that must be swept before any thermal-solver
-      integration.
-  x_y_resolution:
-    value: 0.5 mm
-    status: PAPER_REPORTED_POWER_MAP_RESOLUTION
-  z_resolution:
-    value: 100 um
-    status: MODELING_CHOICE
-  interface_areal_resistance:
-    default: 0 m^2*K/W
-    status: MODELING_CHOICE
-    reason: >-
-      The benchmark explicitly models bonding and interface regions as
-      finite-thickness materials. No additional pairwise contact resistance
-      is applied without source data.
-  steady_state_baseline:
-    label: paper-parameter-aligned uniform-power baseline
-    gpu_power_W: 414
-    hbm_total_power_W: 160
-    total_input_power_W: 574
-    lid_top_htc_W_m2K: 30000
-    laminate_bottom_htc_W_m2K: 200
-    ambient_temperature_C: 20
-    gpu_power_allocation: FEOL
-    hbm_power_allocation: dram_beol
-    allocation_status: MODELING_CHOICE
-    allocation_reason: >-
-      The paper does not publish the per-layer power map; FEOL/dram_beol
-      is the most thermally active layer in each component for the
-      uniform-power baseline. This is NOT a strict reproduction of the
-      paper's 141.7 C number; sensitivity sweeps over the allocation
-      rule are required before that claim can be made.
-    strict_paper_temperature_reproduction: false
+# Convective boundary conditions (all other outer faces = adiabatic).
+boundary:
+  ambient:              20 degC
+  lid_top_htc:          30000 W/m^2/K
+  laminate_bottom_htc:  200 W/m^2/K
+
+# Power sources: 414 W on the GPU FEOL layer, 40 W on the
+# dram_beol layer of each of the four HBM columns.
+power:
+  gpu:      414 W
+  hbm_each: 40 W
+
+# Solver settings.
+solver:
+  method: pcg
+  rtol:   1e-6

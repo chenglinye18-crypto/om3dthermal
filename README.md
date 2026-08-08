@@ -95,6 +95,23 @@ paper, which ones follow directly from the Fig. 3 layout, and which are
 modelling choices this front-end has made because the paper does not specify
 them.
 
+### Configuration format
+
+The shipped `configs/hbm_on_gpu_12hi.yaml` is a **compact** form
+(≈87 lines) optimised for hand-editing. The top-level blocks are
+`materials`, `geometry`, `stacks`, `mesh`, `boundary`, `power`,
+`solver`. Paper citations and per-parameter modelling notes are
+recorded separately in
+[`docs/benchmarks/hbm_on_gpu_12hi.md`](docs/benchmarks/hbm_on_gpu_12hi.md)
+so the YAML itself stays small.
+
+`load_config()` auto-detects the compact form and compiles it into
+the legacy `SimulationConfig` shape before validation. Old hand-written
+legacy YAMLs (the long form with explicit `footprints`,
+`stack_templates`, `horizontal`, `thermal_boundary_conditions`,
+`thermal_power_sources` blocks) still pass through unchanged and are
+used as fixtures in `tests/`.
+
 ### Lateral layout — Fig. 3(a) (`DERIVED_FROM_PAPER_GEOMETRY`)
 
 | Region             | Centre (mm)     | Size (mm)     |
