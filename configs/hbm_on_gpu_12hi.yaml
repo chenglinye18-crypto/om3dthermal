@@ -23,16 +23,18 @@ materials:
   Mold:               3
 
 # 2-D footprints (centred on origin unless `centers` overrides).
-# `hbm` is parametric: the same 11x11 mm footprint is placed at each
-# (x, y) in `centers`, and every DRAM layer uses `inset`.
+# `hbm` is parametric: the same 11x11 mm HBM column footprint is
+# placed at each (x, y) in `centers`. The DRAM dies (the 11
+# repeats and the top die) are 10.8x10.8 mm and the 0.1 mm
+# per-side ring is automatically filled with Mold.
 geometry:
   package:         { size: [65 mm, 65 mm] }
   gpu:             { size: [30 mm, 22 mm] }
   memory_zone:     { size: [30 mm, 22 mm] }
   thermal_silicon: { size: [8 mm, 22 mm] }
   hbm:
-    size:    [11 mm, 11 mm]
-    inset:   0.5 mm
+    size:      [11 mm, 11 mm]      # HBM base footprint
+    dram_size: [10.8 mm, 10.8 mm] # DRAM die footprint
     centers:
       hbm_left_top:     [-9.5 mm,  5.5 mm]
       hbm_left_bottom:  [-9.5 mm, -5.5 mm]

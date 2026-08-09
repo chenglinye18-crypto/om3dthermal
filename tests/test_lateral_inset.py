@@ -381,7 +381,10 @@ def test_benchmark_hbm_base_layers_keep_full_11x11_footprint():
             assert box.tags.get("role") != "lateral_fill"
 
 
-def test_benchmark_dram_layers_have_10x10_central_entity_and_4_fills():
+def test_benchmark_dram_layers_have_10_8x10_8_central_entity_and_4_fills():
+    """The locked benchmark uses a 10.8 x 10.8 mm DRAM die
+    (with 11 x 11 mm HBM base, 0.1 mm per-side mold ring); see
+    configs/hbm_on_gpu_12hi.yaml and docs/benchmarks/hbm_on_gpu_12hi.md."""
     scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
     for name in HBM_COLUMNS:
         central = [b for b in scene.filter(component=f"memory_column:{name}")
@@ -390,8 +393,8 @@ def test_benchmark_dram_layers_have_10x10_central_entity_and_4_fills():
         # 11 regular dies * 3 layers + 3 top layers = 36 inset layers.
         assert len(central) == 36
         for box in central:
-            assert (box.x1 - box.x0) == pytest.approx(10e-3)
-            assert (box.y1 - box.y0) == pytest.approx(10e-3)
+            assert (box.x1 - box.x0) == pytest.approx(10.8e-3)
+            assert (box.y1 - box.y0) == pytest.approx(10.8e-3)
         fills = [b for b in scene.filter(component=f"memory_column:{name}")
                  if b.tags.get("role") == "lateral_fill"]
         # 36 central layers * 4 fill sides per layer.

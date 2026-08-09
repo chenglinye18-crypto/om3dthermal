@@ -40,7 +40,7 @@ for the current label.
 | GPU_HBM_uBump    | [0.59, 0.59, 19.28]  | DERIVED_FROM_PAPER_FIGURE | uBump array effective k |
 | Hybrid_Bonding   | 4.8                  | DERIVED_FROM_PAPER_FIGURE | Cu-Cu hybrid bonding dielectric effective k |
 | Laminate         | 13                   | MODELING_CHOICE         | Package substrate effective k |
-| Mold             | 3                    | MODELING_CHOICE         | EMC mold between HBM columns |
+| Mold             | 3                    | PAPER_REPORTED          | EMC mold between HBM columns; isotropic |
 
 ## Geometry
 
@@ -50,9 +50,11 @@ for the current label.
   in a 2×2 pattern inside this envelope).
 - **Thermal silicon**: 8 mm × 22 mm, on the package between the GPU
   and the HBM array.
-- **HBM footprint**: 11 mm × 11 mm per stack.
-- **DRAM lateral inset**: 0.5 mm (per-layer; each DRAM die in the 11
-  repeats + the top die shrinks by 0.5 mm on both x and y).
+- **HBM column footprint**: 11 mm × 11 mm per stack.
+- **DRAM die footprint**: 10.8 mm × 10.8 mm — every DRAM die in
+  the 11 repeats and the top die uses this size. The 0.1 mm
+  per-side ring (between the DRAM die edge and the 11 × 11 mm
+  HBM column footprint) is automatically filled with Mold.
 - **HBM column centres**:
   - `hbm_left_top`:     (-9.5 mm,  +5.5 mm)
   - `hbm_left_bottom`:  (-9.5 mm,  -5.5 mm)

@@ -670,13 +670,41 @@ def _build_legacy_stack_templates(stacks: dict,
     code and the legacy tests can find it.
 
     ``geometry`` is needed to source the DRAM lateral inset
-    (``geometry.hbm.inset``) which is shared by every DRAM-layer
-    entry (the 11 repeats and the top die).
+    which is shared by every DRAM-layer entry (the 11 repeats
+    and the top die). The compact user form expresses the DRAM
+    geometry in terms of the **DRAM die size**
+    (``geometry.hbm.dram_size``) and the **HBM column size**
+    (``geometry.hbm.size``); the per-side lateral inset is
+    computed as ``(base - dram) / 2`` and applied to every
+    DRAM-layer entry. The older ``geometry.hbm.inset`` form is
+    still accepted as a backwards-compat shortcut: when given,
+    it is used directly as the per-side inset on both axes.
     """
     dram_inset = None
     if geometry is not None:
         hbm_block = geometry.get("hbm", {})
-        if "inset" in hbm_block:
+        if "dram_size" in hbm_block and "size" in hbm_block:
+            # DRAM die size -> per-side lateral inset = (base - dram) / 2.
+            from .units import parse_length
+            dram_x, dram_y = (
+                float(parse_length(hbm_block["dram_size"][0])),
+                float(parse_length(hbm_block["dram_size"][1])),
+            )
+            base_x, base_y = (
+                float(parse_length(hbm_block["size"][0])),
+                float(parse_length(hbm_block["size"][1])),
+            )
+            inset_x = 0.5 * (base_x - dram_x)
+            inset_y = 0.5 * (base_y - dram_y)
+            if inset_x < 0 or inset_y < 0:
+                raise ValueError(
+                    f"geometry.hbm.dram_size {hbm_block['dram_size']!r} "
+                    f"is larger than the HBM column size "
+                    f"{hbm_block['size']!r}; the per-side lateral "
+                    f"inset would be negative")
+            dram_inset = {"x": inset_x, "y": inset_y}
+        elif "inset" in hbm_block:
+            # Backwards-compat: explicit per-side inset.
             inset = hbm_block["inset"]
             dram_inset = {"x": inset, "y": inset}
     out: dict = {}
