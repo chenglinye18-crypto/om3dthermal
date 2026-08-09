@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from .config import load_config
+from .pipeline import run_steady_pipeline
 from .discretization import (
     build_adjacency,
     build_boundary_faces,
@@ -23,6 +24,21 @@ from .discretization.export import (
     write_mesh_summary_json,
 )
 from .geometry.horizontal_columns import HorizontalColumnsBuilder
+from .sensitivity import (
+    SensitivityCase,
+    build_inset_sweep_cases,
+    build_k_sweep_cases,
+    case_already_done as sensitivity_case_already_done,
+    compute_delta_tmax_sensitivity,
+    load_partial_rows as load_sensitivity_partial_rows,
+    merge_sweep_cases,
+    parse_k_list,
+    parse_length_list,
+    run_single_sensitivity_case,
+    write_case_row_partial as write_sensitivity_case_row_partial,
+    write_sensitivity_csv,
+    write_sensitivity_json,
+)
 from .thermal import (
     build_boundary_link_table,
     build_conductance_table,
@@ -210,92 +226,19 @@ def solve_steady(
     """
     import numpy as np
     config = load_config(config_path)
-    if config.discretization is None:
-        raise ValueError(
-            "config has no 'discretization' block; add one before running "
-            "om3dthermal.cli solve-steady")
-    if config.thermal_conductance is None:
-        raise ValueError(
-            "config has no 'thermal_conductance' block; add one before "
-            "running om3dthermal.cli solve-steady")
-    if config.thermal_boundary_conditions is None:
-        raise ValueError(
-            "config has no 'thermal_boundary_conditions' block; add one "
-            "before running om3dthermal.cli solve-steady")
-    if config.thermal_power_sources is None:
-        raise ValueError(
-            "config has no 'thermal_power_sources' block; add one before "
-            "running om3dthermal.cli solve-steady")
-    scene = HorizontalColumnsBuilder(config).build()
-    boxes = list(scene.boxes)
-
-    # Discretise.
-    t0 = time.perf_counter()
-    grid = build_global_grid(boxes, config.discretization.max_cell_size)
-    cells = generate_cells(boxes, grid)
-    edges = build_adjacency(cells, grid)
-    boundary_faces = build_boundary_faces(cells, grid)
-    validate_volume_conservation(cells, boxes)
-    validate_cell_surface_partition(cells, edges, boundary_faces)
-    t1 = time.perf_counter()
-
-    # Conductance + boundary links + power.
-    t2 = time.perf_counter()
-    conductance_table = build_conductance_table(
-        cells=cells, adjacency_edges=edges,
-        materials=config.materials,
-        config=config.thermal_conductance,
+    pipeline = run_steady_pipeline(
+        config,
+        method=method,
+        omega=omega,
+        rtol=rtol,
+        max_iterations=max_iterations,
+        initial_temperature_K=initial_temperature,
     )
-    boundary_table = build_boundary_link_table(
-        boundary_faces=boundary_faces, cells=cells,
-        materials=config.materials,
-        config=config.thermal_boundary_conditions,
-    )
-    power = map_power_sources(cells=cells, config=config.thermal_power_sources)
-    t3 = time.perf_counter()
-
-    # Operator + anchored check.
-    t4 = time.perf_counter()
-    operator = build_matrix_free_operator(
-        conductance=conductance_table, boundary=boundary_table,
-        power_W=power.power_W,
-    )
-    validate_anchored_components(
-        cell_count=operator.cell_count,
-        internal_cell_a=operator.internal_cell_a,
-        internal_cell_b=operator.internal_cell_b,
-        boundary=boundary_table,
-    )
-    t5 = time.perf_counter()
-
-    # Solve.
-    initial_T = np.full(operator.cell_count, initial_temperature,
-                        dtype=np.float64)
-    if method == "pcg":
-        result = solve_pcg(
-            operator, initial_T, boundary_table,
-            relative_residual_tolerance=rtol,
-            max_iterations=max_iterations,
-        )
-    elif method == "jacobi":
-        result = solve_weighted_jacobi(
-            operator, initial_T, boundary_table,
-            omega=omega,
-            relative_residual_tolerance=rtol,
-            max_iterations=max_iterations,
-        )
-    else:
-        raise ValueError(
-            f"unknown method {method!r}; expected 'pcg' or 'jacobi'")
-
-    # Compute per-source power breakdown.
-    gpu_power = 0.0
-    hbm_power = 0.0
-    for source_name, distributed in power.power_by_source.items():
-        if source_name.lower().startswith("gpu"):
-            gpu_power += distributed
-        elif source_name.lower().startswith("hbm"):
-            hbm_power += distributed
+    result = pipeline.result
+    cells = pipeline.cells
+    power = pipeline.power
+    boundary_table = pipeline.boundary_table
+    boundary_faces = pipeline.boundary_faces
 
     # Write outputs.
     output_dir = Path(output_dir)
@@ -314,25 +257,20 @@ def solve_steady(
         cell_id=np.array([c.id for c in cells], dtype=np.int64),
         power_W=power.power_W,
     )
-    cell_by_id = {c.id: c for c in cells}
-    adiabatic_face_count = sum(
-        1 for f in boundary_faces
-        if not _face_matches_selector_for_summary(f, cell_by_id, config)
-    )
     summary = build_solver_summary(
         result=result,
-        cell_count=len(cells),
-        internal_edge_count=len(edges),
-        active_boundary_link_count=boundary_table.link_count,
-        adiabatic_boundary_face_count=adiabatic_face_count,
-        boundary_build_seconds=t3 - t2,
+        cell_count=pipeline.cell_count,
+        internal_edge_count=pipeline.internal_edge_count,
+        active_boundary_link_count=pipeline.active_boundary_link_count,
+        adiabatic_boundary_face_count=pipeline.adiabatic_face_count,
+        boundary_build_seconds=pipeline.conductance_seconds,
         power_mapping_seconds=0.0,
-        operator_build_seconds=t5 - t4,
-        gpu_power_W=gpu_power,
-        hbm_power_W=hbm_power,
+        operator_build_seconds=pipeline.operator_seconds,
+        gpu_power_W=pipeline.gpu_power_W,
+        hbm_power_W=pipeline.hbm_power_W,
     )
     # Surface the individual stage timings for diagnostics.
-    summary["discretization_seconds"] = t1 - t0
+    summary["discretization_seconds"] = pipeline.discretization_seconds
     summary["power_mapping_seconds"] = 0.0
     write_solver_summary_json(summary, output_dir / "steady_state_summary.json")
     return summary
@@ -351,6 +289,123 @@ def _face_matches_selector_for_summary(face, cell_by_id, config):
     return select_boundary_rule(
         face, cell,
         config.thermal_boundary_conditions.rules) is not None
+
+
+def sweep_sensitivity(
+    config_path: str | Path,
+    output_dir: str | Path,
+    *,
+    inset_sizes: str,
+    k_values: str,
+    method: str = "pcg",
+    rtol: float = 1e-6,
+    max_iterations: int = 10_000,
+    initial_temperature: float = 293.15,
+    resume: bool = False,
+) -> dict:
+    """Run a single-factor sensitivity sweep on the DRAM lateral
+    inset and the Mold compound k, and write the per-case
+    results to ``output_dir``.
+
+    The original YAML at ``config_path`` is never modified. Each
+    case overrides the two target parameters in memory (a
+    deep-copied YAML dict) and re-runs the full steady-state
+    pipeline.
+
+    The (baseline_inset, baseline_k) case is the
+    v0.1.0-steady baseline (0.5 mm, 3 W/m*K) and is shared
+    between the two single-factor sweeps. With the canonical
+    ``--inset 0mm,0.25mm,0.5mm,0.75mm,1.0mm`` and
+    ``--mold-k 0.5,1,3,10,30`` inputs the sweep solves 9
+    cases in total.
+
+    With ``resume=True`` (the CLI ``--resume`` flag), any case
+    whose ``label`` is already present in the partial CSV is
+    skipped, so a crashed run can be continued without
+    re-solving finished cases.
+    """
+    inset_list = parse_length_list(inset_sizes)
+    k_list = parse_k_list(k_values)
+    # Convention: the middle element of each input list is the
+    # *fixed* baseline that the other sweep varies around. For
+    # the canonical 9-case sweep ``--inset 0mm,0.5mm,1.0mm``
+    # and ``--mold-k 0.5,1,3,10,30`` the middle elements are
+    # inset=0.5mm and k=3 W/m*K respectively, which is the
+    # v0.1.0-steady baseline.
+    baseline_inset = inset_list[len(inset_list) // 2]
+    baseline_k = k_list[len(k_list) // 2]
+    inset_cases = build_inset_sweep_cases(inset_list, baseline_k)
+    k_cases = build_k_sweep_cases(k_list, baseline_inset)
+    cases = merge_sweep_cases(inset_cases, k_cases)
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows_csv = output_dir / "sensitivity.csv"
+    json_path = output_dir / "sensitivity.json"
+
+    rows: list[dict] = []
+    if resume:
+        existing = load_sensitivity_partial_rows(rows_csv)
+        rows = list(existing)
+
+    for case in cases:
+        if resume and sensitivity_case_already_done(rows_csv, case.label):
+            print(f"[sweep-sensitivity] skip {case.label} (cached)")
+            continue
+        if case.direction == "inset":
+            print(
+                f"[sweep-sensitivity] running {case.label}: "
+                f"inset={case.inset_m*1e3:.3f}mm, "
+                f"k={case.mold_k_W_mK:g} W/(m*K)")
+        else:
+            print(
+                f"[sweep-sensitivity] running {case.label}: "
+                f"inset={case.inset_m*1e3:.3f}mm, "
+                f"k={case.mold_k_W_mK:g} W/(m*K)")
+        row = run_single_sensitivity_case(
+            config_path, case,
+            method=method,
+            rtol=rtol,
+            max_iterations=max_iterations,
+            initial_temperature_K=initial_temperature,
+        )
+        write_sensitivity_case_row_partial(rows_csv, row)
+        rows.append(row)
+        print(
+            f"[sweep-sensitivity]   cells={row['cell_count']:>8} "
+            f"edges={row['internal_edge_count']:>8} "
+            f"iters={row['iterations']:>5} "
+            f"Tmax={row['max_temperature_K']:>7.2f} K "
+            f"({row['max_temperature_C']:>7.2f} C) "
+            f"rel_res={row['final_relative_residual']:.2e} "
+            f"power_imb={row['relative_power_imbalance']:.2e} "
+            f"total={row['total_seconds']:.1f}s"
+        )
+
+    delta = compute_delta_tmax_sensitivity(
+        rows,
+        baseline_inset_m=baseline_inset,
+        baseline_mold_k_W_mK=baseline_k,
+    )
+    write_sensitivity_csv(rows, rows_csv)
+    write_sensitivity_json(
+        rows, delta,
+        config_path=config_path,
+        inset_sizes_m=inset_list,
+        k_values_W_mK=k_list,
+        baseline_inset_m=baseline_inset,
+        baseline_mold_k_W_mK=baseline_k,
+        rtol=rtol,
+        initial_temperature_K=initial_temperature,
+        method=method,
+        path=json_path,
+    )
+    return {
+        "case_count": len(rows),
+        "rows_path": str(rows_csv),
+        "json_path": str(json_path),
+        "delta_Tmax": delta,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -384,6 +439,34 @@ def main(argv: list[str] | None = None) -> int:
     solve_parser.add_argument(
         "--initial-temperature", type=parse_temperature, default=293.15,
         help="uniform starting temperature in K (default 20 degC = 293.15 K)")
+    sensitivity_parser = subparsers.add_parser(
+        "sweep-sensitivity",
+        help=("single-factor sensitivity sweep on DRAM lateral inset "
+              "and Mold compound k (both at the v0.1.0-steady "
+              "baseline)"))
+    sensitivity_parser.add_argument("config", type=Path)
+    sensitivity_parser.add_argument("--out", type=Path, required=True)
+    sensitivity_parser.add_argument(
+        "--inset", required=True,
+        help=("comma-separated lateral inset values, e.g. "
+              "'0mm,0.25mm,0.5mm,0.75mm,1.0mm' (first value is the "
+              "shared baseline; list must be non-decreasing)"))
+    sensitivity_parser.add_argument(
+        "--mold-k", dest="mold_k", required=True,
+        help=("comma-separated Mold k values in W/(m*K), e.g. "
+              "'0.5,1,3,10,30' (first value is the shared "
+              "baseline; list must be non-decreasing)"))
+    sensitivity_parser.add_argument(
+        "--method", choices=["pcg", "jacobi"], default="pcg")
+    sensitivity_parser.add_argument("--rtol", type=float, default=1e-6)
+    sensitivity_parser.add_argument("--max-iterations", type=int,
+                                    default=10_000)
+    sensitivity_parser.add_argument(
+        "--initial-temperature", type=parse_temperature, default=293.15)
+    sensitivity_parser.add_argument(
+        "--resume", action="store_true",
+        help=("skip cases whose label is already present in the "
+              "partial sensitivity.csv (continue after a crash)"))
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -415,6 +498,27 @@ def main(argv: list[str] | None = None) -> int:
             f"power imbalance="
             f"{summary['relative_power_imbalance']:.2e}"
         )
+    elif args.command == "sweep-sensitivity":
+        result = sweep_sensitivity(
+            args.config, args.out,
+            inset_sizes=args.inset, k_values=args.mold_k,
+            method=args.method, rtol=args.rtol,
+            max_iterations=args.max_iterations,
+            initial_temperature=args.initial_temperature,
+            resume=args.resume,
+        )
+        delta = result["delta_Tmax"]
+        print(
+            f"[sweep-sensitivity] wrote {result['case_count']} cases to "
+            f"{result['rows_path']} and {result['json_path']}"
+        )
+        for key, entry in delta.items():
+            print(
+                f"[sweep-sensitivity] ΔTmax {key}: "
+                f"{entry['coarse_max_temperature_K']:.4f} -> "
+                f"{entry['fine_max_temperature_K']:.4f} K "
+                f"(delta = {entry['delta_Tmax_K']:+.4f} K)"
+            )
     return 0
 
 
