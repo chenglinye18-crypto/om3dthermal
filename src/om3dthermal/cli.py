@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from .config import load_config
+from .case_runner import run_steady_pipeline
 from .discretization import (
     build_adjacency,
     build_boundary_faces,
@@ -23,6 +24,18 @@ from .discretization.export import (
     write_mesh_summary_json,
 )
 from .geometry.horizontal_columns import HorizontalColumnsBuilder
+from .mesh_convergence import (
+    CaseSpec,
+    build_sweep_cases,
+    case_already_done,
+    compute_delta_tmax,
+    load_partial_rows,
+    parse_mesh_sizes,
+    run_single_case,
+    write_case_row_partial,
+    write_mesh_convergence_csv,
+    write_mesh_convergence_json,
+)
 from .thermal import (
     build_boundary_link_table,
     build_conductance_table,
@@ -210,92 +223,20 @@ def solve_steady(
     """
     import numpy as np
     config = load_config(config_path)
-    if config.discretization is None:
-        raise ValueError(
-            "config has no 'discretization' block; add one before running "
-            "om3dthermal.cli solve-steady")
-    if config.thermal_conductance is None:
-        raise ValueError(
-            "config has no 'thermal_conductance' block; add one before "
-            "running om3dthermal.cli solve-steady")
-    if config.thermal_boundary_conditions is None:
-        raise ValueError(
-            "config has no 'thermal_boundary_conditions' block; add one "
-            "before running om3dthermal.cli solve-steady")
-    if config.thermal_power_sources is None:
-        raise ValueError(
-            "config has no 'thermal_power_sources' block; add one before "
-            "running om3dthermal.cli solve-steady")
-    scene = HorizontalColumnsBuilder(config).build()
-    boxes = list(scene.boxes)
-
-    # Discretise.
-    t0 = time.perf_counter()
-    grid = build_global_grid(boxes, config.discretization.max_cell_size)
-    cells = generate_cells(boxes, grid)
-    edges = build_adjacency(cells, grid)
-    boundary_faces = build_boundary_faces(cells, grid)
-    validate_volume_conservation(cells, boxes)
-    validate_cell_surface_partition(cells, edges, boundary_faces)
-    t1 = time.perf_counter()
-
-    # Conductance + boundary links + power.
-    t2 = time.perf_counter()
-    conductance_table = build_conductance_table(
-        cells=cells, adjacency_edges=edges,
-        materials=config.materials,
-        config=config.thermal_conductance,
+    pipeline = run_steady_pipeline(
+        config,
+        method=method,
+        omega=omega,
+        rtol=rtol,
+        max_iterations=max_iterations,
+        initial_temperature_K=initial_temperature,
     )
-    boundary_table = build_boundary_link_table(
-        boundary_faces=boundary_faces, cells=cells,
-        materials=config.materials,
-        config=config.thermal_boundary_conditions,
-    )
-    power = map_power_sources(cells=cells, config=config.thermal_power_sources)
-    t3 = time.perf_counter()
-
-    # Operator + anchored check.
-    t4 = time.perf_counter()
-    operator = build_matrix_free_operator(
-        conductance=conductance_table, boundary=boundary_table,
-        power_W=power.power_W,
-    )
-    validate_anchored_components(
-        cell_count=operator.cell_count,
-        internal_cell_a=operator.internal_cell_a,
-        internal_cell_b=operator.internal_cell_b,
-        boundary=boundary_table,
-    )
-    t5 = time.perf_counter()
-
-    # Solve.
-    initial_T = np.full(operator.cell_count, initial_temperature,
-                        dtype=np.float64)
-    if method == "pcg":
-        result = solve_pcg(
-            operator, initial_T, boundary_table,
-            relative_residual_tolerance=rtol,
-            max_iterations=max_iterations,
-        )
-    elif method == "jacobi":
-        result = solve_weighted_jacobi(
-            operator, initial_T, boundary_table,
-            omega=omega,
-            relative_residual_tolerance=rtol,
-            max_iterations=max_iterations,
-        )
-    else:
-        raise ValueError(
-            f"unknown method {method!r}; expected 'pcg' or 'jacobi'")
-
-    # Compute per-source power breakdown.
-    gpu_power = 0.0
-    hbm_power = 0.0
-    for source_name, distributed in power.power_by_source.items():
-        if source_name.lower().startswith("gpu"):
-            gpu_power += distributed
-        elif source_name.lower().startswith("hbm"):
-            hbm_power += distributed
+    result = pipeline.result
+    cells = pipeline.cells
+    power = pipeline.power
+    boundary_table = pipeline.boundary_table
+    boundary_faces = pipeline.boundary_faces
+    config = pipeline.config
 
     # Write outputs.
     output_dir = Path(output_dir)
@@ -314,25 +255,20 @@ def solve_steady(
         cell_id=np.array([c.id for c in cells], dtype=np.int64),
         power_W=power.power_W,
     )
-    cell_by_id = {c.id: c for c in cells}
-    adiabatic_face_count = sum(
-        1 for f in boundary_faces
-        if not _face_matches_selector_for_summary(f, cell_by_id, config)
-    )
     summary = build_solver_summary(
         result=result,
-        cell_count=len(cells),
-        internal_edge_count=len(edges),
-        active_boundary_link_count=boundary_table.link_count,
-        adiabatic_boundary_face_count=adiabatic_face_count,
-        boundary_build_seconds=t3 - t2,
+        cell_count=pipeline.cell_count,
+        internal_edge_count=pipeline.internal_edge_count,
+        active_boundary_link_count=pipeline.active_boundary_link_count,
+        adiabatic_boundary_face_count=pipeline.adiabatic_face_count,
+        boundary_build_seconds=pipeline.conductance_seconds,
         power_mapping_seconds=0.0,
-        operator_build_seconds=t5 - t4,
-        gpu_power_W=gpu_power,
-        hbm_power_W=hbm_power,
+        operator_build_seconds=pipeline.operator_seconds,
+        gpu_power_W=pipeline.gpu_power_W,
+        hbm_power_W=pipeline.hbm_power_W,
     )
     # Surface the individual stage timings for diagnostics.
-    summary["discretization_seconds"] = t1 - t0
+    summary["discretization_seconds"] = pipeline.discretization_seconds
     summary["power_mapping_seconds"] = 0.0
     write_solver_summary_json(summary, output_dir / "steady_state_summary.json")
     return summary
@@ -351,6 +287,109 @@ def _face_matches_selector_for_summary(face, cell_by_id, config):
     return select_boundary_rule(
         face, cell,
         config.thermal_boundary_conditions.rules) is not None
+
+
+def sweep_mesh(
+    config_path: str | Path,
+    output_dir: str | Path,
+    *,
+    xy_sizes: str,
+    z_sizes: str,
+    method: str = "pcg",
+    rtol: float = 1e-6,
+    max_iterations: int = 10_000,
+    initial_temperature: float = 293.15,
+    resume: bool = False,
+) -> dict:
+    """Run a single-factor mesh-convergence sweep and write the
+    per-case results to ``output_dir``.
+
+    The original YAML at ``config_path`` is never modified. Each
+    case overrides ``discretization.max_cell_size`` in memory and
+    re-runs the full ``solve-steady`` pipeline.
+
+    With ``resume=True`` (the CLI ``--resume`` flag), any case whose
+    ``label`` is already present in the partial CSV is skipped, so a
+    crashed run can be continued without re-doing finished work.
+    """
+    config = load_config(config_path)
+    xy_list = parse_mesh_sizes(xy_sizes)
+    z_list = parse_mesh_sizes(z_sizes)
+    cases = build_sweep_cases(xy_list, z_list)
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows_csv = output_dir / "mesh_convergence.csv"
+    json_path = output_dir / "mesh_convergence.json"
+
+    rows: list[dict] = []
+    if resume:
+        # Re-hydrate any partial rows from a previous run so the
+        # summary writer sees the full set, but skip re-solving.
+        existing = load_partial_rows(rows_csv)
+        rows = list(existing)
+
+    for spec in cases:
+        if resume and case_already_done(rows_csv, spec.label):
+            # The CSV is the source of truth for --resume; reload
+            # the cached row for this label.
+            cached = next(
+                (r for r in rows if r.get("label") == spec.label), None)
+            if cached is None:
+                # Re-read the CSV in case rows are stale.
+                cached_rows = load_partial_rows(rows_csv)
+                cached = next(
+                    (r for r in cached_rows
+                     if r.get("label") == spec.label), None)
+                if cached is not None:
+                    rows.append(cached)
+            print(f"[sweep-mesh] skip {spec.label} (cached)")
+            continue
+        print(f"[sweep-mesh] running {spec.label}: "
+              f"dx={spec.dx_m*1e3:.4f}mm dy={spec.dy_m*1e3:.4f}mm "
+              f"dz={spec.dz_m*1e6:.2f}um")
+        row = run_single_case(
+            config, spec,
+            method=method,
+            rtol=rtol,
+            max_iterations=max_iterations,
+            initial_temperature_K=initial_temperature,
+        )
+        # Persist before moving on so a crash never costs more than
+        # the case that was running.
+        write_case_row_partial(rows_csv, row)
+        rows.append(row)
+        print(
+            f"[sweep-mesh]   cells={row['cell_count']:>8} "
+            f"edges={row['internal_edge_count']:>8} "
+            f"iters={row['iterations']:>5} "
+            f"Tmax={row['max_temperature_K']:>7.2f} K "
+            f"({row['max_temperature_C']:>7.2f} C) "
+            f"rel_res={row['final_relative_residual']:.2e} "
+            f"power_imb={row['relative_power_imbalance']:.2e} "
+            f"total={row['total_seconds']:.1f}s"
+        )
+
+    delta = compute_delta_tmax(
+        rows, xy_sizes_m=xy_list, z_sizes_m=z_list,
+    )
+    write_mesh_convergence_csv(rows, rows_csv)
+    write_mesh_convergence_json(
+        rows, delta,
+        config_path=config_path,
+        xy_sizes_m=xy_list,
+        z_sizes_m=z_list,
+        rtol=rtol,
+        initial_temperature_K=initial_temperature,
+        method=method,
+        path=json_path,
+    )
+    return {
+        "case_count": len(rows),
+        "rows_path": str(rows_csv),
+        "json_path": str(json_path),
+        "delta_Tmax": delta,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -384,6 +423,30 @@ def main(argv: list[str] | None = None) -> int:
     solve_parser.add_argument(
         "--initial-temperature", type=parse_temperature, default=293.15,
         help="uniform starting temperature in K (default 20 degC = 293.15 K)")
+    sweep_parser = subparsers.add_parser(
+        "sweep-mesh",
+        help=("single-factor steady-state mesh convergence sweep "
+              "(XY at fixed Z, Z at fixed XY)"))
+    sweep_parser.add_argument("config", type=Path)
+    sweep_parser.add_argument("--out", type=Path, required=True)
+    sweep_parser.add_argument(
+        "--xy", required=True,
+        help=("comma-separated lateral mesh sizes, e.g. "
+              "'1.0mm,0.5mm,0.25mm' (must be strictly decreasing)"))
+    sweep_parser.add_argument(
+        "--z", required=True,
+        help=("comma-separated vertical mesh sizes, e.g. "
+              "'200um,100um,50um' (must be strictly decreasing)"))
+    sweep_parser.add_argument(
+        "--method", choices=["pcg", "jacobi"], default="pcg")
+    sweep_parser.add_argument("--rtol", type=float, default=1e-6)
+    sweep_parser.add_argument("--max-iterations", type=int, default=10_000)
+    sweep_parser.add_argument(
+        "--initial-temperature", type=parse_temperature, default=293.15)
+    sweep_parser.add_argument(
+        "--resume", action="store_true",
+        help=("skip cases whose label is already present in the "
+              "partial mesh_convergence.csv (continue after a crash)"))
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -415,6 +478,27 @@ def main(argv: list[str] | None = None) -> int:
             f"power imbalance="
             f"{summary['relative_power_imbalance']:.2e}"
         )
+    elif args.command == "sweep-mesh":
+        result = sweep_mesh(
+            args.config, args.out,
+            xy_sizes=args.xy, z_sizes=args.z,
+            method=args.method, rtol=args.rtol,
+            max_iterations=args.max_iterations,
+            initial_temperature=args.initial_temperature,
+            resume=args.resume,
+        )
+        delta = result["delta_Tmax"]
+        print(
+            f"[sweep-mesh] wrote {result['case_count']} cases to "
+            f"{result['rows_path']} and {result['json_path']}"
+        )
+        for key, entry in delta.items():
+            print(
+                f"[sweep-mesh] ΔTmax {key}: "
+                f"{entry['coarse_max_temperature_K']:.4f} -> "
+                f"{entry['fine_max_temperature_K']:.4f} K "
+                f"(delta = {entry['delta_Tmax_K']:+.4f} K)"
+            )
     return 0
 
 

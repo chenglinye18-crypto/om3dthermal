@@ -869,9 +869,31 @@ def _top_dram_tags(material: str) -> dict | None:
 def _build_legacy_horizontal(geometry: dict, stacks: dict) -> dict:
     """Expand the ``geometry.hbm.centers`` block into the legacy
     ``horizontal.memory_zone.columns`` list.
+
+    When the user configures an HBM sub-template (``stacks.hbm`` with
+    ``base/dram/top``), the memory zone's ``reference_stack`` is the
+    legacy ``hbm_12hi`` template; each ``geometry.hbm.centers`` entry
+    becomes a column. The optional ``thermal_silicon`` block also
+    becomes a column with the renamed stack key.
+
+    When the user does **not** configure an HBM sub-template (a
+    minimal toy / unit-test config), the memory zone is given an
+    empty column list and the ``reference_stack`` is set to the
+    first available flat stack (typically ``gpu``) so the
+    ``SimulationConfig`` validator's "unknown stack reference"
+    check passes. Toy configs do not use the reference height for
+    column matching because they have no columns.
     """
     hbm_block = geometry.get("hbm", {})
     hbm_centers = hbm_block.get("centers", {})
+    has_hbm_subtemplate = any(
+        ("base" in body or "dram" in body or "top" in body)
+        and "layers" not in body
+        for body in stacks.values()
+    )
+    reference_stack = "hbm_12hi" if has_hbm_subtemplate else (
+        next(iter(stacks.keys()), "gpu")
+    )
     columns = []
     for col_name in hbm_centers:
         columns.append({
@@ -887,18 +909,42 @@ def _build_legacy_horizontal(geometry: dict, stacks: dict) -> dict:
             "stack": "thermal_silicon_stack",
             "priority": 10,
         })
+    background_material = "Mold" if has_hbm_subtemplate else (
+        next(iter(_extract_material_names(stacks)), "Mold")
+    )
     return {
         "foundation": {"footprint": "package", "stack": "foundation"},
         "gpu": {"footprint": "gpu", "stack": "gpu"},
         "memory_zone": {
             "footprint": "memory_zone",
-            "reference_stack": "hbm_12hi",
-            "background_material": "Mold",
+            "reference_stack": reference_stack,
+            "background_material": background_material,
             "background_priority": 0,
             "columns": columns,
         },
         "top": {"footprint": "memory_zone", "stack": "top"},
     }
+
+
+def _extract_material_names(stacks: dict) -> set[str]:
+    """Walk the compact ``stacks`` block and collect every material
+    name referenced. Used as a fallback for the memory-zone
+    background material in toy configs that do not declare
+    ``Mold`` explicitly."""
+    out: set[str] = set()
+    def _walk(entry):
+        if isinstance(entry, (list, tuple)):
+            if len(entry) == 2 and isinstance(entry[0], str):
+                out.add(entry[0])
+            else:
+                for sub in entry:
+                    _walk(sub)
+        elif isinstance(entry, dict):
+            for value in entry.values():
+                _walk(value)
+    for body in stacks.values():
+        _walk(body)
+    return out
 
 
 def _build_legacy_discretization(mesh: dict) -> dict:

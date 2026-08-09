@@ -1,0 +1,103 @@
+name: toy_1box
+package_footprint: package
+materials:
+  Silicon:
+    name: Silicon
+    k_local: [140, 140, 140]
+  Mold:
+    name: Mold
+    k_local: [3, 3, 3]
+footprints:
+  package:
+    name: package
+    center_x: 0 mm
+    center_y: 0 mm
+    size_x: 10 mm
+    size_y: 10 mm
+  gpu:
+    name: gpu
+    center_x: 0 mm
+    center_y: 0 mm
+    size_x: 10 mm
+    size_y: 10 mm
+  memory_zone:
+    name: memory_zone
+    center_x: 0 mm
+    center_y: 0 mm
+    size_x: 10 mm
+    size_y: 10 mm
+stack_templates:
+  foundation:
+    items:
+      - kind: layer
+        name: silicon
+        material: Silicon
+        thickness: 5 mm
+  gpu:
+    items:
+      - kind: layer
+        name: silicon
+        material: Silicon
+        thickness: 5 mm
+  top:
+    items:
+      - kind: layer
+        name: silicon
+        material: Silicon
+        thickness: 1 mm
+horizontal:
+  foundation:
+    footprint: package
+    stack: foundation
+  gpu:
+    footprint: gpu
+    stack: gpu
+  memory_zone:
+    footprint: memory_zone
+    reference_stack: gpu
+    background_material: Silicon
+    background_priority: 0
+    columns: []
+  top:
+    footprint: memory_zone
+    stack: top
+discretization:
+  max_cell_size:
+    x: 5 mm
+    y: 5 mm
+    z: 5 mm
+  preserve_box_boundaries: true
+thermal_conductance:
+  rotation_policy: axis_aligned_only
+  default_interface_areal_resistance: 0 m^2*K/W
+  interfaces: []
+thermal_boundary_conditions:
+  default: adiabatic
+  rules:
+    - name: lid_top_convection
+      kind: convection
+      selector:
+        component: top
+        material: Silicon
+        axis: z
+        side: plus
+      heat_transfer_coefficient: 1000 W/m^2/K
+      ambient_temperature: 293.15 K
+    - name: laminate_bottom_convection
+      kind: convection
+      selector:
+        component: foundation
+        material: Silicon
+        axis: z
+        side: minus
+      heat_transfer_coefficient: 100 W/m^2/K
+      ambient_temperature: 293.15 K
+thermal_power_sources:
+  sources:
+    - name: gpu_total
+      total_power: 1 W
+      selector:
+        component: gpu
+        material: Silicon
+      distribution: uniform_volume
+
