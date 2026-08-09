@@ -1,11 +1,15 @@
 # om3dthermal
 
-`om3dthermal` is a geometry front-end for axis-aligned 3D thermal models.
-It reads a unit-aware YAML config, validates and expands layer stacks, and
-emits a uniform set of `AxisAlignedBox` regions that a later thermal solver
-can consume. The current version does **not** include thermal resistance /
-FEM / FVM, temperature solving, power maps, boundary conditions, meshing,
-the orthogonal MOSAIC builder, COMSOL or Icepak integration, or a GUI.
+`om3dthermal` is an axis-aligned 3D thermal modelling and steady-state solving
+tool. It reads unit-aware YAML, builds conventional and orthogonal MOSAIC
+geometry, generates a boundary-preserving block mesh, maps uniform power,
+constructs conductance and boundary operators, and solves with matrix-free
+PCG. It does not include transient solving, temperature-dependent materials,
+AMR, non-uniform power-map calibration, COMSOL/Icepak integration, or a GUI.
+
+The current six-case experiment matrix and the authoritative mapping from
+configs to results are documented in
+[`docs/benchmarks/experiment_matrix.md`](docs/benchmarks/experiment_matrix.md).
 
 ## Install and run
 
