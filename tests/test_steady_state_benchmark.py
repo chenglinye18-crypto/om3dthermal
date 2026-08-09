@@ -101,7 +101,11 @@ def benchmark_solve():
 # ---------------------------------------------------------------------------
 
 def test_cell_count_matches_discretisation(benchmark_solve):
-    assert benchmark_solve["result"].temperature_K.shape[0] == 272460
+    # v0.2.0-steady: DRAM die 10.8x10.8 mm with 0.1 mm mold ring
+    # forces the global grid to honour the 0.1 mm boundary, so
+    # the HBM column subdivides into 0.1 mm strips. Cell count
+    # grew 3.16x relative to v0.1.0-steady (272 460 -> 859 596).
+    assert benchmark_solve["result"].temperature_K.shape[0] == 859596
 
 
 def test_total_input_power_is_574_W(benchmark_solve):
@@ -178,7 +182,7 @@ def test_solver_summary_records_strict_paper_reproduction_false(benchmark_solve)
     power = benchmark_solve["power"]
     boundary = benchmark_solve["boundary"]
     summary = build_solver_summary(
-        result=result, cell_count=272460, internal_edge_count=790964,
+        result=result, cell_count=859596, internal_edge_count=2531340,
         active_boundary_link_count=boundary.link_count,
         adiabatic_boundary_face_count=0,
         boundary_build_seconds=0.0, power_mapping_seconds=0.0,

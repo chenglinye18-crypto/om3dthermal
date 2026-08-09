@@ -261,13 +261,12 @@ are not invented here.
 
 ## Known limitations
 
-- The lateral inset value `0.5 mm per side` for DRAM dies is
-  `DERIVED_FROM_PAPER_FIGURE` (see `metadata.dram_lateral_inset` in the
-  YAML). Fig. 3(a) indicates approximately 1 mm of total mold-filled
-  width around each HBM stack, but the paper does not report a complete
-  per-edge DRAM footprint. A sensitivity sweep over the inset value is
-  required before any thermal-solver work. The current 0.5 mm value is a
-  first-pass benchmark assumption.
+- The DRAM die size `10.8 x 10.8 mm` is `DERIVED_FROM_PAPER_FIGURE`
+  (see `docs/benchmarks/hbm_on_gpu_12hi.md`). Fig. 3(a) of the
+  IEDM 2025 paper indicates approximately 1 mm of total mold-filled
+  width around each HBM stack, so the locked value leaves 0.1 mm
+  per side for the mold ring. The paper does not report a complete
+  per-edge DRAM footprint.
 
 ## Current boundaries
 
@@ -716,8 +715,7 @@ explicitly **not** a claim that the code reproduces the paper's
 141.7 °C number: the paper does not publish the per-layer 0.5 mm
 non-uniform power map, and the GPU power is allocated to the FEOL
 layer and the HBM power to the DRAM_BEOL layer as a modelling
-choice. A sensitivity sweep over the allocation rule is required
-before that claim can be made.
+choice.
 
 ### Not implemented yet
 
