@@ -199,6 +199,86 @@ class HorizontalStructureConfig(BaseModel):
     top: StackPlacement
 
 
+class OrthogonalDieLayerConfig(BaseModel):
+    """One material layer through an orthogonal memory die thickness."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    material: str
+    thickness: Length
+    role: str
+
+    @field_validator("thickness")
+    @classmethod
+    def positive_thickness(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("orthogonal die layer thickness must be positive")
+        return value
+
+
+class OrthogonalMemoryDieConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    count: Annotated[int, Field(strict=True, gt=0)]
+    width: Length
+    height: Length
+    layers: list[OrthogonalDieLayerConfig]
+    power_per_die: Power
+
+    @field_validator("width", "height")
+    @classmethod
+    def positive_dimension(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("orthogonal die dimensions must be positive")
+        return value
+
+    @field_validator("layers")
+    @classmethod
+    def nonempty_layers(cls, value: list[OrthogonalDieLayerConfig]):
+        if not value:
+            raise ValueError("orthogonal memory die requires at least one layer")
+        return value
+
+    @property
+    def thickness(self) -> float:
+        return sum(layer.thickness for layer in self.layers)
+
+
+class OrthogonalAdhesiveConfig(BaseModel):
+    """Package-level bond layer between the GPU and the MOSAIC cube."""
+
+    model_config = ConfigDict(extra="forbid")
+    material: str
+    thickness: Length
+
+    @field_validator("thickness")
+    @classmethod
+    def positive_thickness(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("orthogonal HBM adhesive thickness must be positive")
+        return value
+
+
+class OrthogonalHBMStructureConfig(BaseModel):
+    """Parametric vertical-die MOSAIC cube placed above the GPU."""
+
+    model_config = ConfigDict(extra="forbid")
+    cube_footprint: str
+    cube_height: Length
+    background_material: str = "Mold"
+    foundation: StackPlacement
+    gpu: StackPlacement
+    top: StackPlacement
+    adhesive: OrthogonalAdhesiveConfig
+    memory_die: OrthogonalMemoryDieConfig
+
+    @field_validator("cube_height")
+    @classmethod
+    def positive_height(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("orthogonal HBM cube height must be positive")
+        return value
+
+
 class CellSizeConfig(BaseModel):
     """Per-axis uniform maximum cell size. All three must be strictly
     positive; equality is rejected so the discretisation always
@@ -416,7 +496,8 @@ class SimulationConfig(BaseModel):
     materials: dict[str, Material]
     footprints: dict[str, Footprint]
     stack_templates: dict[str, StackTemplate]
-    horizontal: HorizontalStructureConfig
+    horizontal: HorizontalStructureConfig | None = None
+    orthogonal_hbm: OrthogonalHBMStructureConfig | None = None
     discretization: DiscretizationConfig | None = None
     thermal_conductance: ThermalConductanceConfig | None = None
     thermal_boundary_conditions: ThermalBoundaryConditionsConfig | None = None
@@ -425,6 +506,9 @@ class SimulationConfig(BaseModel):
 
     @model_validator(mode="after")
     def references_and_bounds(self):
+        if (self.horizontal is None) == (self.orthogonal_hbm is None):
+            raise ValueError(
+                "config must specify exactly one of horizontal or orthogonal_hbm")
         for key, material in self.materials.items():
             if material.name != key:
                 raise ValueError(f"material key {key!r} must match its name")
@@ -439,16 +523,28 @@ class SimulationConfig(BaseModel):
             if (footprint.x0 < package.x0 - tolerance or footprint.x1 > package.x1 + tolerance
                     or footprint.y0 < package.y0 - tolerance or footprint.y1 > package.y1 + tolerance):
                 raise ValueError(f"footprint {name!r} exceeds package bounds")
-        used_stacks = [self.horizontal.foundation.stack, self.horizontal.gpu.stack,
-                       self.horizontal.top.stack, self.horizontal.memory_zone.reference_stack]
-        used_footprints = [self.horizontal.foundation.footprint, self.horizontal.gpu.footprint,
-                           self.horizontal.top.footprint, self.horizontal.memory_zone.footprint]
-        for column in self.horizontal.memory_zone.columns:
-            used_footprints.append(column.footprint)
-            if column.stack:
-                used_stacks.append(column.stack)
-            if column.match_height_of:
-                used_stacks.append(column.match_height_of)
+        if self.horizontal is not None:
+            used_stacks = [self.horizontal.foundation.stack, self.horizontal.gpu.stack,
+                           self.horizontal.top.stack,
+                           self.horizontal.memory_zone.reference_stack]
+            used_footprints = [self.horizontal.foundation.footprint,
+                               self.horizontal.gpu.footprint,
+                               self.horizontal.top.footprint,
+                               self.horizontal.memory_zone.footprint]
+            for column in self.horizontal.memory_zone.columns:
+                used_footprints.append(column.footprint)
+                if column.stack:
+                    used_stacks.append(column.stack)
+                if column.match_height_of:
+                    used_stacks.append(column.match_height_of)
+        else:
+            orthogonal = self.orthogonal_hbm
+            used_stacks = [orthogonal.foundation.stack, orthogonal.gpu.stack,
+                           orthogonal.top.stack]
+            used_footprints = [orthogonal.foundation.footprint,
+                               orthogonal.gpu.footprint,
+                               orthogonal.top.footprint,
+                               orthogonal.cube_footprint]
         missing_stacks = sorted(set(used_stacks) - self.stack_templates.keys())
         missing_footprints = sorted(set(used_footprints) - self.footprints.keys())
         if missing_stacks:
@@ -457,25 +553,46 @@ class SimulationConfig(BaseModel):
             raise ValueError(f"unknown footprint reference(s): {missing_footprints}")
         referenced_materials = {
             layer.material for stack in self.stack_templates.values() for layer in stack.expand()
-        } | {self.horizontal.memory_zone.background_material}
-        for column in self.horizontal.memory_zone.columns:
-            if column.material:
-                referenced_materials.add(column.material)
-            if column.fill_above:
-                referenced_materials.add(column.fill_above)
+        }
+        if self.horizontal is not None:
+            referenced_materials.add(self.horizontal.memory_zone.background_material)
+            for column in self.horizontal.memory_zone.columns:
+                if column.material:
+                    referenced_materials.add(column.material)
+                if column.fill_above:
+                    referenced_materials.add(column.fill_above)
+        else:
+            orthogonal = self.orthogonal_hbm
+            referenced_materials.add(orthogonal.background_material)
+            referenced_materials.add(orthogonal.adhesive.material)
+            referenced_materials.update(
+                layer.material for layer in orthogonal.memory_die.layers)
         missing_materials = sorted(referenced_materials - self.materials.keys())
         if missing_materials:
             raise ValueError(f"unknown material reference(s): {missing_materials}")
-        reference_height = self.stack_templates[self.horizontal.memory_zone.reference_stack].total_thickness
-        for column in self.horizontal.memory_zone.columns:
-            if column.stack:
-                height = self.stack_templates[column.stack].total_thickness
-            else:
-                height = self.stack_templates[column.match_height_of].total_thickness
-            if height > reference_height + 1e-15:
-                raise ValueError(f"column {column.name!r} match height exceeds memory zone")
-            if height < reference_height - 1e-15 and not column.fill_above:
-                raise ValueError(f"short column {column.name!r} requires fill_above")
+        if self.horizontal is not None:
+            reference_height = self.stack_templates[
+                self.horizontal.memory_zone.reference_stack].total_thickness
+            for column in self.horizontal.memory_zone.columns:
+                if column.stack:
+                    height = self.stack_templates[column.stack].total_thickness
+                else:
+                    height = self.stack_templates[column.match_height_of].total_thickness
+                if height > reference_height + 1e-15:
+                    raise ValueError(f"column {column.name!r} match height exceeds memory zone")
+                if height < reference_height - 1e-15 and not column.fill_above:
+                    raise ValueError(f"short column {column.name!r} requires fill_above")
+        else:
+            orthogonal = self.orthogonal_hbm
+            cube = self.footprints[orthogonal.cube_footprint]
+            die = orthogonal.memory_die
+            tolerance = 1e-12
+            if die.width > cube.size_y + tolerance:
+                raise ValueError("orthogonal die width exceeds cube width")
+            if die.height > orthogonal.cube_height + tolerance:
+                raise ValueError("orthogonal die height exceeds cube height")
+            if die.count * die.thickness > cube.size_x + tolerance:
+                raise ValueError("orthogonal die array exceeds cube arrangement length")
         return self
 
 
@@ -502,7 +619,7 @@ def load_config(path: str | Path) -> SimulationConfig:
 # Compact-format compiler
 # ---------------------------------------------------------------------------
 
-_COMPACT_MARKERS = ("geometry", "stacks", "mesh", "solver")
+_COMPACT_MARKERS = ("geometry", "orthogonal_hbm", "stacks", "mesh", "solver")
 
 
 def is_compact_user_config(data: dict) -> bool:
@@ -651,6 +768,22 @@ def _build_legacy_footprints(geometry: dict) -> dict:
                 "size_x": size_x,
                 "size_y": size_y,
             }
+    orthogonal = geometry.get("orthogonal_hbm")
+    if orthogonal is not None:
+        cube_size = orthogonal["cube_size"]
+        if not isinstance(cube_size, (list, tuple)) or len(cube_size) != 3:
+            raise ValueError(
+                f"orthogonal_hbm.cube_size must contain three lengths, got {cube_size!r}")
+        out["mosaic_cube"] = {
+            "name": "mosaic_cube",
+            "center_x": 0.0,
+            "center_y": 0.0,
+            # Paper ordering is [die width, array length, cube height].
+            # Fig. 2 aligns the 30 x 22 mm top view with the canonical
+            # GPU's global x=30 mm, y=22 mm footprint.
+            "size_x": cube_size[1],
+            "size_y": cube_size[0],
+        }
     return out
 
 
@@ -929,6 +1062,49 @@ def _build_legacy_horizontal(geometry: dict, stacks: dict) -> dict:
     }
 
 
+def _build_legacy_orthogonal_hbm(geometry: dict) -> dict:
+    """Compile the compact parametric MOSAIC block without expanding dies."""
+    block = geometry["orthogonal_hbm"]
+    cube_size = block["cube_size"]
+    if not isinstance(cube_size, (list, tuple)) or len(cube_size) != 3:
+        raise ValueError("orthogonal_hbm.cube_size must be [x, y, z]")
+    die = block["memory_die"]
+    stack = die.get("stack", [])
+    roles = ("si_substrate", "active_beol", "daa")
+    layers = []
+    for index, entry in enumerate(stack):
+        if isinstance(entry, dict) and len(entry) == 1:
+            material, thickness = next(iter(entry.items()))
+        else:
+            material, thickness = _unpack_layer_entry(entry)
+        role = roles[index] if index < len(roles) else _snake_case(str(material))
+        layers.append({
+            "name": _snake_case(str(material)),
+            "material": str(material),
+            "thickness": thickness,
+            "role": role,
+        })
+    return {
+        "cube_footprint": "mosaic_cube",
+        "cube_height": cube_size[2],
+        "background_material": block.get("background_material", "Mold"),
+        "foundation": {"footprint": "package", "stack": "foundation"},
+        "gpu": {"footprint": "gpu", "stack": "gpu"},
+        "top": {"footprint": "mosaic_cube", "stack": "top"},
+        "adhesive": {
+            "material": block["adhesive"]["material"],
+            "thickness": block["adhesive"]["thickness"],
+        },
+        "memory_die": {
+            "count": die["count"],
+            "width": die["width"],
+            "height": die["height"],
+            "layers": layers,
+            "power_per_die": die["power_per_die"],
+        },
+    }
+
+
 def _build_legacy_discretization(mesh: dict) -> dict:
     if "dz_max" in mesh and "z" not in mesh:
         mesh = {**mesh, "z": mesh["dz_max"]}
@@ -1026,13 +1202,31 @@ def _build_legacy_thermal_power_sources(power: dict,
                 "distribution": "uniform_volume",
                 "metadata": {"status": "PAPER_REPORTED"},
             })
+    orthogonal = geometry.get("orthogonal_hbm")
+    if orthogonal is not None:
+        die = orthogonal["memory_die"]
+        for index in range(1, int(die["count"]) + 1):
+            die_name = f"die_{index:03d}"
+            sources.append({
+                "name": f"hbm_{die_name}",
+                "total_power": die["power_per_die"],
+                "selector": {
+                    "component": f"orthogonal_hbm:{die_name}",
+                    "tags": {"role": "active_beol"},
+                },
+                "distribution": "uniform_volume",
+                "metadata": {
+                    "status": "PAPER_REPORTED",
+                    "modeling_choice": "uniform within die BEOL",
+                },
+            })
     return {"sources": sources}
 
 
-def _build_legacy_metadata(solver: dict) -> dict:
+def _build_legacy_metadata(solver: dict, supplied: dict | None = None) -> dict:
     """Build a minimal ``metadata`` block (no paper text; that lives
     in ``docs/benchmarks/``)."""
-    md: dict = {}
+    md: dict = dict(supplied or {})
     if solver:
         md["solver"] = dict(solver)
     return md
@@ -1053,14 +1247,21 @@ def compile_user_config(data: dict) -> dict:
     out["package_footprint"] = "package"
     if "materials" in data:
         out["materials"] = _build_legacy_materials(data["materials"])
-    geometry = data.get("geometry", {})
+    geometry = dict(data.get("geometry", {}))
+    if "orthogonal_hbm" in data:
+        if "orthogonal_hbm" in geometry:
+            raise ValueError(
+                "orthogonal_hbm must be declared either at top level or under geometry, not both")
+        geometry["orthogonal_hbm"] = data["orthogonal_hbm"]
     if geometry:
         out["footprints"] = _build_legacy_footprints(geometry)
     stacks = data.get("stacks", {})
     if stacks:
         out["stack_templates"] = _build_legacy_stack_templates(
             stacks, geometry=data.get("geometry"))
-    if geometry or stacks:
+    if "orthogonal_hbm" in geometry:
+        out["orthogonal_hbm"] = _build_legacy_orthogonal_hbm(geometry)
+    elif geometry or stacks:
         out["horizontal"] = _build_legacy_horizontal(geometry, stacks)
     if "mesh" in data:
         out["discretization"] = _build_legacy_discretization(data["mesh"])
@@ -1071,5 +1272,6 @@ def compile_user_config(data: dict) -> dict:
     if "power" in data:
         out["thermal_power_sources"] = (
             _build_legacy_thermal_power_sources(data["power"], geometry))
-    out["metadata"] = _build_legacy_metadata(data.get("solver", {}))
+    out["metadata"] = _build_legacy_metadata(
+        data.get("solver", {}), data.get("metadata"))
     return out

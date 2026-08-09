@@ -1,0 +1,81 @@
+# Paper-aligned first steady-state MOSAIC baseline.
+# Provenance details and unresolved placement questions live in
+# docs/benchmarks/orthogonal_hbm.md.
+name: orthogonal_hbm
+
+materials:
+  Lid:             400
+  TIM:             9.71
+  MOSAIC_Si:       140
+  MOSAIC_BEOL:     0.85
+  MOSAIC_DAA:      0.2
+  Adhesive:        0.2
+  BEOL_MXY:        1.5
+  FEOL:            7.9
+  BSPDN:           [83, 83, 71]
+  Cu_Pillar_Bump:  [0.54, 0.54, 13.25]
+  Laminate:        13
+  Mold:            3
+
+geometry:
+  package: { size: [65 mm, 65 mm] }
+  gpu:     { size: [30 mm, 22 mm] }
+
+orthogonal_hbm:
+  cube_size: [22 mm, 30 mm, 5.5 mm]
+  background_material: Mold
+  adhesive:
+    material: Adhesive
+    thickness: 3 um
+  memory_die:
+    count: 98
+    width: 22 mm
+    height: 5.5 mm
+    stack:
+      - {MOSAIC_Si:   293 um}
+      - {MOSAIC_BEOL:   5 um}
+      - {MOSAIC_DAA:    2 um}
+    power_per_die: 1.6 W
+
+stacks:
+  foundation: { layers: [[Laminate, 300 um]] }
+  gpu:
+    layers:
+      - [Cu_Pillar_Bump, 70 um]
+      - [BSPDN,          1.715 um]
+      - [FEOL,           0.15 um]
+      - [BEOL_MXY,       1.4 um]
+  top: { layers: [[TIM, 200 um], [Lid, 3000 um]] }
+
+mesh:
+  dx:     0.5 mm
+  dy:     0.5 mm
+  dz_max: 100 um
+
+boundary:
+  ambient:              20 degC
+  lid_top_htc:          30000 W/m^2/K
+  laminate_bottom_htc:  200 W/m^2/K
+
+power:
+  gpu: 414 W
+
+solver:
+  method: pcg
+  rtol: 1e-6
+
+metadata:
+  provenance:
+    PAPER_REPORTED:
+      mosaic_cube: [22 mm, 30 mm, 5.5 mm]
+      die_count: 98
+      die_thickness: 300 um
+      silicon: {thickness: 293 um, conductivity_W_mK: 140}
+      beol: {thickness: 5 um, conductivity_W_mK: 0.85}
+      daa: {thickness: 2 um, conductivity_W_mK: 0.2}
+      adhesive: {thickness: 3 um, conductivity_W_mK: 0.2}
+      power_per_die: 1.6 W
+    MODELING_CHOICE:
+      scalar_conductivity: isotropic
+      die_power: uniform within each die BEOL
+      array_position: centered in the 30 mm cube direction

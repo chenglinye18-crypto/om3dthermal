@@ -23,6 +23,7 @@ from .discretization.export import (
     write_mesh_summary_json,
 )
 from .geometry.horizontal_columns import HorizontalColumnsBuilder
+from .geometry.orthogonal_hbm import OrthogonalHBMBuilder
 from .thermal import (
     build_boundary_link_table,
     build_conductance_table,
@@ -50,9 +51,16 @@ from .units import parse_temperature
 from .visualization import write_visualizations
 
 
+def build_scene(config):
+    """Select the geometry template while keeping all downstream stages shared."""
+    if config.orthogonal_hbm is not None:
+        return OrthogonalHBMBuilder(config).build()
+    return HorizontalColumnsBuilder(config).build()
+
+
 def build(config_path: str | Path, output_dir: str | Path):
     config = load_config(config_path)
-    scene = HorizontalColumnsBuilder(config).build()
+    scene = build_scene(config)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     scene.write_csv(output_dir / "regions.csv")
@@ -68,7 +76,7 @@ def discretize(config_path: str | Path, output_dir: str | Path):
         raise ValueError(
             "config has no 'discretization' block; add one before running "
             "om3dthermal.cli discretize")
-    scene = HorizontalColumnsBuilder(config).build()
+    scene = build_scene(config)
     boxes = list(scene.boxes)
 
     t0 = time.perf_counter()
@@ -123,7 +131,7 @@ def conductance(config_path: str | Path, output_dir: str | Path,
         raise ValueError(
             "config has no 'thermal_conductance' block; add one before "
             "running om3dthermal.cli conductance")
-    scene = HorizontalColumnsBuilder(config).build()
+    scene = build_scene(config)
     boxes = list(scene.boxes)
 
     t0 = time.perf_counter()
@@ -226,7 +234,7 @@ def solve_steady(
         raise ValueError(
             "config has no 'thermal_power_sources' block; add one before "
             "running om3dthermal.cli solve-steady")
-    scene = HorizontalColumnsBuilder(config).build()
+    scene = build_scene(config)
     boxes = list(scene.boxes)
 
     # Discretise.
