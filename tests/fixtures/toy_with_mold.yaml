@@ -1,0 +1,32 @@
+name: toy_with_mold
+materials:
+  Silicon: 140
+  FEOL: 7.9
+  Mold: 3
+  Laminate: 13
+  Lid: 400
+geometry:
+  package:     { size: [10 mm, 10 mm] }
+  gpu:         { size: [10 mm, 10 mm] }
+  memory_zone: { size: [10 mm, 10 mm] }
+  hbm:
+    size:  [10 mm, 10 mm]
+    inset: 0 mm
+    centers: {}
+stacks:
+  foundation: { layers: [[Laminate, 5 mm]] }
+  gpu:        { layers: [[FEOL, 5 mm]] }
+  top:        { layers: [[Lid, 1 mm]] }
+mesh:
+  dx:     5 mm
+  dy:     5 mm
+  dz_max: 5 mm
+boundary:
+  ambient:              20 degC
+  lid_top_htc:          1000 W/m^2/K
+  laminate_bottom_htc:  100 W/m^2/K
+power:
+  gpu: 1 W
+solver:
+  method: pcg
+  rtol:   1e-6

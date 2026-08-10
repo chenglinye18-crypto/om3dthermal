@@ -24,6 +24,20 @@ from .discretization.export import (
 )
 from .geometry.horizontal_columns import HorizontalColumnsBuilder
 from .geometry.orthogonal_hbm import OrthogonalHBMBuilder
+from .sensitivity import (
+    build_inset_sweep_cases,
+    build_k_sweep_cases,
+    case_already_done as sensitivity_case_already_done,
+    compute_delta_tmax_sensitivity,
+    load_partial_rows as load_sensitivity_partial_rows,
+    merge_sweep_cases,
+    parse_k_list,
+    parse_length_list,
+    run_single_sensitivity_case,
+    write_case_row_partial as write_sensitivity_case_row_partial,
+    write_sensitivity_csv,
+    write_sensitivity_json,
+)
 from .thermal import (
     build_boundary_link_table,
     build_conductance_table,
@@ -394,6 +408,65 @@ def _face_matches_selector_for_summary(face, cell_by_id, config):
         config.thermal_boundary_conditions.rules) is not None
 
 
+def sweep_sensitivity(
+    config_path: str | Path,
+    output_dir: str | Path,
+    *,
+    inset_sizes: str,
+    k_values: str,
+    method: str = "pcg",
+    rtol: float = 1e-6,
+    max_iterations: int = 10_000,
+    initial_temperature: float = 293.15,
+    resume: bool = False,
+) -> dict:
+    """Run the legacy single-factor inset/Mold-k sensitivity sweep."""
+    inset_list = parse_length_list(inset_sizes)
+    k_list = parse_k_list(k_values)
+    baseline_inset = inset_list[len(inset_list) // 2]
+    baseline_k = k_list[len(k_list) // 2]
+    cases = merge_sweep_cases(
+        build_inset_sweep_cases(inset_list, baseline_k),
+        build_k_sweep_cases(k_list, baseline_inset),
+    )
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows_csv = output_dir / "sensitivity.csv"
+    json_path = output_dir / "sensitivity.json"
+    rows = list(load_sensitivity_partial_rows(rows_csv)) if resume else []
+    for case in cases:
+        if resume and sensitivity_case_already_done(rows_csv, case.label):
+            print(f"[sweep-sensitivity] skip {case.label} (cached)")
+            continue
+        print(
+            f"[sweep-sensitivity] running {case.label}: "
+            f"inset={case.inset_m*1e3:.3f}mm, "
+            f"k={case.mold_k_W_mK:g} W/(m*K)")
+        row = run_single_sensitivity_case(
+            config_path, case, method=method, rtol=rtol,
+            max_iterations=max_iterations,
+            initial_temperature_K=initial_temperature)
+        write_sensitivity_case_row_partial(rows_csv, row)
+        rows.append(row)
+    delta = compute_delta_tmax_sensitivity(
+        rows, baseline_inset_m=baseline_inset,
+        baseline_mold_k_W_mK=baseline_k)
+    write_sensitivity_csv(rows, rows_csv)
+    write_sensitivity_json(
+        rows, delta, config_path=config_path,
+        inset_sizes_m=inset_list, k_values_W_mK=k_list,
+        baseline_inset_m=baseline_inset,
+        baseline_mold_k_W_mK=baseline_k, rtol=rtol,
+        initial_temperature_K=initial_temperature, method=method,
+        path=json_path)
+    return {
+        "case_count": len(rows),
+        "rows_path": str(rows_csv),
+        "json_path": str(json_path),
+        "delta_Tmax": delta,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="om3dthermal")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -428,6 +501,21 @@ def main(argv: list[str] | None = None) -> int:
     solve_parser.add_argument(
         "--initial-temperature", type=parse_temperature, default=293.15,
         help="uniform starting temperature in K (default 20 degC = 293.15 K)")
+    sensitivity_parser = subparsers.add_parser(
+        "sweep-sensitivity",
+        help="single-factor sweep on DRAM lateral inset and Mold k")
+    sensitivity_parser.add_argument("config", type=Path)
+    sensitivity_parser.add_argument("--out", type=Path, required=True)
+    sensitivity_parser.add_argument("--inset", required=True)
+    sensitivity_parser.add_argument("--mold-k", dest="mold_k", required=True)
+    sensitivity_parser.add_argument(
+        "--method", choices=["pcg", "jacobi"], default="pcg")
+    sensitivity_parser.add_argument("--rtol", type=float, default=1e-6)
+    sensitivity_parser.add_argument(
+        "--max-iterations", type=int, default=10_000)
+    sensitivity_parser.add_argument(
+        "--initial-temperature", type=parse_temperature, default=293.15)
+    sensitivity_parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -461,6 +549,16 @@ def main(argv: list[str] | None = None) -> int:
             f"power imbalance="
             f"{summary['relative_power_imbalance']:.2e}"
         )
+    elif args.command == "sweep-sensitivity":
+        result = sweep_sensitivity(
+            args.config, args.out, inset_sizes=args.inset,
+            k_values=args.mold_k, method=args.method, rtol=args.rtol,
+            max_iterations=args.max_iterations,
+            initial_temperature=args.initial_temperature,
+            resume=args.resume)
+        print(
+            f"[sweep-sensitivity] wrote {result['case_count']} cases to "
+            f"{result['rows_path']} and {result['json_path']}")
     return 0
 
 

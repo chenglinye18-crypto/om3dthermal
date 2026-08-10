@@ -1439,10 +1439,24 @@ def _top_dram_tags(material: str) -> dict | None:
 def _build_legacy_horizontal(geometry: dict, stacks: dict) -> dict:
     """Expand the ``geometry.hbm.centers`` block into the legacy
     ``horizontal.memory_zone.columns`` list.
+
+    Compact toy configs without an HBM sub-template use their first flat
+    stack as the reference height; production HBM configs retain the
+    canonical ``hbm_12hi``/thermal-silicon reference semantics.
     """
     hbm_block = geometry.get("hbm", {})
     hbm_centers = hbm_block.get("centers", {})
     hbm_fill_above = hbm_block.get("fill_above")
+    has_hbm_subtemplate = any(
+        ("base" in body or "dram" in body or "top" in body)
+        and "layers" not in body
+        for body in stacks.values()
+    )
+    reference_stack = (
+        "thermal_silicon_stack" if hbm_fill_above is not None
+        else "hbm_12hi" if has_hbm_subtemplate
+        else next(iter(stacks.keys()), "gpu")
+    )
     columns = []
     for col_name in hbm_centers:
         column = {
@@ -1461,20 +1475,42 @@ def _build_legacy_horizontal(geometry: dict, stacks: dict) -> dict:
             "stack": "thermal_silicon_stack",
             "priority": 10,
         })
+    background_material = (
+        "Mold" if has_hbm_subtemplate
+        else next(iter(_extract_material_names(stacks)), "Mold")
+    )
     return {
         "foundation": {"footprint": "package", "stack": "foundation"},
         "gpu": {"footprint": "gpu", "stack": "gpu"},
         "memory_zone": {
             "footprint": "memory_zone",
-            "reference_stack": (
-                "thermal_silicon_stack"
-                if hbm_fill_above is not None else "hbm_12hi"),
-            "background_material": "Mold",
+            "reference_stack": reference_stack,
+            "background_material": background_material,
             "background_priority": 0,
             "columns": columns,
         },
         "top": {"footprint": "memory_zone", "stack": "top"},
     }
+
+
+def _extract_material_names(stacks: dict) -> set[str]:
+    """Collect materials referenced by compact stack definitions."""
+    materials: set[str] = set()
+
+    def walk(entry):
+        if isinstance(entry, (list, tuple)):
+            if len(entry) == 2 and isinstance(entry[0], str):
+                materials.add(entry[0])
+            else:
+                for subentry in entry:
+                    walk(subentry)
+        elif isinstance(entry, dict):
+            for subentry in entry.values():
+                walk(subentry)
+
+    for body in stacks.values():
+        walk(body)
+    return materials
 
 
 def _build_legacy_orthogonal_hbm(geometry: dict) -> dict:
