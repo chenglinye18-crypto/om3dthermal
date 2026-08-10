@@ -28,6 +28,13 @@ from .errors import (
     UnsupportedMaterialRotationError,
 )
 from .interfaces import InterfaceResistanceQuery, InterfaceResistanceRegistry
+from .gpu_solver import (
+    CuPyMatrixFreeThermalOperator,
+    GPUBackendUnavailableError,
+    GPUSolverBreakdownError,
+    require_cupy,
+    solve_pcg_gpu,
+)
 from .m3d_power import (
     M3DMemoryPowerResolution,
     M3DOperationPowerBreakdown,
@@ -69,6 +76,9 @@ from .tensors import (
 __all__ = [
     "BoundaryLinkTable",
     "ConductanceTable",
+    "CuPyMatrixFreeThermalOperator",
+    "GPUBackendUnavailableError",
+    "GPUSolverBreakdownError",
     "InterfaceResistanceQuery",
     "InterfaceResistanceRegistry",
     "InvalidRotationMatrixError",
@@ -95,8 +105,10 @@ __all__ = [
     "map_power_sources",
     "normal_conductivity",
     "resolve_m3d_memory_power",
+    "require_cupy",
     "select_boundary_rule",
     "solve_pcg",
+    "solve_pcg_gpu",
     "solve_weighted_jacobi",
     "validate_anchored_components",
     "validate_rotation_matrix",

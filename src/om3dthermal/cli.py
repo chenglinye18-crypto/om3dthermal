@@ -31,6 +31,7 @@ from .thermal import (
     build_power_breakdown,
     map_power_sources,
     solve_pcg,
+    solve_pcg_gpu,
     solve_weighted_jacobi,
     validate_anchored_components,
 )
@@ -213,12 +214,18 @@ def solve_steady(
     max_iterations: int = 10_000,
     rtol: float = 1e-8,
     initial_temperature: float = 293.15,
+    backend: str | None = None,
 ) -> dict:
     """End-to-end steady-state thermal solve without ever
     materialising a dense or sparse matrix on the production path.
     """
     import numpy as np
     config = load_config(config_path)
+    configured_solver = config.metadata.get("solver", {})
+    resolved_backend = backend or configured_solver.get("backend", "cpu")
+    if resolved_backend not in {"cpu", "gpu"}:
+        raise ValueError(
+            f"unknown solver backend {resolved_backend!r}; expected 'cpu' or 'gpu'")
     if config.discretization is None:
         raise ValueError(
             "config has no 'discretization' block; add one before running "
@@ -282,19 +289,29 @@ def solve_steady(
     # Solve.
     initial_T = np.full(operator.cell_count, initial_temperature,
                         dtype=np.float64)
-    if method == "pcg":
+    if method == "pcg" and resolved_backend == "cpu":
         result = solve_pcg(
             operator, initial_T, boundary_table,
             relative_residual_tolerance=rtol,
             max_iterations=max_iterations,
         )
-    elif method == "jacobi":
+    elif method == "pcg" and resolved_backend == "gpu":
+        result = solve_pcg_gpu(
+            operator, initial_T, boundary_table,
+            relative_residual_tolerance=rtol,
+            max_iterations=max_iterations,
+        )
+    elif method == "jacobi" and resolved_backend == "cpu":
         result = solve_weighted_jacobi(
             operator, initial_T, boundary_table,
             omega=omega,
             relative_residual_tolerance=rtol,
             max_iterations=max_iterations,
         )
+    elif method == "jacobi":
+        raise ValueError(
+            "GPU backend currently supports method='pcg' only; weighted "
+            "Jacobi remains available on backend='cpu'")
     else:
         raise ValueError(
             f"unknown method {method!r}; expected 'pcg' or 'jacobi'")
@@ -341,6 +358,7 @@ def solve_steady(
     summary["discretization_seconds"] = t1 - t0
     summary["power_mapping_seconds"] = 0.0
     summary["case_id"] = config.metadata.get("case_id", config.name)
+    summary["solver_backend"] = resolved_backend
     summary["power_model"] = power_breakdown["power_model"]
     summary["power_breakdown"] = power_breakdown
     summary["power_by_source_W"] = dict(power.power_by_source)
@@ -392,6 +410,9 @@ def main(argv: list[str] | None = None) -> int:
     solve_parser.add_argument("--out", type=Path, required=True)
     solve_parser.add_argument(
         "--method", choices=["pcg", "jacobi"], default="pcg")
+    solve_parser.add_argument(
+        "--backend", choices=["cpu", "gpu"], default=None,
+        help="solver backend; defaults to config solver.backend or cpu")
     solve_parser.add_argument("--omega", type=float, default=0.7)
     solve_parser.add_argument("--max-iterations", type=int, default=10_000)
     solve_parser.add_argument("--rtol", type=float, default=1e-8)
@@ -419,9 +440,11 @@ def main(argv: list[str] | None = None) -> int:
             method=args.method, omega=args.omega,
             max_iterations=args.max_iterations, rtol=args.rtol,
             initial_temperature=args.initial_temperature,
+            backend=args.backend,
         )
         print(
-            f"Solved {summary['cell_count']} cells with {args.method} "
+            f"Solved {summary['cell_count']} cells with {args.method}/"
+            f"{summary['solver_backend']} "
             f"in {summary['iterations']} iterations: "
             f"T=[{summary['min_temperature_K']:.2f}, "
             f"{summary['max_temperature_K']:.2f}] K, "
