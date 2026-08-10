@@ -1,0 +1,24 @@
+memory:
+  technology: si_dram
+  backend: dreamram
+  dreamram:
+    memory_config: third_party/DreamRAM/configs/mem/baseline/hbm3_baseline.json
+    technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
+
+architecture:
+  name: conventional_hbm3_logic_removed
+  layers: 8
+  vertical: {type: tsv, source: dreamram}
+  base_route: {enabled: false, source: none}
+  # MODELING_CHOICE: retain the existing HBM DQ interface after base removal.
+  interface: {type: hbm_dq, source: dreamram}
+  logic_background_w: 0
+
+workload:
+  read_bandwidth_gbps: 39200
+  write_bandwidth_gbps: 0
+  row_policy: {rd_per_act: 64}
+
+power:
+  refresh: {enabled: false}
+  background: {enabled: false}

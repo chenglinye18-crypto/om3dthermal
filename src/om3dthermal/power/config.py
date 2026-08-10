@@ -1,0 +1,161 @@
+"""Configuration schema for standalone memory-power experiments."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class BinaryProbability(StrictModel):
+    p0: float = Field(ge=0.0, le=1.0)
+    p1: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def sum_to_one(self) -> "BinaryProbability":
+        if abs(self.p0 + self.p1 - 1.0) > 1e-12:
+            raise ValueError("p0 and p1 must sum to 1")
+        return self
+
+
+class WriteProbability(StrictModel):
+    p00: float = Field(ge=0.0, le=1.0)
+    p01: float = Field(ge=0.0, le=1.0)
+    p10: float = Field(ge=0.0, le=1.0)
+    p11: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def sum_to_one(self) -> "WriteProbability":
+        if abs(self.p00 + self.p01 + self.p10 + self.p11 - 1.0) > 1e-12:
+            raise ValueError("write-transition probabilities must sum to 1")
+        return self
+
+
+class DreamRAMInput(StrictModel):
+    memory_config: Path
+    technology_config: Path
+
+
+class OperationTable(StrictModel):
+    read_0_pj_per_bit: float = Field(ge=0.0)
+    read_1_pj_per_bit: float = Field(ge=0.0)
+    write_00_pj_per_bit: float = Field(ge=0.0)
+    write_01_pj_per_bit: float = Field(ge=0.0)
+    write_10_pj_per_bit: float = Field(ge=0.0)
+    write_11_pj_per_bit: float = Field(ge=0.0)
+    refresh_0_pj_per_bit: float = Field(ge=0.0)
+    refresh_1_pj_per_bit: float = Field(ge=0.0)
+
+
+class BackgroundInput(StrictModel):
+    type: Literal["per_row", "per_bit", "per_die", "total"]
+    value_w: float = Field(ge=0.0)
+
+
+class MemoryInput(StrictModel):
+    technology: str
+    backend: Literal["dreamram", "operation_table"]
+    dreamram: DreamRAMInput | None = None
+    operations: OperationTable | None = None
+    background: BackgroundInput | None = None
+    retention_s: float | None = Field(default=None, gt=0.0)
+
+    @model_validator(mode="after")
+    def backend_inputs(self) -> "MemoryInput":
+        if self.backend == "dreamram" and self.dreamram is None:
+            raise ValueError("dreamram backend requires memory.dreamram")
+        if self.backend == "operation_table" and self.operations is None:
+            raise ValueError("operation_table backend requires memory.operations")
+        return self
+
+
+class TransportInput(StrictModel):
+    type: Literal["tsv", "miv", "none"]
+    source: Literal["dreamram", "constant", "none"]
+    energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
+
+
+class BaseRouteInput(StrictModel):
+    enabled: bool
+    source: Literal["dreamram", "constant", "none"]
+    energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
+
+    @model_validator(mode="after")
+    def disabled_is_none(self) -> "BaseRouteInput":
+        if not self.enabled and self.source != "none":
+            raise ValueError("disabled base_route must use source: none")
+        return self
+
+
+class InterfaceInput(StrictModel):
+    type: Literal["hbm_dq", "contactless", "direct"]
+    source: Literal["dreamram", "constant", "none"]
+    energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
+
+
+class ArchitectureInput(StrictModel):
+    name: str
+    layers: int = Field(gt=0)
+    dies: int | None = Field(default=None, gt=0)
+    vertical: TransportInput
+    base_route: BaseRouteInput
+    interface: InterfaceInput
+    logic_background_w: float | None = Field(default=None, ge=0.0)
+
+
+class RowPolicy(StrictModel):
+    rd_per_act: int = Field(gt=0)
+
+
+class WorkloadInput(StrictModel):
+    read_bandwidth_gbps: float = Field(ge=0.0)
+    write_bandwidth_gbps: float = Field(ge=0.0)
+    read_data: BinaryProbability | None = None
+    write_transition: WriteProbability | None = None
+    refresh_data: BinaryProbability | None = None
+    row_policy: RowPolicy | None = None
+    stored_bits: float | None = Field(default=None, gt=0.0)
+    active_rows: int | None = Field(default=None, ge=0)
+
+
+class EnableInput(StrictModel):
+    enabled: bool
+
+
+class PowerInput(StrictModel):
+    refresh: EnableInput
+    background: EnableInput
+
+
+class MemoryPowerConfig(StrictModel):
+    memory: MemoryInput
+    architecture: ArchitectureInput
+    workload: WorkloadInput
+    power: PowerInput
+
+
+def load_power_config(path: str | Path) -> MemoryPowerConfig:
+    config_path = Path(path).resolve()
+    with config_path.open("r", encoding="utf-8") as stream:
+        raw = yaml.safe_load(stream)
+    if not isinstance(raw, dict):
+        raise ValueError("memory-power YAML root must be a mapping")
+    return MemoryPowerConfig.model_validate(raw)
+
+
+def find_project_root(config_path: str | Path) -> Path:
+    path = Path(config_path).resolve()
+    for parent in (path.parent, *path.parents):
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    raise ValueError(f"cannot locate project root from {path}")
+
+
+def resolve_project_path(project_root: Path, configured: Path) -> Path:
+    return configured if configured.is_absolute() else project_root / configured

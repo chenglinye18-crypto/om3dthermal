@@ -1,0 +1,26 @@
+memory:
+  technology: si_dram
+  backend: dreamram
+  dreamram:
+    memory_config: third_party/DreamRAM/configs/mem/baseline/hbm3_baseline.json
+    technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
+
+architecture:
+  name: orthogonal_si
+  layers: 8
+  vertical: {type: none, source: none}
+  base_route: {enabled: false, source: none}
+  interface:
+    type: contactless
+    source: constant
+    energy_pj_per_bit: 0.5
+  logic_background_w: null
+
+workload:
+  read_bandwidth_gbps: 39200
+  write_bandwidth_gbps: 0
+  row_policy: {rd_per_act: 64}
+
+power:
+  refresh: {enabled: false}
+  background: {enabled: false}

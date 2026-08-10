@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from .mesh_convergence import (
     write_mesh_convergence_csv,
     write_mesh_convergence_json,
 )
+from .power import run_memory_power
 from .sensitivity import (
     build_inset_sweep_cases,
     build_k_sweep_cases,
@@ -593,6 +595,9 @@ def main(argv: list[str] | None = None) -> int:
     mesh_parser.add_argument(
         "--initial-temperature", type=parse_temperature, default=293.15)
     mesh_parser.add_argument("--resume", action="store_true")
+    power_parser = subparsers.add_parser(
+        "power", help="run a config-driven standalone memory-power model")
+    power_parser.add_argument("config", type=Path)
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -646,6 +651,9 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[sweep-mesh] wrote {result['case_count']} cases to "
             f"{result['rows_path']} and {result['json_path']}")
+    elif args.command == "power":
+        result = run_memory_power(args.config)
+        print(json.dumps(result.as_dict(display_na=True), indent=2))
     return 0
 
 
