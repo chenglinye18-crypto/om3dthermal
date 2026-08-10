@@ -24,7 +24,6 @@ geometry:
   hbm:
     size: [11 mm, 11 mm]
     dram_size: [10.8 mm, 10.8 mm]
-    fill_above: Mold
     centers:
       hbm_left_top: [-9.5 mm, 5.5 mm]
       hbm_left_bottom: [-9.5 mm, -5.5 mm]
@@ -44,7 +43,7 @@ stacks:
       repeat: 11
       layers: [[Hybrid_Bonding, 2 um], [DRAM_BEOL, 3 um], [Silicon, 41 um]]
     top: {layers: [[Hybrid_Bonding, 2 um], [DRAM_BEOL, 3 um], [Silicon, 169 um]]}
-  thermal_silicon: {layers: [[Oxide, 1 um], [Thermal_Silicon, 774 um]]}
+  thermal_silicon: {layers: [[Oxide, 1 um], [Thermal_Silicon, 719 um]]}
   top: {layers: [[TIM, 200 um], [Lid, 3000 um]]}
 mesh: {dx: 0.5 mm, dy: 0.5 mm, dz_max: 100 um}
 boundary:
@@ -72,5 +71,6 @@ metadata:
     removed_layers: [HBM_Base_BEOL_5um, HBM_Base_Si_50um]
     removed_logic_power_per_stack: 8 W
     retained_gpu_hbm_ubump: 40 um
-    top_cavity_fill: Mold
+    top_closure: direct_HBM_to_TIM
+    supersedes: 55um_top_mold_closure
   layout: {hbm_arrangement: 2x2_hbm, cube_count: 4, cube_footprint: [11 mm, 11 mm]}

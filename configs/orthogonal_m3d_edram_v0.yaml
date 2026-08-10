@@ -1,0 +1,133 @@
+# Geometry-closed research template. Thermal solve remains intentionally
+# blocked while effective anisotropic M3D-BEOL conductivity is unresolved.
+name: orthogonal_m3d_edram_v0
+
+architecture:
+  type: orthogonal_m3d_edram
+
+orthogonal:
+  slab_count: 98
+  cube_length_x_mm: 30.0
+  slab_plane_y_mm: 22.0
+  slab_height_z_mm: 5.5
+  slab_pitch_x_um: 300.0
+  daa_um: 2.0
+  slab_plane: y-z
+  thickness_direction: global_x
+  placement: reuse_orthogonal_mosaic_array
+
+slab:
+  total_pitch_um: 300.0
+  si_substrate_um: 292.546
+  feol_um: 0.150
+  region_order:
+    - si_substrate
+    - feol
+    - m3d_bitcell_stack
+    - beol_interconnect
+    - daa
+
+m3d_beol:
+  bitcell_layers: 8
+  bitcell_layer_pitch_nm: 288.0
+  bitcell_stack_um: 2.304
+  interconnect_um: 3.0
+  total_um: 5.304
+  region_order: [bitcell_stack, interconnect]
+  thermal:
+    model: effective_anisotropic
+    k_in_plane_W_mK: unresolved
+    k_cross_plane_W_mK: unresolved
+
+m3d_memory:
+  technology: CAA_IGZO_2T0C
+  layers: 8
+  density_Mb_mm2_per_layer: 30.0
+  cell_area_um2: 0.023
+  slab_array_fill_factor: 1.0
+  placement: within_beol_above_feol
+  daa_between_m3d_layers: false
+
+power:
+  default_mode: iso_total
+
+power_models:
+  iso_total:
+    memory_total_W: 156.8
+    distribution:
+      type: uniform_m3d_layers
+      target_region: m3d_bitcell_stack
+      direct_power_regions: [m3d_bitcell_stack]
+    cim_metrics_used_as_memory_power: false
+
+  operation_energy:
+    operation_energy_fJ_per_bit:
+      read_0: 0.60
+      read_1: 368.0
+      write_0_to_0: 0.30
+      write_0_to_1: 0.37
+      write_1_to_0: 0.58
+      write_1_to_1: 0.24
+      refresh_0: 0.90
+      refresh_1: 370.0
+    hold_power_W_per_row: 4.26e-15
+    activity:
+      read_bit_rate_per_s: unresolved
+      write_bit_rate_per_s: unresolved
+      read_state_probability: {p0: unresolved, p1: unresolved}
+      write_transition_probability:
+        {p00: unresolved, p01: unresolved, p10: unresolved, p11: unresolved}
+      refresh_period_s: unresolved
+      refresh_state_probability: {p0: unresolved, p1: unresolved}
+      active_rows: unresolved
+    distribution:
+      type: uniform_m3d_layers
+      target_region: m3d_bitcell_stack
+      direct_power_regions: [m3d_bitcell_stack]
+    energy_provenance: PAPER_REPORTED
+    cim_metrics_used_as_memory_power: false
+
+paper_metrics:
+  energy_efficiency_TOPS_W: 256
+  compute_density_TOPS_mm2: 50
+
+provenance:
+  PAPER_REPORTED:
+    technology: vertically_stacked_CAA_IGZO_2T0C
+    demonstrated_device_layers: 2
+    evaluated_layer_counts: [2, 4, 6, 8]
+    density_Mb_mm2_per_layer: 30.0
+    cell_area_um2: 0.023
+    energy_efficiency_TOPS_W: 256
+    compute_density_TOPS_mm2: 50
+    operation_energy_fJ_per_bit:
+      read_0: 0.60
+      read_1: 368.0
+      write_0_to_0: 0.30
+      write_0_to_1: 0.37
+      write_1_to_0: 0.58
+      write_1_to_1: 0.24
+      refresh_0: 0.90
+      refresh_1: 370.0
+    hold_power_W_per_row: 4.26e-15
+  MODELING_CHOICE:
+    feol_thickness_um: 0.150
+    beol_interconnect_um: 3.0
+    slab_count_and_pitch: reuse_current_orthogonal_mosaic98
+    power_model: iso_total_uniform_across_bitcell_layers_only
+    daa_scope: between_adjacent_orthogonal_slabs_only
+  DERIVED_FROM_PAPER_FIGURE:
+    bitcell_layer_pitch_nm: 288.0
+    source: Tang_et_al_IEDM_2023_Fig_4_measurement
+  PAPER_SUPPORTED_MODELING_CHOICE:
+    nominal_layer_count: 8
+    basis: paper_evaluates_2_4_6_8_layer_stacking
+  INHERITED_MODEL:
+    daa_thickness_um: 2.0
+    source: current_Orthogonal_MOSAIC_model
+  DERIVED_FROM_GEOMETRY_CLOSURE:
+    si_substrate_um: 292.546
+    equation: 300-0.150-2.304-3.0-2.0
+  UNRESOLVED:
+    - m3d_beol.thermal.k_in_plane_W_mK
+    - m3d_beol.thermal.k_cross_plane_W_mK

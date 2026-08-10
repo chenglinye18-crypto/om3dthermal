@@ -31,23 +31,28 @@ MOSAIC retains uniform 1.6 W/die placement in each die BEOL.
 The no-base intervention removes the 5 um `HBM_Base_BEOL` and 50 um base
 silicon from every physical stack while retaining the 40 um GPU-HBM uBump and
 all 12 DRAM dies. Logic power is removed with the logic die, so HBM power is
-128 W rather than 160 W. The 55 um released above each shortened HBM column is
-filled with Mold under the existing package-cavity rule; the TIM and Lid
-planes are unchanged.
+128 W rather than 160 W. The HBM top, TIM, and Lid move down by 55 um, leaving
+direct HBM-top-to-TIM contact with zero interface resistance. No Mold or air
+layer is inserted above the shortened HBM stack.
 
 | Layout / GPU power | Base-present Tmax | Base-removed Tmax | Delta T (removed - present) | Base-removed DRAM Tmax |
 |---|---:|---:|---:|---:|
-| Conventional 2x2 / 414 W | 122.9715 degC | 131.7286 degC | +8.7571 K | 125.9736 degC |
-| Conventional 2x2 / 300 W | 102.3078 degC | 107.8653 degC | +5.5575 K | 103.7450 degC |
-| Conventional 2x1 / 414 W | 120.4741 degC | 126.4554 degC | +5.9813 K | 124.5038 degC |
-| Conventional 2x1 / 300 W | 100.4761 degC | 104.1459 degC | +3.6698 K | 102.7367 degC |
+| Conventional 2x2 / 414 W | 122.9715 degC | 116.9883 degC | -5.9832 K | 111.1871 degC |
+| Conventional 2x2 / 300 W | 102.3078 degC | 95.9839 degC | -6.3238 K | 91.8277 degC |
+| Conventional 2x1 / 414 W | 120.4741 degC | 111.6267 degC | -8.8474 K | 109.6643 degC |
+| Conventional 2x1 / 300 W | 100.4761 degC | 92.1853 degC | -8.2908 K | 90.7674 degC |
 
-The GPU 414-to-300 W Tmax reduction is 23.8633 K for no-base 2x2 and
-22.3095 K for no-base 2x1. The hotspot component remains GPU FEOL in all four
-cases. IEDM reports approximately -3.7 K for base-die removal; the current
-technology-level intervention instead gives positive deltas, so its trend is
-opposite. This comparison includes both removal of the base-die thermal layers
+The GPU 414-to-300 W Tmax reduction is 21.0043 K for no-base 2x2 and
+19.4414 K for no-base 2x1. The hotspot component remains GPU FEOL in all four
+cases. IEDM reports approximately -3.7 K for base-die removal; the corrected
+technology-level intervention gives negative deltas from -5.9832 K to
+-8.8474 K, so the trend is in the same direction but the modeled cooling is
+larger. This comparison includes both removal of the base-die thermal layers
 and removal of the corresponding 8 W per physical stack logic power.
+
+The earlier results that inserted a 55 um Mold layer between the DRAM stack
+and TIM are marked `superseded_diagnostic` and are excluded from formal tables
+and paper comparison.
 
 ## Paper-parameter-aligned comparison
 

@@ -32,10 +32,13 @@ zero logic power.
 
 | Case ID | Architecture | GPU | HBM | Total | Tmax |
 |---|---|---:|---:|---:|---:|
-| `exp_conv_2x2_nobase_g414_m128` | Conventional 2x2 no-base | 414 W | 128 W | 542 W | 131.7286 degC |
-| `exp_conv_2x2_nobase_g300_m128` | Conventional 2x2 no-base | 300 W | 128 W | 428 W | 107.8653 degC |
-| `exp_conv_2x1_nobase_g414_m128` | Conventional 2x1 no-base | 414 W | 128 W | 542 W | 126.4554 degC |
-| `exp_conv_2x1_nobase_g300_m128` | Conventional 2x1 no-base | 300 W | 128 W | 428 W | 104.1459 degC |
+| `exp_conv_2x2_nobase_g414_m128` | Conventional 2x2 no-base | 414 W | 128 W | 542 W | 116.9883 degC |
+| `exp_conv_2x2_nobase_g300_m128` | Conventional 2x2 no-base | 300 W | 128 W | 428 W | 95.9839 degC |
+| `exp_conv_2x1_nobase_g414_m128` | Conventional 2x1 no-base | 414 W | 128 W | 542 W | 111.6267 degC |
+| `exp_conv_2x1_nobase_g300_m128` | Conventional 2x1 no-base | 300 W | 128 W | 428 W | 92.1853 degC |
+
+The earlier 55 um top-Mold-closure outputs are retained only as
+`superseded_diagnostic` runs and are not formal optimization results.
 
 ## Legacy uniform history
 

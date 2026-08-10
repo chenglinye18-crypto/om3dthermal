@@ -28,6 +28,14 @@ from .errors import (
     UnsupportedMaterialRotationError,
 )
 from .interfaces import InterfaceResistanceQuery, InterfaceResistanceRegistry
+from .m3d_power import (
+    M3DMemoryPowerResolution,
+    M3DOperationPowerBreakdown,
+    UnresolvedM3DActivityError,
+    calculate_operation_energy_power,
+    femtojoules_to_joules,
+    resolve_m3d_memory_power,
+)
 from .operator import MatrixFreeThermalOperator, build_matrix_free_operator
 from .power import (
     PowerSourceResult,
@@ -65,22 +73,28 @@ __all__ = [
     "InterfaceResistanceRegistry",
     "InvalidRotationMatrixError",
     "MatrixFreeThermalOperator",
+    "M3DMemoryPowerResolution",
+    "M3DOperationPowerBreakdown",
     "MissingThermalConductivityError",
     "PowerSourceResult",
     "PowerVector",
     "SteadyStateResult",
     "UnanchoredThermalComponentError",
     "UnsupportedMaterialRotationError",
+    "UnresolvedM3DActivityError",
     "build_boundary_link_table",
     "build_conductance_table",
     "build_matrix_free_operator",
     "build_power_breakdown",
     "build_solver_summary",
+    "calculate_operation_energy_power",
     "canonical_rotation_key",
     "global_conductivity_tensor",
+    "femtojoules_to_joules",
     "is_signed_axis_permutation",
     "map_power_sources",
     "normal_conductivity",
+    "resolve_m3d_memory_power",
     "select_boundary_rule",
     "solve_pcg",
     "solve_weighted_jacobi",

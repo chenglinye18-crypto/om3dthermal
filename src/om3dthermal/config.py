@@ -27,6 +27,357 @@ HeatTransferCoefficient = Annotated[
 Temperature = Annotated[float, BeforeValidator(parse_temperature)]
 
 
+class UnresolvedPhysicalParametersError(ValueError):
+    """A research template is structurally valid but not solver-ready."""
+
+    def __init__(self, architecture: str, parameters: list[str]):
+        self.architecture = architecture
+        self.parameters = tuple(parameters)
+        joined = ", ".join(parameters)
+        super().__init__(
+            f"{architecture} geometry bookkeeping is valid but the config "
+            f"cannot enter thermal material/operator/solve stages; "
+            f"unresolved physical parameters: {joined}")
+
+
+UnresolvedFloat = float | Literal["unresolved"]
+
+
+class OrthogonalM3DArchitectureConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["orthogonal_m3d_edram"]
+
+
+class OrthogonalM3DArrayConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    slab_count: Annotated[int, Field(strict=True, gt=0)]
+    cube_length_x_mm: Annotated[float, Field(gt=0)]
+    slab_plane_y_mm: Annotated[float, Field(gt=0)]
+    slab_height_z_mm: Annotated[float, Field(gt=0)]
+    slab_pitch_x_um: Annotated[float, Field(gt=0)]
+    daa_um: Annotated[float, Field(gt=0)]
+    slab_plane: Literal["y-z"] = "y-z"
+    thickness_direction: Literal["global_x"] = "global_x"
+    placement: Literal["reuse_orthogonal_mosaic_array"] = (
+        "reuse_orthogonal_mosaic_array")
+
+
+class OrthogonalM3DSlabConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    total_pitch_um: Annotated[float, Field(gt=0)]
+    si_substrate_um: Annotated[float, Field(gt=0)]
+    feol_um: Annotated[float, Field(gt=0)]
+    region_order: tuple[str, ...] = (
+        "si_substrate", "feol", "m3d_bitcell_stack",
+        "beol_interconnect", "daa")
+
+    @field_validator("region_order")
+    @classmethod
+    def fixed_region_order(cls, value: tuple[str, ...]):
+        expected = (
+            "si_substrate", "feol", "m3d_bitcell_stack",
+            "beol_interconnect", "daa")
+        if value != expected:
+            raise ValueError(
+                "M3D slab region_order must be Si substrate -> FEOL -> "
+                "M3D bit-cell stack -> BEOL interconnect -> DAA")
+        return value
+
+
+class M3DBEOLThermalConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    model: Literal["effective_anisotropic"]
+    k_in_plane_W_mK: UnresolvedFloat
+    k_cross_plane_W_mK: UnresolvedFloat
+
+    @field_validator("k_in_plane_W_mK", "k_cross_plane_W_mK")
+    @classmethod
+    def positive_if_resolved(cls, value: UnresolvedFloat):
+        if value != "unresolved" and value <= 0:
+            raise ValueError("resolved effective M3D-BEOL k must be positive")
+        return value
+
+
+class M3DBEOLConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    bitcell_layers: Annotated[int, Field(strict=True, gt=0)]
+    bitcell_layer_pitch_nm: Annotated[float, Field(gt=0)]
+    bitcell_stack_um: Annotated[float, Field(gt=0)]
+    interconnect_um: Annotated[float, Field(gt=0)]
+    total_um: Annotated[float, Field(gt=0)]
+    region_order: tuple[str, ...] = ("bitcell_stack", "interconnect")
+    thermal: M3DBEOLThermalConfig
+
+    @model_validator(mode="after")
+    def derived_thicknesses(self):
+        expected_stack_um = (
+            self.bitcell_layers * self.bitcell_layer_pitch_nm / 1000.0)
+        if abs(self.bitcell_stack_um - expected_stack_um) > 1e-12:
+            raise ValueError(
+                "m3d_beol.bitcell_stack_um must equal bitcell_layers * "
+                "bitcell_layer_pitch_nm")
+        if abs(self.total_um - (
+                self.bitcell_stack_um + self.interconnect_um)) > 1e-12:
+            raise ValueError(
+                "m3d_beol.total_um must equal bitcell_stack_um + "
+                "interconnect_um")
+        if self.region_order != ("bitcell_stack", "interconnect"):
+            raise ValueError(
+                "m3d_beol.region_order must be bitcell_stack -> interconnect")
+        return self
+
+
+class M3DMemoryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    technology: Literal["CAA_IGZO_2T0C"]
+    layers: Annotated[int, Field(strict=True, gt=0)]
+    density_Mb_mm2_per_layer: Annotated[float, Field(gt=0)]
+    cell_area_um2: Annotated[float, Field(gt=0)]
+    slab_array_fill_factor: Annotated[float, Field(gt=0, le=1)]
+    placement: Literal["within_beol_above_feol"]
+    daa_between_m3d_layers: Literal[False]
+
+
+class OrthogonalM3DPowerDistributionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["uniform_m3d_layers"]
+    target_region: Literal["m3d_bitcell_stack"]
+    direct_power_regions: tuple[str, ...] = ("m3d_bitcell_stack",)
+
+    @field_validator("direct_power_regions")
+    @classmethod
+    def bitcell_stack_only(cls, value: tuple[str, ...]):
+        if value != ("m3d_bitcell_stack",):
+            raise ValueError(
+                "M3D memory direct power must target only "
+                "m3d_bitcell_stack")
+        return value
+
+
+class M3DIsoTotalPowerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    memory_total_W: Annotated[float, Field(gt=0)]
+    distribution: OrthogonalM3DPowerDistributionConfig
+    cim_metrics_used_as_memory_power: Literal[False] = False
+
+
+class M3DOperationEnergyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    read_0: Annotated[float, Field(ge=0)]
+    read_1: Annotated[float, Field(ge=0)]
+    write_0_to_0: Annotated[float, Field(ge=0)]
+    write_0_to_1: Annotated[float, Field(ge=0)]
+    write_1_to_0: Annotated[float, Field(ge=0)]
+    write_1_to_1: Annotated[float, Field(ge=0)]
+    refresh_0: Annotated[float, Field(ge=0)]
+    refresh_1: Annotated[float, Field(ge=0)]
+
+
+ProbabilityValue = float | Literal["unresolved"]
+ActivityRate = float | Literal["unresolved"]
+ActiveRows = int | Literal["unresolved"]
+
+
+def _validate_probability(value: ProbabilityValue) -> ProbabilityValue:
+    if value != "unresolved" and not 0.0 <= value <= 1.0:
+        raise ValueError("resolved probability must be within [0, 1]")
+    return value
+
+
+class M3DStateProbabilityConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    p0: ProbabilityValue
+    p1: ProbabilityValue
+
+    _probability_range = field_validator("p0", "p1")(_validate_probability)
+
+    @model_validator(mode="after")
+    def sum_if_resolved(self):
+        if self.p0 != "unresolved" and self.p1 != "unresolved":
+            if abs(float(self.p0) + float(self.p1) - 1.0) > 1e-12:
+                raise ValueError("state probabilities p0 + p1 must equal 1")
+        return self
+
+
+class M3DWriteTransitionProbabilityConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    p00: ProbabilityValue
+    p01: ProbabilityValue
+    p10: ProbabilityValue
+    p11: ProbabilityValue
+
+    _probability_range = field_validator(
+        "p00", "p01", "p10", "p11")(_validate_probability)
+
+    @model_validator(mode="after")
+    def sum_if_resolved(self):
+        values = (self.p00, self.p01, self.p10, self.p11)
+        if all(value != "unresolved" for value in values):
+            if abs(sum(float(value) for value in values) - 1.0) > 1e-12:
+                raise ValueError(
+                    "write transition probabilities must sum to 1")
+        return self
+
+
+class M3DOperationActivityConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    read_bit_rate_per_s: ActivityRate
+    write_bit_rate_per_s: ActivityRate
+    read_state_probability: M3DStateProbabilityConfig
+    write_transition_probability: M3DWriteTransitionProbabilityConfig
+    refresh_period_s: ActivityRate
+    refresh_state_probability: M3DStateProbabilityConfig
+    active_rows: ActiveRows
+
+    @field_validator(
+        "read_bit_rate_per_s", "write_bit_rate_per_s", "refresh_period_s")
+    @classmethod
+    def nonnegative_rate_positive_period(cls, value, info):
+        if value == "unresolved":
+            return value
+        if info.field_name == "refresh_period_s":
+            if value <= 0:
+                raise ValueError("refresh_period_s must be positive")
+        elif value < 0:
+            raise ValueError(f"{info.field_name} must be nonnegative")
+        return value
+
+    @field_validator("active_rows")
+    @classmethod
+    def nonnegative_active_rows(cls, value: ActiveRows):
+        if value != "unresolved" and value < 0:
+            raise ValueError("active_rows must be nonnegative")
+        return value
+
+    def unresolved_parameters(self) -> list[str]:
+        candidates = {
+            "read_bit_rate_per_s": self.read_bit_rate_per_s,
+            "write_bit_rate_per_s": self.write_bit_rate_per_s,
+            "read_state_probability.p0": self.read_state_probability.p0,
+            "read_state_probability.p1": self.read_state_probability.p1,
+            "write_transition_probability.p00": (
+                self.write_transition_probability.p00),
+            "write_transition_probability.p01": (
+                self.write_transition_probability.p01),
+            "write_transition_probability.p10": (
+                self.write_transition_probability.p10),
+            "write_transition_probability.p11": (
+                self.write_transition_probability.p11),
+            "refresh_period_s": self.refresh_period_s,
+            "refresh_state_probability.p0": (
+                self.refresh_state_probability.p0),
+            "refresh_state_probability.p1": (
+                self.refresh_state_probability.p1),
+            "active_rows": self.active_rows,
+        }
+        return [name for name, value in candidates.items()
+                if value == "unresolved"]
+
+
+class M3DOperationEnergyPowerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_energy_fJ_per_bit: M3DOperationEnergyConfig
+    hold_power_W_per_row: Annotated[float, Field(ge=0)]
+    activity: M3DOperationActivityConfig
+    distribution: OrthogonalM3DPowerDistributionConfig
+    energy_provenance: Literal["PAPER_REPORTED"]
+    cim_metrics_used_as_memory_power: Literal[False] = False
+
+
+class OrthogonalM3DPowerModelsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    iso_total: M3DIsoTotalPowerConfig
+    operation_energy: M3DOperationEnergyPowerConfig
+
+
+class OrthogonalM3DPowerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    default_mode: Literal["iso_total"]
+
+
+class OrthogonalM3DPaperMetricsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    energy_efficiency_TOPS_W: Annotated[float, Field(gt=0)]
+    compute_density_TOPS_mm2: Annotated[float, Field(gt=0)]
+
+
+class OrthogonalM3DTemplateConfig(BaseModel):
+    """Paper-parameter template that is intentionally not solver-ready."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    architecture: OrthogonalM3DArchitectureConfig
+    orthogonal: OrthogonalM3DArrayConfig
+    slab: OrthogonalM3DSlabConfig
+    m3d_beol: M3DBEOLConfig
+    m3d_memory: M3DMemoryConfig
+    power: OrthogonalM3DPowerConfig
+    power_models: OrthogonalM3DPowerModelsConfig
+    paper_metrics: OrthogonalM3DPaperMetricsConfig
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def pitch_and_layer_contract(self):
+        if abs(self.slab.total_pitch_um
+               - self.orthogonal.slab_pitch_x_um) > 1e-12:
+            raise ValueError(
+                "slab.total_pitch_um must equal orthogonal.slab_pitch_x_um")
+        array_length_mm = (
+            self.orthogonal.slab_count
+            * self.orthogonal.slab_pitch_x_um / 1000.0)
+        if array_length_mm > self.orthogonal.cube_length_x_mm + 1e-12:
+            raise ValueError(
+                "orthogonal slab array length exceeds cube_length_x_mm")
+        if self.m3d_beol.bitcell_layers != self.m3d_memory.layers:
+            raise ValueError(
+                "m3d_beol.bitcell_layers must equal m3d_memory.layers")
+        expected_si_um = (
+            self.slab.total_pitch_um - self.slab.feol_um
+            - self.m3d_beol.total_um - self.orthogonal.daa_um)
+        if abs(self.slab.si_substrate_um - expected_si_um) > 1e-9:
+            raise ValueError(
+                "slab.si_substrate_um must be derived by pitch closure")
+        closure_um = (
+            self.slab.si_substrate_um + self.slab.feol_um
+            + self.m3d_beol.bitcell_stack_um
+            + self.m3d_beol.interconnect_um + self.orthogonal.daa_um)
+        if abs(closure_um - self.slab.total_pitch_um) > 1e-9:
+            raise ValueError(
+                "Si + FEOL + bit-cell stack + interconnect + DAA must "
+                "equal slab.total_pitch_um")
+        return self
+
+    def unresolved_physical_parameters(self) -> list[str]:
+        candidates = {
+            "m3d_beol.thermal.k_in_plane_W_mK": (
+                self.m3d_beol.thermal.k_in_plane_W_mK),
+            "m3d_beol.thermal.k_cross_plane_W_mK": (
+                self.m3d_beol.thermal.k_cross_plane_W_mK),
+        }
+        return [name for name, value in candidates.items()
+                if value == "unresolved"]
+
+    def capacity_bookkeeping(self) -> dict[str, float]:
+        slab_area_mm2 = (
+            self.orthogonal.slab_plane_y_mm
+            * self.orthogonal.slab_height_z_mm)
+        capacity_per_layer_Mb = (
+            self.m3d_memory.density_Mb_mm2_per_layer
+            * slab_area_mm2 * self.m3d_memory.slab_array_fill_factor)
+        capacity_per_slab_Mb = (
+            capacity_per_layer_Mb * self.m3d_memory.layers)
+        capacity_cube_Mb = (
+            capacity_per_slab_Mb * self.orthogonal.slab_count)
+        return {
+            "slab_area_mm2": slab_area_mm2,
+            "capacity_per_layer_Mb": capacity_per_layer_Mb,
+            "capacity_per_slab_Mb": capacity_per_slab_Mb,
+            "capacity_cube_Mb": capacity_cube_Mb,
+            "capacity_cube_Gb_decimal": capacity_cube_Mb / 1000.0,
+            "capacity_cube_GB_decimal": capacity_cube_Mb / 8000.0,
+        }
+
+
 class LateralInset(BaseModel):
     """Per-edge lateral inset applied to a ``Layer``'s parent footprint.
 
@@ -596,6 +947,26 @@ class SimulationConfig(BaseModel):
         return self
 
 
+def is_orthogonal_m3d_template(data: Any) -> bool:
+    """Return whether raw YAML declares the M3D-eDRAM research template."""
+    return (
+        isinstance(data, dict)
+        and isinstance(data.get("architecture"), dict)
+        and data["architecture"].get("type") == "orthogonal_m3d_edram")
+
+
+def load_orthogonal_m3d_template(
+        path: str | Path) -> OrthogonalM3DTemplateConfig:
+    """Parse an M3D research template without claiming solver readiness."""
+    with Path(path).open("r", encoding="utf-8") as stream:
+        data = yaml.safe_load(stream)
+    if not is_orthogonal_m3d_template(data):
+        raise ValueError(
+            "config does not declare architecture.type="
+            "'orthogonal_m3d_edram'")
+    return OrthogonalM3DTemplateConfig.model_validate(data)
+
+
 def load_config(path: str | Path) -> SimulationConfig:
     """Load and validate a benchmark YAML.
 
@@ -611,6 +982,15 @@ def load_config(path: str | Path) -> SimulationConfig:
     """
     with Path(path).open("r", encoding="utf-8") as stream:
         data = yaml.safe_load(stream)
+    if is_orthogonal_m3d_template(data):
+        template = OrthogonalM3DTemplateConfig.model_validate(data)
+        unresolved = template.unresolved_physical_parameters()
+        if unresolved:
+            raise UnresolvedPhysicalParametersError(
+                template.architecture.type, unresolved)
+        raise NotImplementedError(
+            "orthogonal_m3d_edram template parameters are resolved, but "
+            "v0 intentionally has no thermal geometry compilation path")
     expanded = compile_user_config(data)
     return SimulationConfig.model_validate(expanded)
 
