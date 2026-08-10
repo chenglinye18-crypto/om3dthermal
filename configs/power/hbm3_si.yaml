@@ -8,6 +8,9 @@ memory:
 architecture:
   name: conventional_hbm3
   layers: 8
+  geometry_source:
+    config: configs/exp_conv_2x2_g414_m160.yaml
+    memory_region: hbm_dram_die
   vertical: {type: tsv, source: dreamram}
   base_route: {enabled: true, source: dreamram}
   interface: {type: hbm_dq, source: dreamram}

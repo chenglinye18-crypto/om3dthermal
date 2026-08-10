@@ -8,6 +8,9 @@ memory:
 architecture:
   name: conventional_hbm3_logic_removed
   layers: 8
+  geometry_source:
+    config: configs/exp_conv_2x2_nobase_g414_m128.yaml
+    memory_region: hbm_dram_die
   vertical: {type: tsv, source: dreamram}
   base_route: {enabled: false, source: none}
   # MODELING_CHOICE: retain the existing HBM DQ interface after base removal.

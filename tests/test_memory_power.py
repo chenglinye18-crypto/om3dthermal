@@ -5,13 +5,14 @@ from pathlib import Path
 import pytest
 
 from om3dthermal.power import calculate_memory_power, load_power_config
-from om3dthermal.power.backends import OperationTableCellModel
+from om3dthermal.power.backends import DreamRAMBackend, OperationTableCellModel
 from om3dthermal.power.cell_model import (
     MissingCellReplacementError,
     ONE_T_ONE_C_SPECIFIC,
     REUSABLE_STRUCTURE,
 )
 from om3dthermal.power.config import MemoryPowerConfig, RowPolicy
+from om3dthermal.power.geometry import evaluate_geometry_fit
 
 
 ROOT = Path(__file__).parents[1]
@@ -106,6 +107,70 @@ def test_igzo_geometry_does_not_change_operation_energy_or_hold():
     assert cell_model.background.value_w == pytest.approx(4.26e-15)
 
 
+def test_igzo_pitch_maps_to_independent_dreamram_tech():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    result = DreamRAMBackend(ROOT).calculate(config)
+    metadata = result.metadata
+    assert metadata["cell_pitch_mapping"] == "pitch_x_to_bl__pitch_y_to_wl"
+    assert metadata["pitch_bl_um"] == pytest.approx(0.15166)
+    assert metadata["pitch_wl_um"] == pytest.approx(0.15166)
+    assert metadata["pitch_ldl_um"] == pytest.approx(
+        metadata["pitch_wl_um"] * metadata["pitch_ldl_to_wl_min"])
+    assert metadata["pitch_mdl_um"] == pytest.approx(
+        metadata["pitch_bl_um"] * metadata["pitch_mdl_to_bl_min"])
+
+
+def test_igzo_pitch_changes_mat_bank_and_reusable_energy(conventional):
+    native = DreamRAMBackend(ROOT).calculate(conventional)
+    igzo = DreamRAMBackend(ROOT).calculate(
+        load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml"))
+    for dimension in ("mat_x_um", "mat_y_um", "bank_x_um", "bank_y_um"):
+        assert igzo.metadata[dimension] != pytest.approx(native.metadata[dimension])
+    changed = {
+        name for name in ("lwl", "ldl", "mdl")
+        if igzo.native_internal_components[name]
+        != pytest.approx(native.native_internal_components[name])
+    }
+    assert changed
+
+
+def test_existing_geometry_sources_are_resolved_for_all_power_configs():
+    expected = {
+        "hbm3_si.yaml": (10.8, 10.8, "hbm_dram_die"),
+        "hbm3_si_logic_remove.yaml": (10.8, 10.8, "hbm_dram_die"),
+        "orthogonal_si.yaml": (22.0, 5.5, "orthogonal_memory_slab"),
+        "orthogonal_m3d_igzo.yaml": (
+            22.0, 5.5, "orthogonal_memory_slab"),
+    }
+    for name, (configured_x, configured_y, region) in expected.items():
+        backend = DreamRAMBackend(ROOT).calculate(
+            load_power_config(POWER_CONFIGS / name))
+        assert backend.metadata["configured_x_mm"] == pytest.approx(configured_x)
+        assert backend.metadata["configured_y_mm"] == pytest.approx(configured_y)
+        assert backend.metadata["memory_region"] == region
+        assert backend.metadata["x_utilization"] == pytest.approx(
+            backend.metadata["required_x_mm"] / configured_x)
+        assert backend.metadata["y_utilization"] == pytest.approx(
+            backend.metadata["required_y_mm"] / configured_y)
+        assert backend.metadata["geometry_feasible"] == (
+            backend.metadata["required_x_mm"] <= configured_x
+            and backend.metadata["required_y_mm"] <= configured_y)
+
+
+@pytest.mark.parametrize(
+    "configured_x, configured_y, expected",
+    [(11.0, 12.0, True), (9.0, 12.0, False), (11.0, 9.0, False)],
+)
+def test_geometry_fit_checks_each_axis(configured_x, configured_y, expected):
+    fit = evaluate_geometry_fit(
+        configured_x_mm=configured_x,
+        configured_y_mm=configured_y,
+        required_x_mm=10.0,
+        required_y_mm=10.0,
+    )
+    assert fit.geometry_feasible is expected
+
+
 def test_dreamram_hbm3_full_row_regression(conventional):
     result = calculate_memory_power(conventional, project_root=ROOT)
     assert result.E_access_total_pj_bit == pytest.approx(0.9782367131)
@@ -157,6 +222,19 @@ def test_orthogonal_si_keeps_same_dreamram_internal_energy(conventional):
     assert orthogonal.E_vertical_pj_bit == 0.0
     assert orthogonal.E_base_route_pj_bit == 0.0
     assert orthogonal.E_interface_pj_bit == pytest.approx(0.5)
+    assert orthogonal.E_memory_internal_pj_bit == pytest.approx(0.6288729797)
+    assert orthogonal.E_access_total_pj_bit == pytest.approx(1.1288729797)
+
+
+def test_igzo_then_si_has_no_shared_tech_contamination(conventional):
+    before = calculate_memory_power(conventional, project_root=ROOT)
+    DreamRAMBackend(ROOT).calculate(
+        load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml"))
+    after = calculate_memory_power(conventional, project_root=ROOT)
+    assert after.E_access_total_pj_bit == pytest.approx(
+        before.E_access_total_pj_bit, abs=0.0)
+    assert after.diagnostics["pitch_bl_um"] == before.diagnostics["pitch_bl_um"]
+    assert after.diagnostics["pitch_wl_um"] == before.diagnostics["pitch_wl_um"]
 
 
 def test_logic_removed_only_drops_dreamram_base_route(conventional):

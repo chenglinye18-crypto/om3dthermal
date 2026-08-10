@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import fields
+from dataclasses import fields, replace
 import importlib.util
 import os
 from pathlib import Path
@@ -14,6 +14,7 @@ from typing import Iterator
 
 from ..cell_model import ONE_T_ONE_C_SPECIFIC, REUSABLE_STRUCTURE
 from ..config import MemoryPowerConfig, resolve_project_path
+from ..geometry import evaluate_geometry_fit, load_memory_region_size
 from ..result import BackendEnergyResult, EnergyDecomposition
 
 
@@ -131,12 +132,39 @@ class DreamRAMBackend:
                 os.chdir(previous_cwd)
             if memory is None or technology is None:
                 raise ValueError("DreamRAM configuration could not be resolved")
-            tech = tech_module.Tech(**technology)
+            native_tech = tech_module.Tech(**technology)
+            cell_geometry = config.memory.cell_model.geometry
+            if cell_geometry is None:
+                tech = native_tech
+                geometry_mapping = "dreamram_native"
+            else:
+                # Build a per-invocation Tech. Dataclass defaults for pitch_ldl
+                # and pitch_mdl were evaluated using the native pitches, so
+                # both dependent pitches must be updated explicitly.
+                pitch_bl = cell_geometry.pitch_x_um
+                pitch_wl = cell_geometry.pitch_y_um
+                tech = replace(
+                    native_tech,
+                    pitch_bl=pitch_bl,
+                    pitch_wl=pitch_wl,
+                    pitch_ldl=pitch_wl * native_tech.pitch_ldl_to_wl_min,
+                    pitch_mdl=pitch_bl * native_tech.pitch_mdl_to_bl_min,
+                )
+                geometry_mapping = "pitch_x_to_bl__pitch_y_to_wl"
             hbm_fields = {item.name for item in fields(hbm_module.Hbm)}
             hbm_kwargs = {key: value for key, value in memory.items()
                           if key in hbm_fields}
             hbm_kwargs["brv_sa"] = memory["brvsa"]
             dram = hbm_module.Hbm(**hbm_kwargs)
+            bank_x_um, bank_y_um, _ = dram.bank_dims(tech)
+            mat_x_um = (
+                dram.mat_cols * dram.isolation_cols_overhead * tech.pitch_bl)
+            mat_y_um = (
+                dram.mat_rows * dram.isolation_rows_overhead * tech.pitch_wl)
+            stack_dims = dram.calc_stack_dims(tech)
+            required_x_mm = float(stack_dims[1]) * 1e-3
+            required_y_mm = float(sum(stack_dims[2:])) * 1e-3
+            wire_lengths = dram.wire_lengths(tech)
             command_energy, components = dram.per_cmd_energy(tech)
             atoms_per_page = int(dram.atoms_per_page())
             atom_size = int(dram.atom_size)
@@ -145,6 +173,16 @@ class DreamRAMBackend:
         if n_read > atoms_per_page:
             raise ValueError(
                 f"rd_per_act={n_read} exceeds atoms_per_page={atoms_per_page}")
+
+        geometry_path, configured_x_mm, configured_y_mm = (
+            load_memory_region_size(
+                self.project_root, config.architecture.geometry_source))
+        geometry_fit = evaluate_geometry_fit(
+            configured_x_mm=configured_x_mm,
+            configured_y_mm=configured_y_mm,
+            required_x_mm=required_x_mm,
+            required_y_mm=required_y_mm,
+        )
 
         command_groups = {
             command: {group: 0.0 for group in _GROUP_COMPONENTS}
@@ -205,6 +243,22 @@ class DreamRAMBackend:
                 "rd_per_act": n_read,
                 "atom_size_bits": atom_size,
                 "atoms_per_page": atoms_per_page,
+                "geometry_source_config": str(geometry_path),
+                "memory_region": config.architecture.geometry_source.memory_region,
+                **geometry_fit.as_dict(),
+                "cell_pitch_mapping": geometry_mapping,
+                "pitch_bl_um": float(tech.pitch_bl),
+                "pitch_wl_um": float(tech.pitch_wl),
+                "pitch_ldl_um": float(tech.pitch_ldl),
+                "pitch_mdl_um": float(tech.pitch_mdl),
+                "pitch_ldl_to_wl_min": float(tech.pitch_ldl_to_wl_min),
+                "pitch_mdl_to_bl_min": float(tech.pitch_mdl_to_bl_min),
+                "mat_x_um": float(mat_x_um),
+                "mat_y_um": float(mat_y_um),
+                "bank_x_um": float(bank_x_um),
+                "bank_y_um": float(bank_y_um),
+                "wire_lengths_um": {
+                    name: float(value) for name, value in wire_lengths.items()},
                 "E_PRE_pJ": float(command_energy["pre"]),
                 "E_ACT_pJ": float(command_energy["act"]),
                 "E_RD_pJ": float(command_energy["rd"]),

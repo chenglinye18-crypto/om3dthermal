@@ -67,7 +67,7 @@ class CellGeometryProvenance(StrictModel):
 
 
 class CellGeometryInput(StrictModel):
-    """Physical cell pitches; WL/BL orientation mapping is deferred."""
+    """Physical pitches mapped by the adapter as X->BL and Y->WL."""
 
     cell_area_um2: float = Field(gt=0.0)
     pitch_x_um: float = Field(gt=0.0)
@@ -164,10 +164,18 @@ class InterfaceInput(StrictModel):
     energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
 
 
+class GeometrySourceInput(StrictModel):
+    """Existing thermal-geometry source for memory footprint constraints."""
+
+    config: Path
+    memory_region: Literal["hbm_dram_die", "orthogonal_memory_slab"]
+
+
 class ArchitectureInput(StrictModel):
     name: str
     layers: int = Field(gt=0)
     dies: int | None = Field(default=None, gt=0)
+    geometry_source: GeometrySourceInput
     vertical: TransportInput
     base_route: BaseRouteInput
     interface: InterfaceInput

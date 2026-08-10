@@ -1,0 +1,80 @@
+"""Memory-footprint constraints sourced from existing thermal configs."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from om3dthermal.units import parse_length
+
+from .config import GeometrySourceInput, resolve_project_path
+
+
+@dataclass(frozen=True)
+class GeometryFit:
+    configured_x_mm: float
+    configured_y_mm: float
+    required_x_mm: float
+    required_y_mm: float
+    x_utilization: float
+    y_utilization: float
+    geometry_feasible: bool
+
+    def as_dict(self) -> dict[str, float | bool]:
+        return asdict(self)
+
+
+def _length_mm(value: Any) -> float:
+    return parse_length(value) * 1e3
+
+
+def load_memory_region_size(
+        project_root: Path, source: GeometrySourceInput,
+        ) -> tuple[Path, float, float]:
+    """Read a die/slab plane from an existing thermal geometry config."""
+    path = resolve_project_path(project_root, source.config).resolve()
+    with path.open("r", encoding="utf-8") as stream:
+        raw = yaml.safe_load(stream)
+    if not isinstance(raw, dict):
+        raise ValueError(f"thermal geometry config root must be a mapping: {path}")
+
+    try:
+        if source.memory_region == "hbm_dram_die":
+            size = raw["geometry"]["hbm"]["dram_size"]
+            x_mm, y_mm = _length_mm(size[0]), _length_mm(size[1])
+        elif source.memory_region == "orthogonal_memory_slab":
+            die = raw["orthogonal_hbm"]["memory_die"]
+            x_mm, y_mm = _length_mm(die["width"]), _length_mm(die["height"])
+        else:  # protected by the config Literal, retained for direct callers
+            raise ValueError(f"unsupported memory region {source.memory_region!r}")
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError(
+            f"cannot resolve {source.memory_region!r} from thermal geometry "
+            f"config {path}") from exc
+    if x_mm <= 0.0 or y_mm <= 0.0:
+        raise ValueError(f"memory region dimensions must be positive in {path}")
+    return path, x_mm, y_mm
+
+
+def evaluate_geometry_fit(
+        *, configured_x_mm: float, configured_y_mm: float,
+        required_x_mm: float, required_y_mm: float,
+        ) -> GeometryFit:
+    """Evaluate independent X/Y fit without changing DreamRAM organization."""
+    values = (configured_x_mm, configured_y_mm, required_x_mm, required_y_mm)
+    if any(value <= 0.0 for value in values):
+        raise ValueError("configured and required geometry dimensions must be positive")
+    return GeometryFit(
+        configured_x_mm=configured_x_mm,
+        configured_y_mm=configured_y_mm,
+        required_x_mm=required_x_mm,
+        required_y_mm=required_y_mm,
+        x_utilization=required_x_mm / configured_x_mm,
+        y_utilization=required_y_mm / configured_y_mm,
+        geometry_feasible=(
+            required_x_mm <= configured_x_mm
+            and required_y_mm <= configured_y_mm),
+    )

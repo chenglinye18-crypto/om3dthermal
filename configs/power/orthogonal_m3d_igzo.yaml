@@ -10,7 +10,7 @@ memory:
     geometry:
       # 0.023 um^2 is the paper-reported physical/raw bitcell footprint.
       # It is distinct from the 30 Mb/mm^2/layer architecture-level density.
-      # Physical x/y are intentionally not mapped to DreamRAM WL/BL yet.
+      # Adapter mapping: physical X -> DreamRAM BL pitch, Y -> WL pitch.
       cell_area_um2: 0.023
       pitch_x_um: 0.15166
       pitch_y_um: 0.15166
@@ -43,6 +43,9 @@ memory:
 architecture:
   name: orthogonal_m3d_igzo
   layers: 8
+  geometry_source:
+    config: configs/exp_orth_m3d8_g414_bw39p2_all1read.yaml
+    memory_region: orthogonal_memory_slab
   vertical:
     type: miv
     source: constant
