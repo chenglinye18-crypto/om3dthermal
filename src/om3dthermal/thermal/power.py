@@ -202,8 +202,11 @@ def build_power_breakdown(
         name for name in model_names if name.startswith("son23"))
     son23 = bool(son23_models)
     if not son23:
+        reported_model = (
+            "m3d_operation_energy"
+            if "m3d_operation_energy" in model_names else "uniform")
         return {
-            "power_model": "uniform",
+            "power_model": reported_model,
             "component_split_available": False,
             "whole_package": {
                 "hbm_total_W": hbm_total_W,

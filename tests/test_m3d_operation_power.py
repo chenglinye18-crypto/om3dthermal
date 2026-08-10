@@ -100,14 +100,21 @@ def test_probability_sum_not_one_fails_clearly(template, probability_block):
         M3DOperationEnergyPowerConfig.model_validate(raw)
 
 
-def test_unresolved_activity_blocks_operation_mode_but_not_iso_total(template):
-    iso = resolve_m3d_memory_power(template)
+def test_nominal_operation_mode_and_legacy_iso_total_are_independent(template):
+    nominal = resolve_m3d_memory_power(template)
+    assert nominal.mode == "operation_energy"
+    assert nominal.memory_total_W == pytest.approx(14.4256)
+    assert nominal.per_bitcell_layer_W == pytest.approx(1.8032)
+    assert nominal.target_region == "m3d_bitcell_stack"
+    iso = resolve_m3d_memory_power(template, mode="iso_total")
     assert iso.mode == "iso_total"
     assert iso.memory_total_W == pytest.approx(156.8)
     assert iso.per_bitcell_layer_W == pytest.approx(19.6)
     assert iso.target_region == "m3d_bitcell_stack"
     with pytest.raises(UnresolvedM3DActivityError) as caught:
-        resolve_m3d_memory_power(template, mode="operation_energy")
+        calculate_operation_energy_power(
+            template.power_models.operation_energy,
+            total_memory_bits=1.0)
     assert "read_bit_rate_per_s" in str(caught.value)
     assert "refresh_period_s" in str(caught.value)
     assert "active_rows" in str(caught.value)

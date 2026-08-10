@@ -362,10 +362,19 @@ def solve_steady(
     summary["power_model"] = power_breakdown["power_model"]
     summary["power_breakdown"] = power_breakdown
     summary["power_by_source_W"] = dict(power.power_by_source)
+    if "architecture_bookkeeping" in config.metadata:
+        summary["architecture_bookkeeping"] = dict(
+            config.metadata["architecture_bookkeeping"])
+    if "power_provenance" in config.metadata:
+        summary["power_provenance"] = dict(
+            config.metadata["power_provenance"])
     summary["benchmark_label"] = (
         "paper-parameter-aligned Son23 component-power experiment"
         if power_breakdown["power_model"] == "son23split"
-        else "paper-parameter-aligned uniform-power baseline")
+        else (
+            "M3D-v1 matched-bandwidth array-read baseline"
+            if power_breakdown["power_model"] == "m3d_operation_energy"
+            else "paper-parameter-aligned uniform-power baseline"))
     write_solver_summary_json(summary, output_dir / "steady_state_summary.json")
     return summary
 

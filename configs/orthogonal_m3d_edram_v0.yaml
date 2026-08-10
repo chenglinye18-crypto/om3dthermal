@@ -1,5 +1,5 @@
-# Geometry-closed research template. Thermal solve remains intentionally
-# blocked while effective anisotropic M3D-BEOL conductivity is unresolved.
+# Geometry- and material-closed research template. Formal thermal cases use
+# the production configs exp_orth_m3d8_g{414,300}_bw39p2_all1read.yaml.
 name: orthogonal_m3d_edram_v0
 
 architecture:
@@ -35,9 +35,9 @@ m3d_beol:
   total_um: 5.304
   region_order: [bitcell_stack, interconnect]
   thermal:
-    model: effective_anisotropic
-    k_in_plane_W_mK: unresolved
-    k_cross_plane_W_mK: unresolved
+    model: effective_isotropic
+    k_in_plane_W_mK: 0.85
+    k_cross_plane_W_mK: 0.85
 
 m3d_memory:
   technology: CAA_IGZO_2T0C
@@ -49,7 +49,7 @@ m3d_memory:
   daa_between_m3d_layers: false
 
 power:
-  default_mode: iso_total
+  default_mode: operation_energy
 
 power_models:
   iso_total:
@@ -71,6 +71,14 @@ power_models:
       refresh_0: 0.90
       refresh_1: 370.0
     hold_power_W_per_row: 4.26e-15
+    nominal_workload:
+      delivered_bandwidth_bit_per_s: 39.2e12
+      read_fraction: 1.0
+      write_fraction: 0.0
+      read_state_probability: {p0: 0.0, p1: 1.0}
+      included_power_terms: [array_read]
+      power_scope: array_core_power_only
+      bandwidth_provenance: MATCHED_DELIVERED_BANDWIDTH_REFERENCE
     activity:
       read_bit_rate_per_s: unresolved
       write_bit_rate_per_s: unresolved
@@ -114,7 +122,11 @@ provenance:
     feol_thickness_um: 0.150
     beol_interconnect_um: 3.0
     slab_count_and_pitch: reuse_current_orthogonal_mosaic98
-    power_model: iso_total_uniform_across_bitcell_layers_only
+    m3d_bitcell_stack_k_W_mK: 0.85
+    beol_interconnect_k_W_mK: 0.85
+    nominal_power_model: matched_bandwidth_all1_array_read
+    legacy_control_power_model: iso_total_156p8W
+    bitcell_thermal_geometry: homogenized_8_layer_stack
     daa_scope: between_adjacent_orthogonal_slabs_only
   DERIVED_FROM_PAPER_FIGURE:
     bitcell_layer_pitch_nm: 288.0
@@ -128,6 +140,7 @@ provenance:
   DERIVED_FROM_GEOMETRY_CLOSURE:
     si_substrate_um: 292.546
     equation: 300-0.150-2.304-3.0-2.0
-  UNRESOLVED:
-    - m3d_beol.thermal.k_in_plane_W_mK
-    - m3d_beol.thermal.k_cross_plane_W_mK
+  MATCHED_DELIVERED_BANDWIDTH_REFERENCE:
+    delivered_bandwidth_Tb_s: 39.2
+    source: MOSAIC_98x50x8Gbps
+    interpretation: comparison_reference_not_M3D_maximum_bandwidth

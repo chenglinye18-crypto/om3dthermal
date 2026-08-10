@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from om3dthermal.config import (
-    UnresolvedPhysicalParametersError,
     load_config,
     load_orthogonal_m3d_template,
 )
@@ -96,22 +95,17 @@ def test_capacity_bookkeeping_uses_density_not_cim_metrics(template):
     assert template.power_models.iso_total.cim_metrics_used_as_memory_power is False
 
 
-def test_unresolved_parameters_are_explicit_and_block_solver_config(template):
-    expected = [
-        "m3d_beol.thermal.k_in_plane_W_mK",
-        "m3d_beol.thermal.k_cross_plane_W_mK",
-    ]
-    assert template.unresolved_physical_parameters() == expected
-    with pytest.raises(UnresolvedPhysicalParametersError) as caught:
+def test_effective_thermal_conductivity_is_resolved(template):
+    assert template.m3d_beol.thermal.model == "effective_isotropic"
+    assert template.m3d_beol.thermal.k_in_plane_W_mK == pytest.approx(0.85)
+    assert template.m3d_beol.thermal.k_cross_plane_W_mK == pytest.approx(0.85)
+    assert template.unresolved_physical_parameters() == []
+    with pytest.raises(NotImplementedError, match="no thermal geometry"):
         load_config(CONFIG)
-    message = str(caught.value)
-    assert "geometry bookkeeping is valid" in message
-    assert "cannot enter thermal material/operator/solve stages" in message
-    assert all(parameter in message for parameter in expected)
 
 
-def test_total_power_is_iso_total_only_and_not_per_bit_derived(template):
-    assert template.power.default_mode == "iso_total"
+def test_operation_energy_is_default_and_iso_total_is_legacy_control(template):
+    assert template.power.default_mode == "operation_energy"
     iso_total = template.power_models.iso_total
     assert iso_total.memory_total_W == pytest.approx(156.8)
     distribution = iso_total.distribution

@@ -51,6 +51,32 @@ def femtojoules_to_joules(energy_fJ: float) -> float:
     return float(energy_fJ) * FEMTOJOULE_TO_JOULE
 
 
+def calculate_array_read_power(
+        *, delivered_bandwidth_bit_per_s: float,
+        read_fraction: float,
+        state_0_probability: float,
+        state_1_probability: float,
+        read_0_energy_fJ_per_bit: float,
+        read_1_energy_fJ_per_bit: float) -> float:
+    """Matched-bandwidth array-read power without peripheral assumptions."""
+    if delivered_bandwidth_bit_per_s <= 0:
+        raise ValueError("delivered_bandwidth_bit_per_s must be positive")
+    if not 0.0 <= read_fraction <= 1.0:
+        raise ValueError("read_fraction must be within [0, 1]")
+    if not all(0.0 <= p <= 1.0 for p in (
+            state_0_probability, state_1_probability)):
+        raise ValueError("read-state probabilities must be within [0, 1]")
+    if abs(state_0_probability + state_1_probability - 1.0) > 1e-12:
+        raise ValueError("read-state probabilities must sum to 1")
+    read_bit_rate = delivered_bandwidth_bit_per_s * read_fraction
+    weighted_energy_J = (
+        state_0_probability * femtojoules_to_joules(
+            read_0_energy_fJ_per_bit)
+        + state_1_probability * femtojoules_to_joules(
+            read_1_energy_fJ_per_bit))
+    return read_bit_rate * weighted_energy_J
+
+
 def calculate_operation_energy_power(
         model: M3DOperationEnergyPowerConfig,
         *, total_memory_bits: float) -> M3DOperationPowerBreakdown:
@@ -119,9 +145,25 @@ def resolve_m3d_memory_power(
         )
     if selected == "operation_energy":
         model = template.power_models.operation_energy
-        total_bits = template.capacity_bookkeeping()["capacity_cube_Mb"] * 1e6
-        breakdown = calculate_operation_energy_power(
-            model, total_memory_bits=total_bits)
+        workload = model.nominal_workload
+        energy = model.operation_energy_fJ_per_bit
+        probability = workload.read_state_probability
+        read_W = calculate_array_read_power(
+            delivered_bandwidth_bit_per_s=(
+                workload.delivered_bandwidth_bit_per_s),
+            read_fraction=workload.read_fraction,
+            state_0_probability=float(probability.p0),
+            state_1_probability=float(probability.p1),
+            read_0_energy_fJ_per_bit=energy.read_0,
+            read_1_energy_fJ_per_bit=energy.read_1,
+        )
+        breakdown = M3DOperationPowerBreakdown(
+            read_W=read_W,
+            write_W=0.0,
+            refresh_W=0.0,
+            hold_W=0.0,
+            memory_total_W=read_W,
+        )
         return M3DMemoryPowerResolution(
             mode=selected,
             memory_total_W=breakdown.memory_total_W,

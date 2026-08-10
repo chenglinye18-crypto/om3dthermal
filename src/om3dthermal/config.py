@@ -86,7 +86,7 @@ class OrthogonalM3DSlabConfig(BaseModel):
 
 class M3DBEOLThermalConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    model: Literal["effective_anisotropic"]
+    model: Literal["effective_isotropic", "effective_anisotropic"]
     k_in_plane_W_mK: UnresolvedFloat
     k_cross_plane_W_mK: UnresolvedFloat
 
@@ -279,6 +279,7 @@ class M3DOperationEnergyPowerConfig(BaseModel):
     operation_energy_fJ_per_bit: M3DOperationEnergyConfig
     hold_power_W_per_row: Annotated[float, Field(ge=0)]
     activity: M3DOperationActivityConfig
+    nominal_workload: "M3DNominalArrayReadWorkloadConfig"
     distribution: OrthogonalM3DPowerDistributionConfig
     energy_provenance: Literal["PAPER_REPORTED"]
     cim_metrics_used_as_memory_power: Literal[False] = False
@@ -290,9 +291,37 @@ class OrthogonalM3DPowerModelsConfig(BaseModel):
     operation_energy: M3DOperationEnergyPowerConfig
 
 
+class M3DNominalArrayReadWorkloadConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    delivered_bandwidth_bit_per_s: Annotated[float, Field(gt=0)]
+    read_fraction: Annotated[float, Field(ge=0, le=1)]
+    write_fraction: Annotated[float, Field(ge=0, le=1)]
+    read_state_probability: M3DStateProbabilityConfig
+    included_power_terms: tuple[str, ...] = ("array_read",)
+    power_scope: Literal["array_core_power_only"]
+    bandwidth_provenance: Literal["MATCHED_DELIVERED_BANDWIDTH_REFERENCE"]
+
+    @model_validator(mode="after")
+    def nominal_read_contract(self):
+        if abs(self.read_fraction + self.write_fraction - 1.0) > 1e-12:
+            raise ValueError("read_fraction + write_fraction must equal 1")
+        if self.read_fraction != 1.0 or self.write_fraction != 0.0:
+            raise ValueError(
+                "M3D-v1 nominal workload must be read_fraction=1 and "
+                "write_fraction=0")
+        probabilities = self.read_state_probability
+        if probabilities.p0 == "unresolved" or probabilities.p1 == "unresolved":
+            raise ValueError(
+                "nominal array-read state probabilities must be resolved")
+        if self.included_power_terms != ("array_read",):
+            raise ValueError(
+                "M3D-v1 nominal workload includes only array_read power")
+        return self
+
+
 class OrthogonalM3DPowerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    default_mode: Literal["iso_total"]
+    default_mode: Literal["operation_energy"]
 
 
 class OrthogonalM3DPaperMetricsConfig(BaseModel):
@@ -573,7 +602,7 @@ class OrthogonalMemoryDieConfig(BaseModel):
     width: Length
     height: Length
     layers: list[OrthogonalDieLayerConfig]
-    power_per_die: Power
+    power_per_die: Power = 0.0
 
     @field_validator("width", "height")
     @classmethod
@@ -1459,13 +1488,40 @@ def _build_legacy_orthogonal_hbm(geometry: dict) -> dict:
     roles = ("si_substrate", "active_beol", "daa")
     layers = []
     for index, entry in enumerate(stack):
-        if isinstance(entry, dict) and len(entry) == 1:
+        if isinstance(entry, dict) and "repeat" in entry:
+            repeat = int(entry["repeat"])
+            material = str(entry["material"])
+            thickness = entry["thickness"]
+            role = str(entry["role"])
+            base_name = str(entry.get("name", _snake_case(material)))
+            if repeat <= 0:
+                raise ValueError("orthogonal layer repeat must be positive")
+            for repeat_index in range(1, repeat + 1):
+                layers.append({
+                    "name": f"{base_name}_{repeat_index:02d}",
+                    "material": material,
+                    "thickness": thickness,
+                    "role": role,
+                })
+            continue
+        if isinstance(entry, dict) and {
+                "material", "thickness", "role"}.issubset(entry):
+            material = str(entry["material"])
+            thickness = entry["thickness"]
+            role = str(entry["role"])
+            layer_name = str(entry.get("name", _snake_case(material)))
+        elif isinstance(entry, dict) and len(entry) == 1:
             material, thickness = next(iter(entry.items()))
+            role = roles[index] if index < len(roles) else _snake_case(
+                str(material))
+            layer_name = _snake_case(str(material))
         else:
             material, thickness = _unpack_layer_entry(entry)
-        role = roles[index] if index < len(roles) else _snake_case(str(material))
+            role = roles[index] if index < len(roles) else _snake_case(
+                str(material))
+            layer_name = _snake_case(str(material))
         layers.append({
-            "name": _snake_case(str(material)),
+            "name": layer_name,
             "material": str(material),
             "thickness": thickness,
             "role": role,
@@ -1486,7 +1542,7 @@ def _build_legacy_orthogonal_hbm(geometry: dict) -> dict:
             "width": die["width"],
             "height": die["height"],
             "layers": layers,
-            "power_per_die": die["power_per_die"],
+            "power_per_die": die.get("power_per_die", 0.0),
         },
     }
 
@@ -1692,10 +1748,13 @@ def _build_legacy_thermal_power_sources(power: dict,
     HBM power goes to the dram_beol layer of each HBM column.
     """
     power_model = str(power.get("model", "uniform"))
-    if power_model not in {"uniform", "son23split", "son23_dram_only"}:
+    if power_model not in {
+            "uniform", "son23split", "son23_dram_only",
+            "m3d_operation_energy"}:
         raise ValueError(
             f"unsupported power.model {power_model!r}; expected "
-            "'uniform', 'son23split', or 'son23_dram_only'")
+            "'uniform', 'son23split', 'son23_dram_only', or "
+            "'m3d_operation_energy'")
     sources: list = []
     if "gpu" in power:
         sources.append({
@@ -1737,21 +1796,50 @@ def _build_legacy_thermal_power_sources(power: dict,
     orthogonal = geometry.get("orthogonal_hbm")
     if orthogonal is not None:
         die = orthogonal["memory_die"]
+        if power_model == "m3d_operation_energy":
+            from .thermal.m3d_power import calculate_array_read_power
+            read_probability = power["read_state_probability"]
+            memory_total_W = calculate_array_read_power(
+                delivered_bandwidth_bit_per_s=float(
+                    power["delivered_bandwidth_bit_per_s"]),
+                read_fraction=float(power["read_fraction"]),
+                state_0_probability=float(read_probability["p0"]),
+                state_1_probability=float(read_probability["p1"]),
+                read_0_energy_fJ_per_bit=float(
+                    power["operation_energy_fJ_per_bit"]["read_0"]),
+                read_1_energy_fJ_per_bit=float(
+                    power["operation_energy_fJ_per_bit"]["read_1"]),
+            )
+            if float(power["write_fraction"]) != 0.0:
+                raise ValueError(
+                    "M3D-v1 array-core nominal requires write_fraction=0")
+            per_die_power = memory_total_W / int(die["count"])
+            target_role = "m3d_bitcell_stack"
+        else:
+            per_die_power = die["power_per_die"]
+            target_role = "active_beol"
         for index in range(1, int(die["count"]) + 1):
             die_name = f"die_{index:03d}"
             sources.append({
                 "name": f"hbm_{die_name}",
-                "total_power": die["power_per_die"],
+                "total_power": per_die_power,
                 "selector": {
                     "component": f"orthogonal_hbm:{die_name}",
-                    "tags": {"role": "active_beol"},
+                    "tags": {"role": target_role},
                 },
                 "distribution": "uniform_volume",
                 "metadata": {
-                    "status": "PAPER_REPORTED",
-                    "power_model": "uniform",
+                    "status": (
+                        "DERIVED_FROM_OPERATION_ENERGY"
+                        if power_model == "m3d_operation_energy"
+                        else "PAPER_REPORTED"),
+                    "power_model": power_model,
                     "component_class": "dram",
-                    "modeling_choice": "uniform within die BEOL",
+                    "stack": die_name,
+                    "modeling_choice": (
+                        "uniform within homogenized 8-layer M3D bit-cell stack"
+                        if power_model == "m3d_operation_energy"
+                        else "uniform within die BEOL"),
                 },
             })
     return {"sources": sources}
@@ -1803,9 +1891,24 @@ def compile_user_config(data: dict) -> dict:
     if "boundary" in data:
         out["thermal_boundary_conditions"] = (
             _build_legacy_thermal_boundary_conditions(data["boundary"]))
+    thermal_power_sources = None
     if "power" in data:
-        out["thermal_power_sources"] = (
-            _build_legacy_thermal_power_sources(data["power"], geometry))
-    out["metadata"] = _build_legacy_metadata(
+        thermal_power_sources = _build_legacy_thermal_power_sources(
+            data["power"], geometry)
+        out["thermal_power_sources"] = thermal_power_sources
+    metadata = _build_legacy_metadata(
         data.get("solver", {}), data.get("metadata"))
+    if (thermal_power_sources is not None
+            and data.get("power", {}).get("model")
+            == "m3d_operation_energy"):
+        derived_memory_W = sum(
+            float(source["total_power"])
+            for source in thermal_power_sources["sources"]
+            if source.get("metadata", {}).get("power_model")
+            == "m3d_operation_energy")
+        bookkeeping = metadata.setdefault("architecture_bookkeeping", {})
+        bookkeeping["array_read_power_W"] = derived_memory_W
+        bookkeeping["memory_power_derivation"] = (
+            "delivered_bandwidth_bit_per_s * read_1_energy_fJ_per_bit * 1e-15")
+    out["metadata"] = metadata
     return out

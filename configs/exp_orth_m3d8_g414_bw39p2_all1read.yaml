@@ -1,0 +1,85 @@
+name: exp_orth_m3d8_g414_bw39p2_all1read
+
+materials:
+  Lid:             400
+  TIM:             9.71
+  M3D_Si:          140
+  M3D_FEOL:        7.9
+  M3D_Bitcell:     0.85
+  M3D_BEOL:        0.85
+  M3D_DAA:         0.2
+  Adhesive:        0.2
+  BEOL_MXY:        1.5
+  FEOL:            7.9
+  BSPDN:           [83, 83, 71]
+  Cu_Pillar_Bump:  [0.54, 0.54, 13.25]
+  Laminate:        13
+  Mold:            3
+
+geometry:
+  package: {size: [65 mm, 65 mm]}
+  gpu: {size: [30 mm, 22 mm]}
+
+orthogonal_hbm:
+  cube_size: [22 mm, 30 mm, 5.5 mm]
+  background_material: Mold
+  adhesive: {material: Adhesive, thickness: 3 um}
+  memory_die:
+    count: 98
+    width: 22 mm
+    height: 5.5 mm
+    stack:
+      - {material: M3D_Si, thickness: 292.546 um, role: si_substrate, name: si_substrate}
+      - {material: M3D_FEOL, thickness: 0.150 um, role: feol, name: feol}
+      - {material: M3D_Bitcell, thickness: 2.304 um, role: m3d_bitcell_stack, name: m3d_bitcell_stack}
+      - {material: M3D_BEOL, thickness: 3.0 um, role: beol_interconnect, name: beol_interconnect}
+      - {material: M3D_DAA, thickness: 2.0 um, role: daa, name: daa}
+
+stacks:
+  foundation: {layers: [[Laminate, 300 um]]}
+  gpu:
+    layers:
+      - [Cu_Pillar_Bump, 70 um]
+      - [BSPDN, 1.715 um]
+      - [FEOL, 0.15 um]
+      - [BEOL_MXY, 1.4 um]
+  top: {layers: [[TIM, 200 um], [Lid, 3000 um]]}
+
+mesh: {dx: 0.5 mm, dy: 0.5 mm, dz_max: 100 um}
+boundary: {ambient: 20 degC, lid_top_htc: 30000 W/m^2/K, laminate_bottom_htc: 200 W/m^2/K}
+
+power:
+  model: m3d_operation_energy
+  gpu: 414 W
+  delivered_bandwidth_bit_per_s: 39.2e12
+  read_fraction: 1.0
+  write_fraction: 0.0
+  read_state_probability: {p0: 0.0, p1: 1.0}
+  operation_energy_fJ_per_bit: {read_0: 0.60, read_1: 368.0}
+
+solver: {method: pcg, rtol: 1e-6}
+
+metadata:
+  case_id: exp_orth_m3d8_g414_bw39p2_all1read
+  scope: exp
+  architecture: orthogonal_m3d_edram_8layer
+  power_model: m3d_operation_energy
+  architecture_bookkeeping:
+    cube_footprint_mm: [30, 22]
+    slab_count: 98
+    active_slab_plane_mm: [22, 5.5]
+    bitcell_layers: 8
+    bitcell_thermal_geometry: homogenized_8_layer_stack
+    density_Mb_mm2_per_layer: 30
+    capacity_density_Mb_mm2: 240
+    capacity_density_MB_mm2: 30
+    slab_array_fill_factor: 1.0
+    upper_bound_capacity_GB: 355.74
+    matched_delivered_bandwidth_Tb_s: 39.2
+    all1_read_energy_pJ_per_bit: 0.368
+    power_scope: worst_case_all1_array_read_at_matched_bandwidth
+  power_provenance:
+    bandwidth: MATCHED_DELIVERED_BANDWIDTH_REFERENCE
+    operation_energy: PAPER_REPORTED
+    bitcell_and_interconnect_k: MODELING_CHOICE
+    excluded: [peripheral, interconnect_direct_power, controller, refresh, hold]
