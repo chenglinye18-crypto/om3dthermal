@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from om3dthermal.config import RepeatBlock, StackTemplate, load_config
 
-CONFIG = Path(__file__).parents[1] / "configs" / "hbm_on_gpu_12hi.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
 
 
 def test_hbm_total_thickness_is_775_um():

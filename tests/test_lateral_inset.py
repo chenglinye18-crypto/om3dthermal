@@ -27,7 +27,7 @@ from om3dthermal.geometry.horizontal_columns import (
 )
 from om3dthermal.geometry.primitives import AxisAlignedBox, Footprint
 
-CONFIG = Path(__file__).parents[1] / "configs" / "hbm_on_gpu_12hi.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
 
 HBM_COLUMNS = ("hbm_left_top", "hbm_left_bottom", "hbm_right_top", "hbm_right_bottom")
 
@@ -384,7 +384,7 @@ def test_benchmark_hbm_base_layers_keep_full_11x11_footprint():
 def test_benchmark_dram_layers_have_10_8x10_8_central_entity_and_4_fills():
     """The locked benchmark uses a 10.8 x 10.8 mm DRAM die
     (with 11 x 11 mm HBM base, 0.1 mm per-side mold ring); see
-    configs/hbm_on_gpu_12hi.yaml and docs/benchmarks/hbm_on_gpu_12hi.md."""
+    the canonical conventional config and IEDM25 provenance document."""
     scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
     for name in HBM_COLUMNS:
         central = [b for b in scene.filter(component=f"memory_column:{name}")

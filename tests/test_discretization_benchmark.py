@@ -1,6 +1,6 @@
 """Integration tests for the discretiser on the shipped HBM benchmark.
 
-These tests build the full ``hbm_on_gpu_12hi.yaml`` scene and run the
+These tests build the full canonical conventional 2x2 scene and run the
 discretiser end-to-end. They assert the geometric invariants that the
 thermal solver will rely on: volume conservation, max cell sizes, all
 material boundaries survive the cut merging, the face adjacency contains
@@ -31,7 +31,7 @@ from om3dthermal.discretization import (
 from om3dthermal.geometry.horizontal_columns import HorizontalColumnsBuilder
 
 
-CONFIG = Path(__file__).parents[1] / "configs" / "hbm_on_gpu_12hi.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
 
 
 # A reasonable tolerance for asserting "max cell size <= configured".

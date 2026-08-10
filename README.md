@@ -10,6 +10,8 @@ AMR, non-uniform power-map calibration, COMSOL/Icepak integration, or a GUI.
 The current six-case experiment matrix and the authoritative mapping from
 configs to results are documented in
 [`docs/benchmarks/experiment_matrix.md`](docs/benchmarks/experiment_matrix.md).
+The result-first paper summary and figures are in
+[`docs/benchmarks/thermal_results_overview.md`](docs/benchmarks/thermal_results_overview.md).
 
 ## Install and run
 
@@ -18,10 +20,10 @@ Python 3.10+ is required:
 ```bash
 python -m pip install -e ".[test]"
 python -m pytest
-python -m om3dthermal.cli build configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_iedm2025
-python -m om3dthermal.cli discretize configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_mesh
-python -m om3dthermal.cli conductance configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_conductance
-python -m om3dthermal.cli solve-steady configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_steady --method pcg
+python -m om3dthermal.cli build configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_iedm2025
+python -m om3dthermal.cli discretize configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_mesh
+python -m om3dthermal.cli conductance configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_conductance
+python -m om3dthermal.cli solve-steady configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --method pcg
 ```
 
 The `build` command writes (under the directory given by `--out`, which
@@ -81,7 +83,7 @@ them in SI metres from the stack templates.
 
 ## IEDM 2025 HBM-on-GPU benchmark configuration
 
-The shipped `configs/hbm_on_gpu_12hi.yaml` is a paper-anchored benchmark for
+The shipped `configs/exp_conv_2x2_g414_m160.yaml` is a paper-anchored benchmark for
 3D HBM-on-GPU integration. It is sourced from:
 
 > Yukai Chen, Melina Lofrano, Diksha Moolchandani, Herman Oprins, Geert Van
@@ -101,12 +103,12 @@ them.
 
 ### Configuration format
 
-The shipped `configs/hbm_on_gpu_12hi.yaml` is a **compact** form
+The shipped `configs/exp_conv_2x2_g414_m160.yaml` is a **compact** form
 (≈87 lines) optimised for hand-editing. The top-level blocks are
 `materials`, `geometry`, `stacks`, `mesh`, `boundary`, `power`,
 `solver`. Paper citations and per-parameter modelling notes are
 recorded separately in
-[`docs/benchmarks/hbm_on_gpu_12hi.md`](docs/benchmarks/hbm_on_gpu_12hi.md)
+[`docs/benchmarks/ref_iedm25_conv_2x2_g414_m160.md`](docs/benchmarks/ref_iedm25_conv_2x2_g414_m160.md)
 so the YAML itself stays small.
 
 `load_config()` auto-detects the compact form and compiles it into
@@ -266,7 +268,7 @@ are not invented here.
 ## Known limitations
 
 - The DRAM die size `10.8 x 10.8 mm` is `DERIVED_FROM_PAPER_FIGURE`
-  (see `docs/benchmarks/hbm_on_gpu_12hi.md`). Fig. 3(a) of the
+  (see `docs/benchmarks/ref_iedm25_conv_2x2_g414_m160.md`). Fig. 3(a) of the
   IEDM 2025 paper indicates approximately 1 mm of total mold-filled
   width around each HBM stack, so the locked value leaves 0.1 mm
   per side for the mold ring. The paper does not report a complete
@@ -536,7 +538,7 @@ at parse time.
 
 ### Output
 
-`om3dthermal.cli conductance configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_conductance`
+`om3dthermal.cli conductance configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_conductance`
 writes (under git-ignored `runs/`):
 
 - the three discretisation CSVs and the mesh summary (re-emitted for
@@ -686,7 +688,7 @@ the shipped HBM benchmark's `relative_power_imbalance` is below
 
 ### HBM benchmark (paper-parameter-aligned uniform-power baseline)
 
-`om3dthermal.cli solve-steady configs/hbm_on_gpu_12hi.yaml --out runs/hbm12_steady --method pcg --rtol 1e-8 --max-iterations 2000`
+`om3dthermal.cli solve-steady configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --method pcg --rtol 1e-8 --max-iterations 2000`
 
 | Quantity | Value |
 |----------|-------|

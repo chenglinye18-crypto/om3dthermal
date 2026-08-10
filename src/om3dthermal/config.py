@@ -1033,14 +1033,18 @@ def _build_legacy_horizontal(geometry: dict, stacks: dict) -> dict:
     """
     hbm_block = geometry.get("hbm", {})
     hbm_centers = hbm_block.get("centers", {})
+    hbm_fill_above = hbm_block.get("fill_above")
     columns = []
     for col_name in hbm_centers:
-        columns.append({
+        column = {
             "name": col_name,
             "footprint": col_name,
             "stack": "hbm_12hi",
             "priority": 10,
-        })
+        }
+        if hbm_fill_above is not None:
+            column["fill_above"] = hbm_fill_above
+        columns.append(column)
     if "thermal_silicon" in geometry:
         columns.append({
             "name": "thermal_silicon",
@@ -1053,7 +1057,9 @@ def _build_legacy_horizontal(geometry: dict, stacks: dict) -> dict:
         "gpu": {"footprint": "gpu", "stack": "gpu"},
         "memory_zone": {
             "footprint": "memory_zone",
-            "reference_stack": "hbm_12hi",
+            "reference_stack": (
+                "thermal_silicon_stack"
+                if hbm_fill_above is not None else "hbm_12hi"),
             "background_material": "Mold",
             "background_priority": 0,
             "columns": columns,
@@ -1174,12 +1180,142 @@ def _build_legacy_thermal_boundary_conditions(boundary: dict) -> dict:
     }
 
 
+def _son23_component_sources(
+    power: dict,
+    hbm_columns: list[str],
+    *,
+    include_logic: bool = True,
+    source_power_model: str = "son23split",
+) -> list[dict]:
+    """Expand the Son et al. EDAPS 2023 component partition.
+
+    Functional components remain separate power sources even when two sources
+    share the same existing active-side BEOL carrier. No lateral PHY/TSV/bank
+    geometry is inferred here.
+    """
+    reference = power.get("son23_reference")
+    if not isinstance(reference, dict):
+        raise ValueError(
+            "power.model='son23split' requires power.son23_reference")
+    required = (
+        "stack_total", "logic_phy", "logic_tsv",
+        "dram_bank_per_die", "dram_tsv_per_die", "dram_die_count",
+    )
+    missing = [key for key in required if key not in reference]
+    if missing:
+        raise ValueError(
+            f"power.son23_reference is missing required keys {missing}")
+
+    reference_stack_W = parse_power(reference["stack_total"])
+    logic_phy_reference_W = parse_power(reference["logic_phy"])
+    logic_tsv_reference_W = parse_power(reference["logic_tsv"])
+    dram_bank_reference_W = parse_power(reference["dram_bank_per_die"])
+    dram_tsv_reference_W = parse_power(reference["dram_tsv_per_die"])
+    dram_die_count = int(reference["dram_die_count"])
+    if dram_die_count != 12:
+        raise ValueError(
+            "Son23 conventional 12Hi model requires dram_die_count=12")
+    accounted_reference_W = (
+        logic_phy_reference_W + logic_tsv_reference_W
+        + dram_die_count * (dram_bank_reference_W + dram_tsv_reference_W))
+    if not abs(accounted_reference_W - reference_stack_W) <= 1e-12:
+        raise ValueError(
+            "Son23 reference partition does not sum to stack_total: "
+            f"{accounted_reference_W} W != {reference_stack_W} W")
+
+    target_stack_W = parse_power(power["hbm_each"])
+    reference_dram_W = dram_die_count * (
+        dram_bank_reference_W + dram_tsv_reference_W)
+    scaling_reference_W = (
+        reference_stack_W if include_logic else reference_dram_W)
+    scale = target_stack_W / scaling_reference_W
+    component_power_W = {
+        "logic_phy": logic_phy_reference_W * scale,
+        "logic_tsv": logic_tsv_reference_W * scale,
+        "dram_bank": dram_bank_reference_W * scale,
+        "dram_tsv": dram_tsv_reference_W * scale,
+    }
+    scaled_total_W = (
+        (component_power_W["logic_phy"] + component_power_W["logic_tsv"]
+         if include_logic else 0.0)
+        + dram_die_count * (
+            component_power_W["dram_bank"] + component_power_W["dram_tsv"]))
+    if not abs(scaled_total_W - target_stack_W) <= max(
+            1e-12, 1e-12 * target_stack_W):
+        raise ValueError(
+            "scaled Son23 partition does not sum to hbm_each: "
+            f"{scaled_total_W} W != {target_stack_W} W")
+
+    common_metadata = {
+        "power_model": source_power_model,
+        "partition_provenance": "PAPER_REPORTED",
+        "scaling_provenance": "DERIVED_FROM_REFERENCE",
+        "placement_provenance": "MODELING_CHOICE",
+        "placement": "existing active-side BEOL carrier",
+        "reference_stack_power_W": reference_stack_W,
+        "scaling_reference_power_W": scaling_reference_W,
+        "scale_from_reference": scale,
+    }
+    sources: list[dict] = []
+    for stack_name in hbm_columns:
+        component = f"memory_column:{stack_name}"
+        if include_logic:
+            for function, power_W in (
+                    ("phy", component_power_W["logic_phy"]),
+                    ("tsv", component_power_W["logic_tsv"])):
+                sources.append({
+                    "name": f"hbm_{stack_name}_logic_{function}",
+                    "total_power": power_W,
+                    "selector": {
+                        "component": component,
+                        "material": "HBM_Base_BEOL",
+                        "tags": {"role": "hbm_base"},
+                    },
+                    "distribution": "uniform_volume",
+                    "metadata": {
+                        **common_metadata,
+                        "stack": stack_name,
+                        "component_class": "logic",
+                        "functional_component": function,
+                    },
+                })
+        for die_index in range(1, dram_die_count + 1):
+            layer_name = (
+                f"dram_beol_{die_index:02d}"
+                if die_index < dram_die_count else "top_dram_beol")
+            for function, power_W in (
+                    ("bank", component_power_W["dram_bank"]),
+                    ("tsv", component_power_W["dram_tsv"])):
+                sources.append({
+                    "name": f"hbm_{stack_name}_dram{die_index:02d}_{function}",
+                    "total_power": power_W,
+                    "selector": {
+                        "component": component,
+                        "layer": f"{component}.{layer_name}",
+                    },
+                    "distribution": "uniform_volume",
+                    "metadata": {
+                        **common_metadata,
+                        "stack": stack_name,
+                        "component_class": "dram",
+                        "functional_component": function,
+                        "dram_die_index": die_index,
+                    },
+                })
+    return sources
+
+
 def _build_legacy_thermal_power_sources(power: dict,
                                           geometry: dict) -> dict:
     """Build the ``thermal_power_sources.sources`` list from the
     compact ``power`` section. GPU power goes to the FEOL layer;
     HBM power goes to the dram_beol layer of each HBM column.
     """
+    power_model = str(power.get("model", "uniform"))
+    if power_model not in {"uniform", "son23split", "son23_dram_only"}:
+        raise ValueError(
+            f"unsupported power.model {power_model!r}; expected "
+            "'uniform', 'son23split', or 'son23_dram_only'")
     sources: list = []
     if "gpu" in power:
         sources.append({
@@ -1187,21 +1323,37 @@ def _build_legacy_thermal_power_sources(power: dict,
             "total_power": power["gpu"],
             "selector": {"component": "gpu", "material": "FEOL"},
             "distribution": "uniform_volume",
-            "metadata": {"status": "PAPER_REPORTED"},
+            "metadata": {
+                "status": "PAPER_REPORTED",
+                "power_model": "uniform",
+                "component_class": "gpu",
+            },
         })
     hbm_columns = list(geometry.get("hbm", {}).get("centers", {}).keys())
     if "hbm_each" in power:
-        for col in hbm_columns:
-            sources.append({
-                "name": col,
-                "total_power": power["hbm_each"],
-                "selector": {
-                    "component": f"memory_column:{col}",
-                    "tags": {"role": "dram_beol"},
-                },
-                "distribution": "uniform_volume",
-                "metadata": {"status": "PAPER_REPORTED"},
-            })
+        if power_model in {"son23split", "son23_dram_only"}:
+            sources.extend(_son23_component_sources(
+                power, hbm_columns,
+                include_logic=(power_model == "son23split"),
+                source_power_model=power_model,
+            ))
+        else:
+            for col in hbm_columns:
+                sources.append({
+                    "name": col,
+                    "total_power": power["hbm_each"],
+                    "selector": {
+                        "component": f"memory_column:{col}",
+                        "tags": {"role": "dram_beol"},
+                    },
+                    "distribution": "uniform_volume",
+                    "metadata": {
+                        "status": "PAPER_REPORTED",
+                        "power_model": "uniform",
+                        "component_class": "dram",
+                        "stack": col,
+                    },
+                })
     orthogonal = geometry.get("orthogonal_hbm")
     if orthogonal is not None:
         die = orthogonal["memory_die"]
@@ -1217,6 +1369,8 @@ def _build_legacy_thermal_power_sources(power: dict,
                 "distribution": "uniform_volume",
                 "metadata": {
                     "status": "PAPER_REPORTED",
+                    "power_model": "uniform",
+                    "component_class": "dram",
                     "modeling_choice": "uniform within die BEOL",
                 },
             })

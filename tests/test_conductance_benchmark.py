@@ -1,6 +1,6 @@
 """Integration tests for the conductance CLI on the shipped HBM benchmark.
 
-These tests load the shipped ``hbm_on_gpu_12hi.yaml``, run the
+These tests load the shipped canonical conventional 2x2 config, run the
 discretiser, and then build the :class:`ConductanceTable`. They
 verify the geometric and physical invariants a future KCL solver
 will rely on:
@@ -36,7 +36,7 @@ from om3dthermal.thermal import build_conductance_table
 from om3dthermal.geometry.horizontal_columns import HorizontalColumnsBuilder
 
 
-CONFIG = Path(__file__).parents[1] / "configs" / "hbm_on_gpu_12hi.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
 
 
 @pytest.fixture(scope="module")

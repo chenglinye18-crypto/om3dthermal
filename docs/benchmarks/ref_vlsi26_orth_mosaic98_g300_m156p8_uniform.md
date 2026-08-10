@@ -1,10 +1,10 @@
-# Orthogonal HBM (MOSAIC) steady-state baseline provenance
+# ref_vlsi26_orth_mosaic98_g300_m156p8_uniform
 
 This benchmark is the first paper-aligned geometry/material baseline for a
 MOSAIC memory cube above the canonical GPU package. It is not a calibrated
 temperature reproduction. The package, GPU stack, TIM, lid, ambient, HTC,
 boundary conditions, and matrix-free PCG path are unchanged from the canonical
-`hbm_on_gpu_12hi` baseline.
+`exp_conv_2x2_g414_m160` baseline.
 
 ## PAPER_REPORTED
 

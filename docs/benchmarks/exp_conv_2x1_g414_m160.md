@@ -1,4 +1,4 @@
-# Conventional 12Hi HBM: two y-merged 2x1 groups
+# exp_conv_2x1_g414_m160 and exp_conv_2x1_g300_m160
 
 This layout is derived from the canonical 2x2 HBM case. The left and right
 groups remain separated by the central 8 x 22 mm Thermal Silicon column. Within
@@ -13,6 +13,7 @@ global y into one continuous 11 x 22 mm group.
 - Vertical 12Hi stack, materials, mesh, cooling, and boundary conditions are
   unchanged from the canonical configuration.
 - The canonical four times 40 W HBM power is preserved as two times 80 W.
+- Conventional power uses Son23 component-aware vertical placement by default.
 
 Two power variants are supplied: GPU 414 W and GPU 300 W. Their only resolved
 physical difference is GPU total power.

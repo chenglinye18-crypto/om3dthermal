@@ -10,8 +10,8 @@ from om3dthermal.geometry.horizontal_columns import _boxes_overlap_3d
 
 
 ROOT = Path(__file__).parents[1]
-CONFIG_414 = ROOT / "configs" / "hbm_on_gpu_12hi_2x1.yaml"
-CONFIG_300 = ROOT / "configs" / "hbm_on_gpu_12hi_2x1_gpu300.yaml"
+CONFIG_414 = ROOT / "configs" / "exp_conv_2x1_g414_m160.yaml"
+CONFIG_300 = ROOT / "configs" / "exp_conv_2x1_g300_m160.yaml"
 GROUPS = ("hbm_left", "hbm_right")
 
 
@@ -80,11 +80,18 @@ def test_no_geometry_overlap(case):
 
 def test_hbm_power_is_two_times_80_W(case):
     cfg, _ = case
-    hbm = [source for source in cfg.thermal_power_sources.sources
-           if source.name in GROUPS]
-    assert len(hbm) == 2
-    assert [source.total_power for source in hbm] == pytest.approx([80.0, 80.0])
-    expected_gpu = 414.0 if cfg.name == "hbm_on_gpu_12hi_2x1" else 300.0
+    hbm = cfg.thermal_power_sources.sources[1:]
+    group_totals = {
+        group: sum(source.total_power for source in hbm
+                   if source.metadata.get("stack") == group)
+        for group in GROUPS
+    }
+    assert group_totals == pytest.approx({"hbm_left": 80.0, "hbm_right": 80.0})
+    assert sum(source.total_power for source in hbm
+               if source.metadata.get("component_class") == "logic") == pytest.approx(32.0)
+    assert sum(source.total_power for source in hbm
+               if source.metadata.get("component_class") == "dram") == pytest.approx(128.0)
+    expected_gpu = 414.0 if cfg.name == "exp_conv_2x1_g414_m160" else 300.0
     assert cfg.thermal_power_sources.sources[0].total_power == pytest.approx(expected_gpu)
     assert sum(source.total_power for source in cfg.thermal_power_sources.sources) == pytest.approx(
         expected_gpu + 160.0)
@@ -94,6 +101,7 @@ def test_two_power_variants_differ_only_in_name_and_gpu_power():
     first = load_config(CONFIG_414).model_dump()
     second = load_config(CONFIG_300).model_dump()
     assert _diff(first, second) == [
-        ("name", "hbm_on_gpu_12hi_2x1", "hbm_on_gpu_12hi_2x1_gpu300"),
+        ("metadata.case_id", "exp_conv_2x1_g414_m160", "exp_conv_2x1_g300_m160"),
+        ("name", "exp_conv_2x1_g414_m160", "exp_conv_2x1_g300_m160"),
         ("thermal_power_sources.sources[0].total_power", 414.0, 300.0),
     ]

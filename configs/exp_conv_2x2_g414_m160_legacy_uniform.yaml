@@ -1,7 +1,7 @@
 # Paper-anchored 3D HBM-on-GPU benchmark, IEDM 2025 Fig. 3.
 # All paper citations, source locations and modelling assumptions
-# live in docs/benchmarks/hbm_on_gpu_12hi.md.
-name: hbm_on_gpu_12hi
+# retained only as legacy uniform-power history.
+name: exp_conv_2x2_g414_m160_legacy_uniform
 
 # Material conductivities in W/(m*K). Scalar = isotropic;
 # 3-list = (kx, ky, kz) diagonal of the local conductivity tensor.
@@ -80,6 +80,7 @@ boundary:
 # Power sources: 414 W on the GPU FEOL layer, 40 W on the
 # dram_beol layer of each of the four HBM columns.
 power:
+  model:    uniform
   gpu:      414 W
   hbm_each: 40 W
 
@@ -89,6 +90,10 @@ solver:
   rtol:   1e-6
 
 metadata:
+  case_id: exp_conv_2x2_g414_m160_legacy_uniform
+  scope: exp
+  architecture: conventional_12hi
+  power_model: legacy_uniform
   layout:
     hbm_arrangement: 2x2_hbm
     cube_count: 4

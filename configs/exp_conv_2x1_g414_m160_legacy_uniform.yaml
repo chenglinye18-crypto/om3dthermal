@@ -1,5 +1,5 @@
 # Conventional 12Hi HBM with two y-merged 2x1 groups.
-name: hbm_on_gpu_12hi_2x1
+name: exp_conv_2x1_g414_m160_legacy_uniform
 
 materials:
   Lid:                400
@@ -59,6 +59,7 @@ boundary:
   laminate_bottom_htc: 200 W/m^2/K
 
 power:
+  model: uniform
   gpu: 414 W
   hbm_each: 80 W
 
@@ -67,6 +68,10 @@ solver:
   rtol: 1e-6
 
 metadata:
+  case_id: exp_conv_2x1_g414_m160_legacy_uniform
+  scope: exp
+  architecture: conventional_12hi
+  power_model: legacy_uniform
   layout:
     hbm_arrangement: 2x1_hbm
     group_count: 2

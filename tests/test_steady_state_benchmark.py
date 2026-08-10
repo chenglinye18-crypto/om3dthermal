@@ -45,7 +45,7 @@ from om3dthermal.thermal import (
 from om3dthermal.thermal.solution_export import build_solver_summary
 
 
-CONFIG = Path(__file__).parents[1] / "configs" / "hbm_on_gpu_12hi.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
 
 
 @pytest.fixture(scope="module")

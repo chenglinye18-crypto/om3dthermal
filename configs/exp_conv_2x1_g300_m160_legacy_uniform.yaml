@@ -1,6 +1,5 @@
-# Conventional canonical HBM power-only paper check.
-# Exact derivative of hbm_on_gpu_12hi.yaml; only GPU power changes 414 -> 300 W.
-name: vlsi_12hi_hbm_paper_check
+# Legacy uniform-power GPU-300 W derivative.
+name: exp_conv_2x1_g300_m160_legacy_uniform
 
 materials:
   Lid:                400
@@ -20,18 +19,16 @@ materials:
   Mold:               3
 
 geometry:
-  package:         { size: [65 mm, 65 mm] }
-  gpu:             { size: [30 mm, 22 mm] }
-  memory_zone:     { size: [30 mm, 22 mm] }
-  thermal_silicon: { size: [8 mm, 22 mm] }
+  package:         {size: [65 mm, 65 mm]}
+  gpu:             {size: [30 mm, 22 mm]}
+  memory_zone:     {size: [30 mm, 22 mm]}
+  thermal_silicon: {size: [8 mm, 22 mm]}
   hbm:
-    size:      [11 mm, 11 mm]
-    dram_size: [10.8 mm, 10.8 mm]
+    size:      [11 mm, 22 mm]
+    dram_size: [10.8 mm, 21.8 mm]
     centers:
-      hbm_left_top:     [-9.5 mm,  5.5 mm]
-      hbm_left_bottom:  [-9.5 mm, -5.5 mm]
-      hbm_right_top:    [ 9.5 mm,  5.5 mm]
-      hbm_right_bottom: [ 9.5 mm, -5.5 mm]
+      hbm_left:  [-9.5 mm, 0 mm]
+      hbm_right: [ 9.5 mm, 0 mm]
 
 stacks:
   foundation: {layers: [[Laminate, 300 um]]}
@@ -52,25 +49,32 @@ stacks:
   top: {layers: [[TIM, 200 um], [Lid, 3000 um]]}
 
 mesh:
-  dx:     0.5 mm
-  dy:     0.5 mm
+  dx: 0.5 mm
+  dy: 0.5 mm
   dz_max: 100 um
 
 boundary:
-  ambient:              20 degC
-  lid_top_htc:          30000 W/m^2/K
-  laminate_bottom_htc:  200 W/m^2/K
+  ambient: 20 degC
+  lid_top_htc: 30000 W/m^2/K
+  laminate_bottom_htc: 200 W/m^2/K
 
 power:
-  gpu:      300 W
-  hbm_each: 40 W
+  model: uniform
+  gpu: 300 W
+  hbm_each: 80 W
 
 solver:
   method: pcg
   rtol: 1e-6
 
 metadata:
+  case_id: exp_conv_2x1_g300_m160_legacy_uniform
+  scope: exp
+  architecture: conventional_12hi
+  power_model: legacy_uniform
   layout:
-    hbm_arrangement: 2x2_hbm
-    cube_count: 4
-    cube_footprint: [11 mm, 11 mm]
+    hbm_arrangement: 2x1_hbm
+    group_count: 2
+    group_footprint: [11 mm, 22 mm]
+    merged_axis: y
+    internal_y_mold_seam: absent

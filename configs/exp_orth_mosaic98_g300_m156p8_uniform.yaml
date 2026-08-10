@@ -1,6 +1,6 @@
-# Strict apples-to-apples paper check derived from orthogonal_hbm.yaml.
+# Strict derivative of exp_orth_mosaic98_g414_m156p8_uniform.yaml.
 # The only physical difference is GPU power: 414 W -> 300 W.
-name: orthogonal_hbm_paper_check
+name: exp_orth_mosaic98_g300_m156p8_uniform
 
 materials:
   Lid:             400
@@ -57,6 +57,7 @@ boundary:
   laminate_bottom_htc:  200 W/m^2/K
 
 power:
+  model: uniform
   gpu: 300 W
 
 solver:
@@ -64,6 +65,10 @@ solver:
   rtol: 1e-6
 
 metadata:
+  case_id: exp_orth_mosaic98_g300_m156p8_uniform
+  scope: exp
+  architecture: orthogonal_mosaic98
+  power_model: uniform
   provenance:
     PAPER_REPORTED:
       mosaic_cube: [22 mm, 30 mm, 5.5 mm]

@@ -29,7 +29,12 @@ from .errors import (
 )
 from .interfaces import InterfaceResistanceQuery, InterfaceResistanceRegistry
 from .operator import MatrixFreeThermalOperator, build_matrix_free_operator
-from .power import PowerSourceResult, PowerVector, map_power_sources
+from .power import (
+    PowerSourceResult,
+    PowerVector,
+    build_power_breakdown,
+    map_power_sources,
+)
 from .solution_export import (
     build_solver_summary,
     write_boundary_heat_flows_csv,
@@ -69,6 +74,7 @@ __all__ = [
     "build_boundary_link_table",
     "build_conductance_table",
     "build_matrix_free_operator",
+    "build_power_breakdown",
     "build_solver_summary",
     "canonical_rotation_key",
     "global_conductivity_tensor",

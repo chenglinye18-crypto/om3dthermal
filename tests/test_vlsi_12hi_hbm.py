@@ -9,8 +9,8 @@ from om3dthermal.config import load_config
 
 
 ROOT = Path(__file__).parents[1]
-BASELINE = ROOT / "configs" / "hbm_on_gpu_12hi.yaml"
-CHECK = ROOT / "configs" / "vlsi_12hi_hbm_paper_check.yaml"
+BASELINE = ROOT / "configs" / "exp_conv_2x2_g414_m160.yaml"
+CHECK = ROOT / "configs" / "exp_conv_2x2_g300_m160.yaml"
 
 
 @pytest.fixture(scope="module")
@@ -44,7 +44,7 @@ def test_resolved_physical_diff_is_only_gpu_power(cases):
     baseline, check = cases
     differences = _physical_diff(baseline.model_dump(), check.model_dump())
     differences = [item for item in differences
-                   if item[0] not in {"name", "metadata"}]
+                   if item[0] != "name" and not item[0].startswith("metadata")]
     assert differences == [
         ("thermal_power_sources.sources[0].total_power", 414.0, 300.0)
     ]
@@ -62,9 +62,18 @@ def test_geometry_is_identical(cases):
     assert check.stack_templates["hbm_12hi"].total_thickness == pytest.approx(775e-6)
 
 
-def test_power_is_300_plus_four_times_40_W(cases):
+def test_power_is_300_plus_four_times_40_W_with_son23_accounting(cases):
     _, check = cases
     sources = check.thermal_power_sources.sources
     assert sources[0].total_power == pytest.approx(300.0)
-    assert [source.total_power for source in sources[1:]] == pytest.approx([40.0] * 4)
+    hbm = sources[1:]
+    stacks = {source.metadata["stack"] for source in hbm}
+    assert len(stacks) == 4
+    assert {stack: sum(source.total_power for source in hbm
+                       if source.metadata["stack"] == stack)
+            for stack in stacks} == pytest.approx({stack: 40.0 for stack in stacks})
+    assert sum(source.total_power for source in hbm
+               if source.metadata["component_class"] == "logic") == pytest.approx(32.0)
+    assert sum(source.total_power for source in hbm
+               if source.metadata["component_class"] == "dram") == pytest.approx(128.0)
     assert sum(source.total_power for source in sources) == pytest.approx(460.0)

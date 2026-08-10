@@ -28,6 +28,7 @@ from .thermal import (
     build_boundary_link_table,
     build_conductance_table,
     build_matrix_free_operator,
+    build_power_breakdown,
     map_power_sources,
     solve_pcg,
     solve_weighted_jacobi,
@@ -260,6 +261,8 @@ def solve_steady(
         config=config.thermal_boundary_conditions,
     )
     power = map_power_sources(cells=cells, config=config.thermal_power_sources)
+    power_breakdown = build_power_breakdown(
+        power=power, config=config.thermal_power_sources)
     t3 = time.perf_counter()
 
     # Operator + anchored check.
@@ -296,14 +299,9 @@ def solve_steady(
         raise ValueError(
             f"unknown method {method!r}; expected 'pcg' or 'jacobi'")
 
-    # Compute per-source power breakdown.
-    gpu_power = 0.0
-    hbm_power = 0.0
-    for source_name, distributed in power.power_by_source.items():
-        if source_name.lower().startswith("gpu"):
-            gpu_power += distributed
-        elif source_name.lower().startswith("hbm"):
-            hbm_power += distributed
+    package_power = power_breakdown["whole_package"]
+    gpu_power = float(package_power["gpu_total_W"])
+    hbm_power = float(package_power["hbm_total_W"])
 
     # Write outputs.
     output_dir = Path(output_dir)
@@ -342,6 +340,14 @@ def solve_steady(
     # Surface the individual stage timings for diagnostics.
     summary["discretization_seconds"] = t1 - t0
     summary["power_mapping_seconds"] = 0.0
+    summary["case_id"] = config.metadata.get("case_id", config.name)
+    summary["power_model"] = power_breakdown["power_model"]
+    summary["power_breakdown"] = power_breakdown
+    summary["power_by_source_W"] = dict(power.power_by_source)
+    summary["benchmark_label"] = (
+        "paper-parameter-aligned Son23 component-power experiment"
+        if power_breakdown["power_model"] == "son23split"
+        else "paper-parameter-aligned uniform-power baseline")
     write_solver_summary_json(summary, output_dir / "steady_state_summary.json")
     return summary
 

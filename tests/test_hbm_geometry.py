@@ -8,7 +8,7 @@ from om3dthermal.cli import build
 from om3dthermal.config import SimulationConfig, load_config
 from om3dthermal.geometry.horizontal_columns import HorizontalColumnsBuilder
 
-CONFIG = Path(__file__).parents[1] / "configs" / "hbm_on_gpu_12hi.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
 
 HBM_COLUMN_NAMES = ("hbm_left_top", "hbm_left_bottom", "hbm_right_top", "hbm_right_bottom")
 

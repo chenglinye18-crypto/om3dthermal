@@ -1,6 +1,7 @@
-# Conventional canonical HBM GPU-300 W power check
+# exp_conv_2x2_g300_m160_legacy_uniform
 
-This is a strict power-only derivative of `configs/hbm_on_gpu_12hi.yaml`.
+This is a strict power-only derivative of
+`configs/exp_conv_2x2_g414_m160_legacy_uniform.yaml`.
 Geometry, materials, mesh, boundary conditions, solver settings, HBM power,
 and power placement are unchanged. The only physical difference is GPU power:
 414 W becomes 300 W.
