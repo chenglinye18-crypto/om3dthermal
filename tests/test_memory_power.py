@@ -53,6 +53,59 @@ def test_all_four_configs_parse():
         load_power_config(POWER_CONFIGS / name)
 
 
+def test_igzo_cell_geometry_parses_and_closes():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    geometry = config.memory.cell_model.geometry
+    assert geometry is not None
+    assert geometry.cell_area_um2 == pytest.approx(0.023)
+    assert geometry.pitch_x_um == pytest.approx(0.15166)
+    assert geometry.pitch_y_um == pytest.approx(0.15166)
+    assert geometry.aspect_ratio == pytest.approx(1.0)
+    assert geometry.pitch_x_um * geometry.pitch_y_um == pytest.approx(
+        geometry.cell_area_um2, rel=1e-4)
+    assert geometry.pitch_x_um / geometry.pitch_y_um == pytest.approx(
+        geometry.aspect_ratio, rel=1e-9)
+    assert geometry.provenance.model_dump() == {
+        "cell_area_um2": "PAPER_REPORTED",
+        "pitch_x_um": "DERIVED_FROM_REFERENCE",
+        "pitch_y_um": "DERIVED_FROM_REFERENCE",
+        "aspect_ratio": "MODELING_CHOICE",
+    }
+
+
+@pytest.mark.parametrize("mutation, message", [
+    ({"pitch_x_um": 0.0}, "greater than 0"),
+    ({"pitch_x_um": 0.2}, "cell geometry area does not close"),
+    ({"aspect_ratio": 2.0}, "cell geometry aspect ratio does not close"),
+])
+def test_invalid_igzo_cell_geometry_fails_loudly(mutation, message):
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    raw = config.model_dump()
+    raw["memory"]["cell_model"]["geometry"].update(mutation)
+    with pytest.raises(ValueError, match=message):
+        MemoryPowerConfig.model_validate(raw)
+
+
+def test_igzo_geometry_does_not_change_operation_energy_or_hold():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    cell_model = config.memory.cell_model
+    energy = cell_model.operations
+    assert energy is not None
+    assert (
+        energy.read_0_pj_per_bit, energy.read_1_pj_per_bit,
+    ) == pytest.approx((0.00060, 0.36800))
+    assert (
+        energy.write_00_pj_per_bit, energy.write_01_pj_per_bit,
+        energy.write_10_pj_per_bit, energy.write_11_pj_per_bit,
+    ) == pytest.approx((0.00030, 0.00037, 0.00058, 0.00024))
+    assert (
+        energy.refresh_0_pj_per_bit, energy.refresh_1_pj_per_bit,
+    ) == pytest.approx((0.00090, 0.37000))
+    assert cell_model.background is not None
+    assert cell_model.background.type == "per_row"
+    assert cell_model.background.value_w == pytest.approx(4.26e-15)
+
+
 def test_dreamram_hbm3_full_row_regression(conventional):
     result = calculate_memory_power(conventional, project_root=ROOT)
     assert result.E_access_total_pj_bit == pytest.approx(0.9782367131)

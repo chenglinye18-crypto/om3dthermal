@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Literal
 
@@ -58,6 +59,39 @@ class BackgroundInput(StrictModel):
     value_w: float = Field(ge=0.0)
 
 
+class CellGeometryProvenance(StrictModel):
+    cell_area_um2: Literal["PAPER_REPORTED"]
+    pitch_x_um: Literal["DERIVED_FROM_REFERENCE"]
+    pitch_y_um: Literal["DERIVED_FROM_REFERENCE"]
+    aspect_ratio: Literal["MODELING_CHOICE"]
+
+
+class CellGeometryInput(StrictModel):
+    """Physical cell pitches; WL/BL orientation mapping is deferred."""
+
+    cell_area_um2: float = Field(gt=0.0)
+    pitch_x_um: float = Field(gt=0.0)
+    pitch_y_um: float = Field(gt=0.0)
+    aspect_ratio: float = Field(gt=0.0)
+    provenance: CellGeometryProvenance
+
+    @model_validator(mode="after")
+    def geometry_closes(self) -> "CellGeometryInput":
+        area = self.pitch_x_um * self.pitch_y_um
+        if not math.isclose(
+                area, self.cell_area_um2, rel_tol=1e-4, abs_tol=1e-12):
+            raise ValueError(
+                "cell geometry area does not close: "
+                "pitch_x_um * pitch_y_um must equal cell_area_um2")
+        ratio = self.pitch_x_um / self.pitch_y_um
+        if not math.isclose(
+                ratio, self.aspect_ratio, rel_tol=1e-9, abs_tol=1e-12):
+            raise ValueError(
+                "cell geometry aspect ratio does not close: "
+                "pitch_x_um / pitch_y_um must equal aspect_ratio")
+        return self
+
+
 class CellReplacementInput(StrictModel):
     mapping_status: Literal["validated", "unresolved"]
     components: tuple[str, ...]
@@ -76,6 +110,8 @@ class CellModelInput(StrictModel):
     type: Literal[
         "dreamram_native", "component_replacement", "operation_table"
     ] = "dreamram_native"
+    source: str | None = None
+    geometry: CellGeometryInput | None = None
     replacement: CellReplacementInput | None = None
     operations: OperationTable | None = None
     background: BackgroundInput | None = None

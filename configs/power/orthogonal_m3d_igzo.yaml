@@ -6,6 +6,20 @@ memory:
     technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
   cell_model:
     type: operation_table
+    source: tang_iedm_2023
+    geometry:
+      # 0.023 um^2 is the paper-reported physical/raw bitcell footprint.
+      # It is distinct from the 30 Mb/mm^2/layer architecture-level density.
+      # Physical x/y are intentionally not mapped to DreamRAM WL/BL yet.
+      cell_area_um2: 0.023
+      pitch_x_um: 0.15166
+      pitch_y_um: 0.15166
+      aspect_ratio: 1.0
+      provenance:
+        cell_area_um2: PAPER_REPORTED
+        pitch_x_um: DERIVED_FROM_REFERENCE
+        pitch_y_um: DERIVED_FROM_REFERENCE
+        aspect_ratio: MODELING_CHOICE
     replacement:
       # bl-act/bl-pre are the audited 1T1C-specific compact block. Tang's
       # operation-energy boundary has not yet been proven equivalent to it.
