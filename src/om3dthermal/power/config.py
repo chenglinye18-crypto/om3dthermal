@@ -58,20 +58,49 @@ class BackgroundInput(StrictModel):
     value_w: float = Field(ge=0.0)
 
 
-class MemoryInput(StrictModel):
-    technology: str
-    backend: Literal["dreamram", "operation_table"]
-    dreamram: DreamRAMInput | None = None
+class CellReplacementInput(StrictModel):
+    mapping_status: Literal["validated", "unresolved"]
+    components: tuple[str, ...]
+    component_energy_pj_per_bit: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def valid_component_values(self) -> "CellReplacementInput":
+        if len(set(self.components)) != len(self.components):
+            raise ValueError("replacement components must be unique")
+        if any(value < 0.0 for value in self.component_energy_pj_per_bit.values()):
+            raise ValueError("replacement component energy must be non-negative")
+        return self
+
+
+class CellModelInput(StrictModel):
+    type: Literal[
+        "dreamram_native", "component_replacement", "operation_table"
+    ] = "dreamram_native"
+    replacement: CellReplacementInput | None = None
     operations: OperationTable | None = None
     background: BackgroundInput | None = None
     retention_s: float | None = Field(default=None, gt=0.0)
 
     @model_validator(mode="after")
+    def model_inputs(self) -> "CellModelInput":
+        if self.type in {"component_replacement", "operation_table"}:
+            if self.replacement is None:
+                raise ValueError(f"{self.type} requires cell_model.replacement")
+        if self.type == "operation_table" and self.operations is None:
+            raise ValueError("operation_table requires cell_model.operations")
+        return self
+
+
+class MemoryInput(StrictModel):
+    technology: str
+    backend: Literal["dreamram"]
+    dreamram: DreamRAMInput | None = None
+    cell_model: CellModelInput = Field(default_factory=CellModelInput)
+
+    @model_validator(mode="after")
     def backend_inputs(self) -> "MemoryInput":
         if self.backend == "dreamram" and self.dreamram is None:
             raise ValueError("dreamram backend requires memory.dreamram")
-        if self.backend == "operation_table" and self.operations is None:
-            raise ValueError("operation_table backend requires memory.operations")
         return self
 
 

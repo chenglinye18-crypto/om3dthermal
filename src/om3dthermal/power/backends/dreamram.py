@@ -12,6 +12,7 @@ import sys
 from types import ModuleType
 from typing import Iterator
 
+from ..cell_model import ONE_T_ONE_C_SPECIFIC, REUSABLE_STRUCTURE
 from ..config import MemoryPowerConfig, resolve_project_path
 from ..result import BackendEnergyResult, EnergyDecomposition
 
@@ -20,10 +21,7 @@ DREAMRAM_BRANCH = "DATE2026"
 DREAMRAM_COMMIT = "c069ce14dfa85ce1983f3a1274a265d1e7b5494a"
 
 _GROUP_COMPONENTS = {
-    "memory_internal": {
-        "row", "mwl", "lwl", "bl-pre", "bl-act", "col", "csl",
-        "ldl", "mdl", "bgbus+gbus",
-    },
+    "memory_internal": ONE_T_ONE_C_SPECIFIC | REUSABLE_STRUCTURE,
     "vertical": {"row-tsv", "col-tsv", "tsv"},
     "base_route": {"row-base", "col-base", "base"},
     "interface": {"row-dq", "col-dq", "dq"},
@@ -171,6 +169,17 @@ class DreamRAMBackend:
             ) / denominator
             for group in _GROUP_COMPONENTS
         }
+        internal_components = {
+            component: (
+                _COMMAND_TERMS["pre"].get(component, 0.0)
+                * float(components[component])
+                + _COMMAND_TERMS["act"].get(component, 0.0)
+                * float(components[component])
+                + n_read * _COMMAND_TERMS["rd"].get(component, 0.0)
+                * float(components[component])
+            ) / denominator
+            for component in _GROUP_COMPONENTS["memory_internal"]
+        }
         decomposition = EnergyDecomposition(**access)
         reference = (
             float(command_energy["pre"]) + float(command_energy["act"])
@@ -178,11 +187,16 @@ class DreamRAMBackend:
         ) / denominator
         if abs(decomposition.total - reference) > 1e-12:
             raise RuntimeError("DreamRAM access-energy decomposition does not close")
+        if abs(sum(internal_components.values())
+               - decomposition.memory_internal) > 1e-12:
+            raise RuntimeError(
+                "DreamRAM internal component partition does not close")
 
         return BackendEnergyResult(
             technology=config.memory.technology,
             backend="dreamram",
             read_default=decomposition,
+            native_internal_components=internal_components,
             metadata={
                 "branch": DREAMRAM_BRANCH,
                 "commit": DREAMRAM_COMMIT,
@@ -194,6 +208,10 @@ class DreamRAMBackend:
                 "E_PRE_pJ": float(command_energy["pre"]),
                 "E_ACT_pJ": float(command_energy["act"]),
                 "E_RD_pJ": float(command_energy["rd"]),
+                "component_classification": {
+                    "1T1C_SPECIFIC": sorted(ONE_T_ONE_C_SPECIFIC),
+                    "REUSABLE_STRUCTURE": sorted(REUSABLE_STRUCTURE),
+                },
                 "unsupported_operations": [
                     "write", "refresh", "background"],
             },

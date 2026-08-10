@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 
 from om3dthermal.power import calculate_memory_power, load_power_config
-from om3dthermal.power.config import RowPolicy
+from om3dthermal.power.backends import OperationTableCellModel
+from om3dthermal.power.cell_model import (
+    MissingCellReplacementError,
+    ONE_T_ONE_C_SPECIFIC,
+    REUSABLE_STRUCTURE,
+)
+from om3dthermal.power.config import MemoryPowerConfig, RowPolicy
 
 
 ROOT = Path(__file__).parents[1]
@@ -18,12 +24,18 @@ def _with_rd_per_act(config, value: int):
     return config.model_copy(update={"workload": workload})
 
 
-def _resolved_igzo_config():
-    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    vertical = config.architecture.vertical.model_copy(
-        update={"energy_pj_per_bit": 0.125})
-    architecture = config.architecture.model_copy(update={"vertical": vertical})
-    return config.model_copy(update={"architecture": architecture})
+def _with_component_replacement(
+        config, *, required=("bl-act",), replacements=None):
+    raw = config.model_dump()
+    raw["memory"]["cell_model"] = {
+        "type": "component_replacement",
+        "replacement": {
+            "mapping_status": "validated",
+            "components": list(required),
+            "component_energy_pj_per_bit": replacements or {},
+        },
+    }
+    return MemoryPowerConfig.model_validate(raw)
 
 
 @pytest.fixture(scope="module")
@@ -66,6 +78,16 @@ def test_dreamram_decomposition_closes(conventional):
     assert reconstructed == pytest.approx(result.E_access_total_pj_bit)
 
 
+def test_internal_component_partition_closes(conventional):
+    result = calculate_memory_power(conventional, project_root=ROOT)
+    components = result.diagnostics["native_components_pj_bit"]
+    assert set(components) == ONE_T_ONE_C_SPECIFIC | REUSABLE_STRUCTURE
+    specific = sum(components[name] for name in ONE_T_ONE_C_SPECIFIC)
+    reusable = sum(components[name] for name in REUSABLE_STRUCTURE)
+    assert specific + reusable == pytest.approx(
+        result.E_memory_internal_pj_bit, abs=1e-15)
+
+
 def test_rd_per_act_cannot_exceed_atoms_per_page(conventional):
     with pytest.raises(ValueError, match="exceeds atoms_per_page=64"):
         calculate_memory_power(
@@ -100,39 +122,62 @@ def test_logic_removed_only_drops_dreamram_base_route(conventional):
     assert removed.P_total_W == pytest.approx(removed.P_access_W)
 
 
-def test_operation_table_read_weighting_and_architecture_transport():
-    config = _resolved_igzo_config()
-    result = calculate_memory_power(config, project_root=ROOT)
-    expected_internal = 0.5 * 0.00060 + 0.5 * 0.36800
-    assert result.E_memory_internal_pj_bit == pytest.approx(expected_internal)
-    assert result.E_vertical_pj_bit == pytest.approx(0.125)
-    assert result.E_base_route_pj_bit == 0.0
-    assert result.E_interface_pj_bit == pytest.approx(0.5)
-    assert result.E_access_total_pj_bit == pytest.approx(
-        expected_internal + 0.125 + 0.5)
+def test_synthetic_replacement_has_no_double_count(conventional):
+    native = calculate_memory_power(conventional, project_root=ROOT)
+    old_component = native.diagnostics["native_components_pj_bit"]["bl-act"]
+    replacement = 0.125
+    modified = calculate_memory_power(
+        _with_component_replacement(
+            conventional, replacements={"bl-act": replacement}),
+        project_root=ROOT)
+    expected = native.E_memory_internal_pj_bit - old_component + replacement
+    assert modified.E_memory_internal_pj_bit == pytest.approx(
+        expected, abs=1e-15)
+    assert "bl-act" not in modified.diagnostics["native_components_pj_bit"]
+    assert modified.diagnostics["replacement_components_pj_bit"] == {
+        "bl-act": replacement}
 
 
-def test_missing_miv_energy_fails_loudly():
-    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    with pytest.raises(ValueError, match="energy_pj_per_bit is unresolved"):
+def test_modified_internal_is_architecture_independent(conventional):
+    modified = _with_component_replacement(
+        conventional, replacements={"bl-act": 0.125})
+    orthogonal_architecture = load_power_config(
+        POWER_CONFIGS / "orthogonal_si.yaml").architecture
+    orthogonal = modified.model_copy(
+        update={"architecture": orthogonal_architecture})
+    hbm_result = calculate_memory_power(modified, project_root=ROOT)
+    orthogonal_result = calculate_memory_power(orthogonal, project_root=ROOT)
+    assert orthogonal_result.E_memory_internal_pj_bit == pytest.approx(
+        hbm_result.E_memory_internal_pj_bit, abs=0.0)
+    assert hbm_result.E_vertical_pj_bit != orthogonal_result.E_vertical_pj_bit
+    assert hbm_result.E_base_route_pj_bit != orthogonal_result.E_base_route_pj_bit
+    assert hbm_result.E_interface_pj_bit != orthogonal_result.E_interface_pj_bit
+
+
+def test_required_replacement_missing_fails_loudly(conventional):
+    config = _with_component_replacement(
+        conventional,
+        required=("bl-act", "bl-pre"),
+        replacements={"bl-act": 0.125})
+    with pytest.raises(
+            MissingCellReplacementError,
+            match="required replacement components are unresolved: bl-pre"):
         calculate_memory_power(config, project_root=ROOT)
 
 
-def test_refresh_and_per_row_background_use_explicit_activity_only():
-    config = _resolved_igzo_config()
-    raw = config.model_dump()
-    raw["memory"]["retention_s"] = 2.0
-    raw["workload"].update({
-        "stored_bits": 1000.0,
-        "active_rows": 10,
-        "refresh_data": {"p0": 0.25, "p1": 0.75},
-    })
-    raw["power"]["refresh"]["enabled"] = True
-    raw["power"]["background"]["enabled"] = True
-    from om3dthermal.power.config import MemoryPowerConfig
-    resolved = MemoryPowerConfig.model_validate(raw)
-    result = calculate_memory_power(resolved, project_root=ROOT)
-    expected_refresh = (
-        1000.0 * (0.25 * 0.00090 + 0.75 * 0.37000) * 1e-12 / 2.0)
-    assert result.P_refresh_W == pytest.approx(expected_refresh)
-    assert result.P_memory_background_W == pytest.approx(10 * 4.26e-15)
+def test_operation_table_is_device_energy_not_complete_memory_energy():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    device = OperationTableCellModel().calculate(config)
+    assert device.weighted_read(p0=0.5, p1=0.5) == pytest.approx(0.1843)
+    assert device.weighted_write(
+        p00=0.25, p01=0.25, p10=0.25, p11=0.25,
+    ) == pytest.approx((0.00030 + 0.00037 + 0.00058 + 0.00024) / 4)
+    assert device.background_value_W == pytest.approx(4.26e-15)
+
+
+def test_igzo_nominal_fails_at_unvalidated_replacement_boundary():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    with pytest.raises(
+            MissingCellReplacementError,
+            match="IGZO cell energy exists but has not been mapped"):
+        calculate_memory_power(config, project_root=ROOT)

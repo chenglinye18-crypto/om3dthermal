@@ -14,10 +14,14 @@ class MemoryTechnologyBackend(Protocol):
 
 
 from .dreamram import DreamRAMBackend  # noqa: E402
-from .operation_table import OperationTableBackend  # noqa: E402
+from .operation_table import (  # noqa: E402
+    OperationTableBackend,
+    OperationTableCellModel,
+)
 
 __all__ = [
     "DreamRAMBackend",
     "MemoryTechnologyBackend",
     "OperationTableBackend",
+    "OperationTableCellModel",
 ]

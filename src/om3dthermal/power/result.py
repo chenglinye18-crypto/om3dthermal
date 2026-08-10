@@ -41,6 +41,8 @@ class BackendEnergyResult:
     background_type: str | None = None
     background_value_W: float | None = None
     retention_s: float | None = None
+    native_internal_components: dict[str, float] = field(default_factory=dict)
+    replacement_components: dict[str, float] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

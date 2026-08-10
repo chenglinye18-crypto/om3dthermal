@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .backends import DreamRAMBackend, OperationTableBackend
+from .backends import DreamRAMBackend, OperationTableCellModel
+from .cell_model import (
+    DeviceOperationEnergies,
+    MissingCellReplacementError,
+    apply_component_replacements,
+)
 from .config import MemoryPowerConfig, find_project_root, load_power_config
 from .result import BackendEnergyResult, EnergyDecomposition, MemoryPowerResult
-
-
-def _weighted_binary(p0: float, p1: float, e0: float, e1: float) -> float:
-    return p0 * e0 + p1 * e1
 
 
 def _resolve_transport(
@@ -34,94 +35,100 @@ def _resolve_transport(
 
 
 def _memory_read_energy(
-        backend: BackendEnergyResult, config: MemoryPowerConfig) -> tuple[float, EnergyDecomposition | None]:
-    if backend.read_default is not None:
-        return backend.read_default.memory_internal, backend.read_default
-    if backend.read_0 is None or backend.read_1 is None:
-        raise ValueError("selected backend does not provide read energy")
-    probability = config.workload.read_data
-    if probability is None:
-        raise ValueError("state-dependent read energy requires workload.read_data")
-    return _weighted_binary(
-        probability.p0, probability.p1,
-        backend.read_0, backend.read_1), None
+        backend: BackendEnergyResult,
+        config: MemoryPowerConfig,
+        ) -> tuple[
+            float, EnergyDecomposition, dict[str, float], dict[str, float]]:
+    native = backend.read_default
+    if native is None:
+        raise ValueError("DreamRAM structural backend did not provide read energy")
+    cell_model = config.memory.cell_model
+    if cell_model.type == "dreamram_native":
+        return (
+            native.memory_internal, native,
+            dict(backend.native_internal_components), {})
 
-
-def _memory_write_energy(
-        backend: BackendEnergyResult, config: MemoryPowerConfig) -> float | None:
-    energies = (
-        backend.write_00, backend.write_01,
-        backend.write_10, backend.write_11,
+    replacement = cell_model.replacement
+    if replacement is None:
+        raise MissingCellReplacementError("cell replacement definition is absent")
+    if replacement.mapping_status != "validated":
+        if cell_model.type == "operation_table":
+            raise MissingCellReplacementError(
+                "IGZO cell energy exists but has not been mapped to a "
+                "validated DreamRAM replacement boundary")
+        raise MissingCellReplacementError(
+            "cell replacement mapping has not been validated")
+    resolved = apply_component_replacements(
+        backend.native_internal_components,
+        required_components=replacement.components,
+        replacement_components=replacement.component_energy_pj_per_bit,
     )
-    if any(value is None for value in energies):
-        return None
-    probability = config.workload.write_transition
-    if probability is None:
-        if config.workload.write_bandwidth_gbps == 0:
-            return 0.0
-        raise ValueError(
-            "state-dependent write energy requires workload.write_transition")
+    modified = EnergyDecomposition(
+        memory_internal=resolved.memory_internal_pj_bit,
+        vertical=native.vertical,
+        base_route=native.base_route,
+        interface=native.interface,
+    )
     return (
-        probability.p00 * float(backend.write_00)
-        + probability.p01 * float(backend.write_01)
-        + probability.p10 * float(backend.write_10)
-        + probability.p11 * float(backend.write_11)
-    )
+        resolved.memory_internal_pj_bit, modified,
+        resolved.native_components, resolved.replacement_components)
 
 
 def _refresh_power(
-        backend: BackendEnergyResult, config: MemoryPowerConfig) -> float:
+        device: DeviceOperationEnergies | None,
+        config: MemoryPowerConfig) -> float:
     if not config.power.refresh.enabled:
         return 0.0
-    if backend.refresh_0 is None or backend.refresh_1 is None:
-        raise ValueError("refresh enabled but backend refresh energy is unsupported")
+    if device is None:
+        raise ValueError("refresh enabled but cell model refresh is unsupported")
     if config.workload.stored_bits is None:
         raise ValueError("refresh enabled but workload.stored_bits is unresolved")
-    if backend.retention_s is None:
-        raise ValueError("refresh enabled but memory.retention_s is unresolved")
+    if device.retention_s is None:
+        raise ValueError("refresh enabled but cell_model.retention_s is unresolved")
     probability = config.workload.refresh_data
     if probability is None:
         raise ValueError("refresh enabled but workload.refresh_data is unresolved")
-    energy = _weighted_binary(
-        probability.p0, probability.p1,
-        backend.refresh_0, backend.refresh_1)
-    return config.workload.stored_bits * energy * 1e-12 / backend.retention_s
+    energy = device.weighted_refresh(p0=probability.p0, p1=probability.p1)
+    return config.workload.stored_bits * energy * 1e-12 / device.retention_s
 
 
 def _background_power(
-        backend: BackendEnergyResult, config: MemoryPowerConfig) -> float:
+        device: DeviceOperationEnergies | None,
+        config: MemoryPowerConfig) -> float:
     if not config.power.background.enabled:
         return 0.0
-    if backend.background_type is None or backend.background_value_W is None:
-        raise ValueError("background enabled but backend background is unresolved")
-    if backend.background_type == "total":
-        return backend.background_value_W
-    if backend.background_type == "per_row":
+    if (device is None or device.background_type is None
+            or device.background_value_W is None):
+        raise ValueError("background enabled but cell model background is unresolved")
+    if device.background_type == "total":
+        return device.background_value_W
+    if device.background_type == "per_row":
         if config.workload.active_rows is None:
             raise ValueError("per_row background requires workload.active_rows")
         count = config.workload.active_rows
-    elif backend.background_type == "per_bit":
+    elif device.background_type == "per_bit":
         if config.workload.stored_bits is None:
             raise ValueError("per_bit background requires workload.stored_bits")
         count = config.workload.stored_bits
-    elif backend.background_type == "per_die":
+    elif device.background_type == "per_die":
         if config.architecture.dies is None:
             raise ValueError("per_die background requires architecture.dies")
         count = config.architecture.dies
     else:
-        raise ValueError(f"unsupported background type {backend.background_type!r}")
-    return count * backend.background_value_W
+        raise ValueError(f"unsupported background type {device.background_type!r}")
+    return count * device.background_value_W
 
 
 def calculate_memory_power(
         config: MemoryPowerConfig, *, project_root: Path) -> MemoryPowerResult:
-    if config.memory.backend == "dreamram":
-        backend = DreamRAMBackend(project_root).calculate(config)
-    else:
-        backend = OperationTableBackend().calculate(config)
+    backend = DreamRAMBackend(project_root).calculate(config)
+    device = (
+        OperationTableCellModel().calculate(config)
+        if config.memory.cell_model.type == "operation_table" else None)
 
-    memory_internal, dreamram_decomposition = _memory_read_energy(
-        backend, config)
+    (memory_internal, dreamram_decomposition,
+     native_components, replacement_components) = _memory_read_energy(
+         backend, config)
     vertical = _resolve_transport(
         "vertical", config.architecture.vertical.source,
         config.architecture.vertical.energy_pj_per_bit,
@@ -136,18 +143,17 @@ def calculate_memory_power(
         dreamram_decomposition)
     read_total = memory_internal + vertical + base_route + interface
 
-    write_memory = _memory_write_energy(backend, config)
-    if config.workload.write_bandwidth_gbps > 0 and write_memory is None:
-        raise ValueError("write bandwidth is nonzero but backend write is unsupported")
-    write_total = 0.0 if write_memory is None else (
-        write_memory + vertical + base_route + interface)
+    if config.workload.write_bandwidth_gbps > 0:
+        raise ValueError(
+            "write bandwidth is nonzero but a validated structural write "
+            "replacement boundary is unavailable")
 
     # Gbit/s * pJ/bit = 1e-3 W.
     read_W = config.workload.read_bandwidth_gbps * read_total * 1e-3
-    write_W = config.workload.write_bandwidth_gbps * write_total * 1e-3
+    write_W = 0.0
     access_W = read_W + write_W
-    refresh_W = _refresh_power(backend, config)
-    background_W = _background_power(backend, config)
+    refresh_W = _refresh_power(device, config)
+    background_W = _background_power(device, config)
     logic_W = config.architecture.logic_background_w
     total_W = None if logic_W is None else (
         access_W + refresh_W + background_W + logic_W)
@@ -168,7 +174,12 @@ def calculate_memory_power(
         P_memory_background_W=background_W,
         P_logic_background_W=logic_W,
         P_total_W=total_W,
-        diagnostics=backend.metadata,
+        diagnostics={
+            **backend.metadata,
+            "cell_model": config.memory.cell_model.type,
+            "native_components_pj_bit": native_components,
+            "replacement_components_pj_bit": replacement_components,
+        },
     )
 
 

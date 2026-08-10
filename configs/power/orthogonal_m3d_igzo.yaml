@@ -1,19 +1,30 @@
 memory:
   technology: igzo_2t0c
-  backend: operation_table
-  operations:
-    read_0_pj_per_bit: 0.00060
-    read_1_pj_per_bit: 0.36800
-    write_00_pj_per_bit: 0.00030
-    write_01_pj_per_bit: 0.00037
-    write_10_pj_per_bit: 0.00058
-    write_11_pj_per_bit: 0.00024
-    refresh_0_pj_per_bit: 0.00090
-    refresh_1_pj_per_bit: 0.37000
-  background:
-    type: per_row
-    value_w: 4.26e-15
-  retention_s: null
+  backend: dreamram
+  dreamram:
+    memory_config: third_party/DreamRAM/configs/mem/baseline/hbm3_baseline.json
+    technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
+  cell_model:
+    type: operation_table
+    replacement:
+      # bl-act/bl-pre are the audited 1T1C-specific compact block. Tang's
+      # operation-energy boundary has not yet been proven equivalent to it.
+      mapping_status: unresolved
+      components: [bl-act, bl-pre]
+      component_energy_pj_per_bit: {}
+    operations:
+      read_0_pj_per_bit: 0.00060
+      read_1_pj_per_bit: 0.36800
+      write_00_pj_per_bit: 0.00030
+      write_01_pj_per_bit: 0.00037
+      write_10_pj_per_bit: 0.00058
+      write_11_pj_per_bit: 0.00024
+      refresh_0_pj_per_bit: 0.00090
+      refresh_1_pj_per_bit: 0.37000
+    background:
+      type: per_row
+      value_w: 4.26e-15
+    retention_s: null
 
 architecture:
   name: orthogonal_m3d_igzo
@@ -33,6 +44,7 @@ workload:
   read_bandwidth_gbps: 39200
   write_bandwidth_gbps: 0
   read_data: {p0: 0.5, p1: 0.5}
+  row_policy: {rd_per_act: 64}
 
 power:
   refresh: {enabled: false}
