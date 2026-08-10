@@ -24,6 +24,17 @@ from .discretization.export import (
 )
 from .geometry.horizontal_columns import HorizontalColumnsBuilder
 from .geometry.orthogonal_hbm import OrthogonalHBMBuilder
+from .mesh_convergence import (
+    build_sweep_cases as build_mesh_sweep_cases,
+    case_already_done as mesh_case_already_done,
+    compute_delta_tmax as compute_mesh_delta_tmax,
+    load_partial_rows as load_mesh_partial_rows,
+    parse_mesh_sizes,
+    run_single_case as run_single_mesh_case,
+    write_case_row_partial as write_mesh_case_row_partial,
+    write_mesh_convergence_csv,
+    write_mesh_convergence_json,
+)
 from .sensitivity import (
     build_inset_sweep_cases,
     build_k_sweep_cases,
@@ -467,6 +478,58 @@ def sweep_sensitivity(
     }
 
 
+def sweep_mesh(
+    config_path: str | Path,
+    output_dir: str | Path,
+    *,
+    xy_sizes: str,
+    z_sizes: str,
+    method: str = "pcg",
+    rtol: float = 1e-6,
+    max_iterations: int = 10_000,
+    initial_temperature: float = 293.15,
+    resume: bool = False,
+) -> dict:
+    """Run a single-factor steady-state mesh-convergence sweep."""
+    config = load_config(config_path)
+    xy_list = parse_mesh_sizes(xy_sizes)
+    z_list = parse_mesh_sizes(z_sizes)
+    cases = build_mesh_sweep_cases(xy_list, z_list)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows_csv = output_dir / "mesh_convergence.csv"
+    json_path = output_dir / "mesh_convergence.json"
+    rows = list(load_mesh_partial_rows(rows_csv)) if resume else []
+    for spec in cases:
+        if resume and mesh_case_already_done(rows_csv, spec.label):
+            print(f"[sweep-mesh] skip {spec.label} (cached)")
+            continue
+        print(
+            f"[sweep-mesh] running {spec.label}: "
+            f"dx={spec.dx_m*1e3:.4f}mm dy={spec.dy_m*1e3:.4f}mm "
+            f"dz={spec.dz_m*1e6:.2f}um")
+        row = run_single_mesh_case(
+            config, spec, method=method, rtol=rtol,
+            max_iterations=max_iterations,
+            initial_temperature_K=initial_temperature)
+        write_mesh_case_row_partial(rows_csv, row)
+        rows.append(row)
+    delta = compute_mesh_delta_tmax(
+        rows, xy_sizes_m=xy_list, z_sizes_m=z_list)
+    write_mesh_convergence_csv(rows, rows_csv)
+    write_mesh_convergence_json(
+        rows, delta, config_path=config_path,
+        xy_sizes_m=xy_list, z_sizes_m=z_list, rtol=rtol,
+        initial_temperature_K=initial_temperature, method=method,
+        path=json_path)
+    return {
+        "case_count": len(rows),
+        "rows_path": str(rows_csv),
+        "json_path": str(json_path),
+        "delta_Tmax": delta,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="om3dthermal")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -516,6 +579,20 @@ def main(argv: list[str] | None = None) -> int:
     sensitivity_parser.add_argument(
         "--initial-temperature", type=parse_temperature, default=293.15)
     sensitivity_parser.add_argument("--resume", action="store_true")
+    mesh_parser = subparsers.add_parser(
+        "sweep-mesh",
+        help="single-factor steady-state mesh convergence sweep")
+    mesh_parser.add_argument("config", type=Path)
+    mesh_parser.add_argument("--out", type=Path, required=True)
+    mesh_parser.add_argument("--xy", required=True)
+    mesh_parser.add_argument("--z", required=True)
+    mesh_parser.add_argument(
+        "--method", choices=["pcg", "jacobi"], default="pcg")
+    mesh_parser.add_argument("--rtol", type=float, default=1e-6)
+    mesh_parser.add_argument("--max-iterations", type=int, default=10_000)
+    mesh_parser.add_argument(
+        "--initial-temperature", type=parse_temperature, default=293.15)
+    mesh_parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -558,6 +635,16 @@ def main(argv: list[str] | None = None) -> int:
             resume=args.resume)
         print(
             f"[sweep-sensitivity] wrote {result['case_count']} cases to "
+            f"{result['rows_path']} and {result['json_path']}")
+    elif args.command == "sweep-mesh":
+        result = sweep_mesh(
+            args.config, args.out, xy_sizes=args.xy, z_sizes=args.z,
+            method=args.method, rtol=args.rtol,
+            max_iterations=args.max_iterations,
+            initial_temperature=args.initial_temperature,
+            resume=args.resume)
+        print(
+            f"[sweep-mesh] wrote {result['case_count']} cases to "
             f"{result['rows_path']} and {result['json_path']}")
     return 0
 
