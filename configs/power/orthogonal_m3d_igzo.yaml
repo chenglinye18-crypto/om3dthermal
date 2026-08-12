@@ -53,14 +53,14 @@ memory:
 
 architecture:
   name: orthogonal_m3d_igzo
-  layers: 8
   geometry_source:
-    config: configs/exp_orth_m3d8_g414_bw39p2_all1read.yaml
-    memory_region: orthogonal_memory_slab
+    config: configs/orthogonal_m3d_edram_v0.yaml
+    memory_region: orthogonal_m3d_slab
   vertical:
     type: miv
-    source: constant
-    energy_pj_per_bit: null
+    source: miv_topology
+    vertical_serialization_factor: unresolved
+    capacitance_fF: unresolved
   base_route: {enabled: false, source: none}
   interface:
     type: contactless

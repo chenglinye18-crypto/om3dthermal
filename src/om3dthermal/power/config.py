@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictModel(BaseModel):
@@ -168,8 +168,29 @@ class MemoryInput(StrictModel):
 
 class TransportInput(StrictModel):
     type: Literal["tsv", "miv", "none"]
-    source: Literal["dreamram", "constant", "none"]
+    source: Literal["dreamram", "constant", "miv_topology", "none"]
     energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
+    vertical_serialization_factor: int | Literal["unresolved"] | None = None
+    capacitance_fF: float | Literal["unresolved"] | None = None
+
+    @model_validator(mode="after")
+    def miv_inputs(self) -> "TransportInput":
+        if self.source == "miv_topology":
+            if self.type != "miv":
+                raise ValueError("miv_topology source requires type: miv")
+            if self.vertical_serialization_factor is None:
+                raise ValueError(
+                    "miv_topology requires vertical_serialization_factor")
+            if self.capacitance_fF is None:
+                raise ValueError("miv_topology requires capacitance_fF")
+            if (self.vertical_serialization_factor != "unresolved"
+                    and self.vertical_serialization_factor <= 0):
+                raise ValueError(
+                    "resolved vertical serialization factor must be positive")
+            if (self.capacitance_fF != "unresolved"
+                    and self.capacitance_fF <= 0.0):
+                raise ValueError("resolved MIV capacitance must be positive")
+        return self
 
 
 class BaseRouteInput(StrictModel):
@@ -194,12 +215,13 @@ class GeometrySourceInput(StrictModel):
     """Existing thermal-geometry source for memory footprint constraints."""
 
     config: Path
-    memory_region: Literal["hbm_dram_die", "orthogonal_memory_slab"]
+    memory_region: Literal[
+        "hbm_dram_die", "orthogonal_memory_slab", "orthogonal_m3d_slab"]
 
 
 class ArchitectureInput(StrictModel):
     name: str
-    layers: int = Field(gt=0)
+    layers: int | None = Field(default=None, gt=0)
     dies: int | None = Field(default=None, gt=0)
     geometry_source: GeometrySourceInput
     vertical: TransportInput
@@ -221,6 +243,19 @@ class WorkloadInput(StrictModel):
     row_policy: RowPolicy | None = None
     stored_bits: float | None = Field(default=None, gt=0.0)
     active_rows: int | None = Field(default=None, ge=0)
+    layer_access_probability: tuple[float, ...] | None = None
+
+    @field_validator("layer_access_probability")
+    @classmethod
+    def valid_layer_probability(
+            cls, value: tuple[float, ...] | None) -> tuple[float, ...] | None:
+        if value is None:
+            return None
+        if not value or any(probability < 0.0 for probability in value):
+            raise ValueError("layer access probabilities must be non-negative")
+        if not math.isclose(sum(value), 1.0, rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError("layer access probabilities must sum to 1")
+        return value
 
 
 class EnableInput(StrictModel):

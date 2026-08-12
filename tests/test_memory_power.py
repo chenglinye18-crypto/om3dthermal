@@ -3,8 +3,13 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
-from om3dthermal.power import calculate_memory_power, load_power_config
+from om3dthermal.power import (
+    UnresolvedMIVEnergyError,
+    calculate_memory_power,
+    load_power_config,
+)
 from om3dthermal.power.backends import DreamRAMBackend, OperationTableCellModel
 from om3dthermal.power.cell_model import (
     MissingCellReplacementError,
@@ -13,6 +18,7 @@ from om3dthermal.power.cell_model import (
 )
 from om3dthermal.power.config import MemoryPowerConfig, RowPolicy, TransportInput
 from om3dthermal.power.geometry import evaluate_geometry_fit
+from om3dthermal.power.miv import build_miv_topology
 
 
 ROOT = Path(__file__).parents[1]
@@ -177,7 +183,7 @@ def test_existing_geometry_sources_are_resolved_for_all_power_configs():
         "hbm3_si_logic_remove.yaml": (10.8, 10.8, "hbm_dram_die"),
         "orthogonal_si.yaml": (22.0, 5.5, "orthogonal_memory_slab"),
         "orthogonal_m3d_igzo.yaml": (
-            22.0, 5.5, "orthogonal_memory_slab"),
+            22.0, 5.5, "orthogonal_m3d_slab"),
     }
     for name, (configured_x, configured_y, region) in expected.items():
         backend = DreamRAMBackend(ROOT).calculate(
@@ -362,3 +368,137 @@ def test_igzo_operation_primitive_replaces_native_block_without_double_count():
     assert "current_sense_energy" not in result.diagnostics
     assert "CSA_energy" not in result.diagnostics
     assert "RBL_energy" not in result.diagnostics
+
+
+def test_m3d_topology_uses_geometry_layers_and_uniform_access():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    metadata = DreamRAMBackend(ROOT).calculate(config).metadata
+    assert config.architecture.layers is None
+    assert metadata["m3d_layers"] == 8
+    assert metadata["layer_pitch_um"] == pytest.approx(0.288)
+    assert metadata["m3d_layers_source"] == (
+        "geometry_source.m3d_beol.bitcell_layers")
+    assert metadata["layer_pitch_source"] == (
+        "geometry_source.m3d_beol.bitcell_layer_pitch_nm")
+    assert metadata["layer_access_assumption"] == "uniform"
+    assert metadata["miv_length_per_layer_um"] == pytest.approx(
+        tuple(0.288 * index for index in range(1, 9)))
+    assert metadata["miv_average_length_um"] == pytest.approx(1.296)
+    assert metadata["m3d_layers_independent_of_dies_stacked"] is True
+    assert metadata["dies_stacked"] == 8
+
+
+def test_miv_length_changes_with_layers_and_pitch_not_dies_stacked():
+    common = {
+        "data_width_before_vertical": 17,
+        "vertical_serialization_factor": "unresolved",
+        "row_miv_count": 24,
+        "col_miv_count": 19,
+    }
+    four_layers = build_miv_topology(
+        m3d_layers=4, layer_pitch_um=0.288, **common)
+    eight_layers = build_miv_topology(
+        m3d_layers=8, layer_pitch_um=0.288, **common)
+    wider_pitch = build_miv_topology(
+        m3d_layers=8, layer_pitch_um=0.4, **common)
+    assert four_layers.miv_average_length_um == pytest.approx(0.72)
+    assert eight_layers.miv_average_length_um == pytest.approx(1.296)
+    assert wider_pitch.miv_average_length_um == pytest.approx(1.8)
+    # No dies_stacked argument exists: physical die count cannot enter MIV
+    # length, and 4-layer average is not DreamRAM dies_stacked/2 * pitch.
+    assert four_layers.miv_average_length_um != pytest.approx(4 * 0.288)
+
+
+@pytest.mark.parametrize(
+    "layers,pitch_nm,expected_average_um",
+    [(4, 288.0, 0.72), (8, 400.0, 1.8)],
+)
+def test_miv_adapter_tracks_existing_geometry_config(
+        tmp_path, layers, pitch_nm, expected_average_um):
+    source_path = ROOT / "configs" / "orthogonal_m3d_edram_v0.yaml"
+    raw_geometry = yaml.safe_load(source_path.read_text(encoding="utf-8"))
+    stack_um = layers * pitch_nm * 1e-3
+    raw_geometry["m3d_beol"].update({
+        "bitcell_layers": layers,
+        "bitcell_layer_pitch_nm": pitch_nm,
+        "bitcell_stack_um": stack_um,
+        "total_um": stack_um + raw_geometry["m3d_beol"]["interconnect_um"],
+    })
+    raw_geometry["m3d_memory"]["layers"] = layers
+    raw_geometry["slab"]["si_substrate_um"] = (
+        raw_geometry["slab"]["total_pitch_um"]
+        - raw_geometry["slab"]["feol_um"]
+        - stack_um
+        - raw_geometry["m3d_beol"]["interconnect_um"]
+        - raw_geometry["orthogonal"]["daa_um"])
+    geometry_path = tmp_path / "m3d_geometry.yaml"
+    geometry_path.write_text(
+        yaml.safe_dump(raw_geometry, sort_keys=False), encoding="utf-8")
+
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    geometry_source = config.architecture.geometry_source.model_copy(
+        update={"config": geometry_path})
+    architecture = config.architecture.model_copy(
+        update={"geometry_source": geometry_source})
+    metadata = DreamRAMBackend(ROOT).calculate(
+        config.model_copy(update={"architecture": architecture})).metadata
+    assert metadata["m3d_layers"] == layers
+    assert metadata["layer_pitch_um"] == pytest.approx(pitch_nm * 1e-3)
+    assert metadata["miv_average_length_um"] == pytest.approx(
+        expected_average_um)
+    assert metadata["dies_stacked"] == 8
+
+
+def test_miv_count_is_derived_and_native_tsv_serialization_is_not_inherited():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    metadata = DreamRAMBackend(ROOT).calculate(config).metadata
+    assert metadata["data_width_before_vertical"] == 272
+    assert metadata["vertical_serialization_factor"] is None
+    assert metadata["vertical_serialization_status"] == "unresolved"
+    assert metadata["active_data_miv_count"] is None
+    assert metadata["row_miv_count"] == 23
+    assert metadata["col_miv_count"] == 17
+    resolved = build_miv_topology(
+        m3d_layers=8,
+        layer_pitch_um=0.288,
+        data_width_before_vertical=metadata["data_width_before_vertical"],
+        vertical_serialization_factor=5,
+        row_miv_count=metadata["row_miv_count"],
+        col_miv_count=metadata["col_miv_count"],
+    )
+    assert resolved.active_data_miv_count == 55
+    assert resolved.active_data_miv_count == (
+        metadata["data_width_before_vertical"] + 5 - 1) // 5
+
+
+def test_m3d_path_excludes_hbm_vertical_base_dq_and_tsv_area():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    metadata = DreamRAMBackend(ROOT).calculate(config).metadata
+    assert metadata["vertical_interconnect_type"] == "MIV"
+    assert metadata["miv_connection_model"] == (
+        "per_layer_local_selection_to_shared_vertical")
+    assert metadata["direct_bitline_to_feol"] is False
+    assert metadata["miv_components"] == (
+        "row-miv", "col-miv", "data-miv")
+    assert metadata["tsv_energy_included"] is False
+    assert metadata["base_route_included"] is False
+    assert metadata["dq_included"] is False
+    assert metadata["miv_dedicated_koz_area_modeled"] is False
+    assert metadata["miv_planar_footprint_basis"] == (
+        "bankdie_without_tsv_koz_bands")
+    assert set(metadata["excluded_hbm_components"]) == {
+        "row-tsv", "col-tsv", "tsv",
+        "row-base", "col-base", "base",
+        "row-dq", "col-dq", "dq",
+    }
+
+
+def test_missing_miv_capacitance_returns_unresolved_and_fails_loudly():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    metadata = DreamRAMBackend(ROOT).calculate(config).metadata
+    assert metadata["miv_capacitance_status"] == "unresolved"
+    assert metadata["miv_energy_status"] == "unresolved"
+    with pytest.raises(UnresolvedMIVEnergyError) as captured:
+        calculate_memory_power(config, project_root=ROOT)
+    assert captured.value.diagnostics["miv_energy_status"] == "unresolved"
+    assert "TSV capacitance is not used" in str(captured.value)

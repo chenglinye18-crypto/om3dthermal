@@ -15,6 +15,17 @@ from .config import MemoryPowerConfig, find_project_root, load_power_config
 from .result import BackendEnergyResult, EnergyDecomposition, MemoryPowerResult
 
 
+class UnresolvedMIVEnergyError(ValueError):
+    """MIV topology is resolved but electrical energy inputs are not."""
+
+    def __init__(self, diagnostics: dict[str, object]):
+        self.diagnostics = diagnostics
+        super().__init__(
+            "MIV energy is unresolved/N/A: credible MIV capacitance and "
+            "vertical serialization are not configured; TSV capacitance is "
+            "not used as a substitute")
+
+
 def _resolve_transport(
         label: str, source: str, constant: float | None,
         dreamram: EnergyDecomposition | None) -> float:
@@ -32,6 +43,8 @@ def _resolve_transport(
                 f"architecture {label} requests DreamRAM energy from a "
                 "non-DreamRAM backend")
         return float(getattr(dreamram, label))
+    if source == "miv_topology":
+        raise ValueError("MIV topology source requires unresolved-energy handling")
     raise ValueError(f"unsupported architecture source {source!r}")
 
 
@@ -146,6 +159,9 @@ def calculate_memory_power(
     (memory_internal, dreamram_decomposition,
      native_components, replacement_components) = _memory_read_energy(
          backend, config, device)
+    if config.architecture.vertical.source == "miv_topology":
+        if backend.metadata.get("miv_energy_status") != "resolved":
+            raise UnresolvedMIVEnergyError(dict(backend.metadata))
     vertical = _resolve_transport(
         "vertical", config.architecture.vertical.source,
         config.architecture.vertical.energy_pj_per_bit,

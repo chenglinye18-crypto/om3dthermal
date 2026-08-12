@@ -14,7 +14,12 @@ from typing import Iterator
 
 from ..cell_model import ONE_T_ONE_C_SPECIFIC, REUSABLE_STRUCTURE
 from ..config import MemoryPowerConfig, resolve_project_path
-from ..geometry import evaluate_geometry_fit, load_memory_region_size
+from ..geometry import (
+    evaluate_geometry_fit,
+    load_m3d_geometry,
+    load_memory_region_size,
+)
+from ..miv import build_miv_topology
 from ..result import BackendEnergyResult, EnergyDecomposition
 
 
@@ -162,9 +167,20 @@ class DreamRAMBackend:
             mat_y_um = (
                 dram.mat_rows * dram.isolation_rows_overhead * tech.pitch_wl)
             stack_dims = dram.calc_stack_dims(tech)
-            required_x_mm = float(stack_dims[1]) * 1e-3
-            required_y_mm = float(sum(stack_dims[2:])) * 1e-3
+            dies_stacked = int(stack_dims[0])
+            if config.architecture.vertical.type == "miv":
+                # M3D is a single-die topology. Exclude HBM TSV/KOZ bands from
+                # its planar footprint constraint; dies_stacked is diagnostic
+                # only and never enters the MIV length calculation.
+                required_x_um, required_y_um = dram.bankdie_dims(tech)
+                required_x_mm = float(required_x_um) * 1e-3
+                required_y_mm = float(required_y_um) * 1e-3
+            else:
+                required_x_mm = float(stack_dims[1]) * 1e-3
+                required_y_mm = float(sum(stack_dims[2:])) * 1e-3
             wire_lengths = dram.wire_lengths(tech)
+            wire_counts = dram.wire_counts()
+            row_bits, col_bits = dram.ch_cmd_bits()
             command_energy, components = dram.per_cmd_energy(tech)
             atoms_per_page = int(dram.atoms_per_page())
             atom_size = int(dram.atom_size)
@@ -183,6 +199,34 @@ class DreamRAMBackend:
             required_x_mm=required_x_mm,
             required_y_mm=required_y_mm,
         )
+        miv_metadata: dict[str, object] = {}
+        if config.architecture.vertical.type == "miv":
+            m3d_geometry = load_m3d_geometry(
+                self.project_root, config.architecture.geometry_source)
+            vertical = config.architecture.vertical
+            topology = build_miv_topology(
+                m3d_layers=m3d_geometry.layers,
+                layer_pitch_um=m3d_geometry.layer_pitch_um,
+                data_width_before_vertical=int(wire_counts["gbus"]),
+                vertical_serialization_factor=(
+                    vertical.vertical_serialization_factor
+                    if vertical.vertical_serialization_factor is not None
+                    else "unresolved"),
+                row_miv_count=int(row_bits),
+                col_miv_count=int(col_bits),
+                layer_access_probability=(
+                    config.workload.layer_access_probability),
+                capacitance_fF=(
+                    vertical.capacitance_fF
+                    if vertical.capacitance_fF is not None else "unresolved"),
+            )
+            miv_metadata = topology.as_dict()
+            miv_metadata["m3d_layers_source"] = (
+                "geometry_source.m3d_beol.bitcell_layers")
+            miv_metadata["layer_pitch_source"] = (
+                "geometry_source.m3d_beol.bitcell_layer_pitch_nm")
+            miv_metadata["dies_stacked"] = dies_stacked
+            miv_metadata["m3d_layers_independent_of_dies_stacked"] = True
 
         command_groups = {
             command: {group: 0.0 for group in _GROUP_COMPONENTS}
@@ -243,6 +287,7 @@ class DreamRAMBackend:
                 "rd_per_act": n_read,
                 "atom_size_bits": atom_size,
                 "atoms_per_page": atoms_per_page,
+                "dies_stacked": dies_stacked,
                 "geometry_source_config": str(geometry_path),
                 "memory_region": config.architecture.geometry_source.memory_region,
                 **geometry_fit.as_dict(),
@@ -259,6 +304,7 @@ class DreamRAMBackend:
                 "bank_y_um": float(bank_y_um),
                 "wire_lengths_um": {
                     name: float(value) for name, value in wire_lengths.items()},
+                **miv_metadata,
                 "E_PRE_pJ": float(command_energy["pre"]),
                 "E_ACT_pJ": float(command_energy["act"]),
                 "E_RD_pJ": float(command_energy["rd"]),
