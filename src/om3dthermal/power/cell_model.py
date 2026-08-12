@@ -91,3 +91,29 @@ def apply_component_replacements(
         native_components=retained,
         replacement_components=replacements,
     )
+
+
+def apply_operation_primitive_replacement(
+        native_components: dict[str, float], *,
+        required_components: tuple[str, ...],
+        operation_energy_pj_per_bit: float,
+        primitive_name: str = "mat_local_operation",
+        ) -> CellReplacementResolution:
+    """Replace a native component set with one indivisible operation primitive."""
+    if operation_energy_pj_per_bit < 0.0:
+        raise ValueError("operation replacement energy must be non-negative")
+    # Reuse component-boundary validation without inventing a split of the
+    # reported operation primitive across bl-act and bl-pre.
+    validated = apply_component_replacements(
+        native_components,
+        required_components=required_components,
+        replacement_components={name: 0.0 for name in required_components},
+    )
+    replacements = {primitive_name: float(operation_energy_pj_per_bit)}
+    return CellReplacementResolution(
+        memory_internal_pj_bit=(
+            sum(validated.native_components.values())
+            + operation_energy_pj_per_bit),
+        native_components=validated.native_components,
+        replacement_components=replacements,
+    )

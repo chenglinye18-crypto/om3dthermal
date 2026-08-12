@@ -54,6 +54,14 @@ class OperationTable(StrictModel):
     refresh_1_pj_per_bit: float = Field(ge=0.0)
 
 
+class OperationEnergyProvenance(StrictModel):
+    source: Literal["IEDM2026_HaotongZhu_V5"]
+    accounting_level: Literal["SPICE_EXTRACTED_MAT_LOCAL_OPERATION_ENERGY"]
+    sensing_included: Literal[True]
+    distributed_rc_included: Literal[True]
+    accounting_note: str
+
+
 class BackgroundInput(StrictModel):
     type: Literal["per_row", "per_bit", "per_die", "total"]
     value_w: float = Field(ge=0.0)
@@ -95,6 +103,8 @@ class CellGeometryInput(StrictModel):
 class CellReplacementInput(StrictModel):
     mapping_status: Literal["validated", "unresolved"]
     components: tuple[str, ...]
+    energy_source: Literal["component_values", "operation_table"] = (
+        "component_values")
     component_energy_pj_per_bit: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -103,6 +113,11 @@ class CellReplacementInput(StrictModel):
             raise ValueError("replacement components must be unique")
         if any(value < 0.0 for value in self.component_energy_pj_per_bit.values()):
             raise ValueError("replacement component energy must be non-negative")
+        if (self.energy_source == "operation_table"
+                and self.component_energy_pj_per_bit):
+            raise ValueError(
+                "operation_table replacement is one combined primitive; "
+                "component_energy_pj_per_bit must be empty")
         return self
 
 
@@ -114,6 +129,7 @@ class CellModelInput(StrictModel):
     geometry: CellGeometryInput | None = None
     replacement: CellReplacementInput | None = None
     operations: OperationTable | None = None
+    operation_energy_provenance: OperationEnergyProvenance | None = None
     background: BackgroundInput | None = None
     retention_s: float | None = Field(default=None, gt=0.0)
 
@@ -124,6 +140,16 @@ class CellModelInput(StrictModel):
                 raise ValueError(f"{self.type} requires cell_model.replacement")
         if self.type == "operation_table" and self.operations is None:
             raise ValueError("operation_table requires cell_model.operations")
+        if self.type == "operation_table":
+            if self.operation_energy_provenance is None:
+                raise ValueError(
+                    "operation_table requires operation_energy_provenance")
+            if (self.replacement is not None
+                    and self.replacement.mapping_status == "validated"
+                    and self.replacement.energy_source != "operation_table"):
+                raise ValueError(
+                    "validated operation_table replacement must use "
+                    "energy_source: operation_table")
         return self
 
 

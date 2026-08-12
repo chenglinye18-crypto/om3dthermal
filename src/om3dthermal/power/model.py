@@ -9,6 +9,7 @@ from .cell_model import (
     DeviceOperationEnergies,
     MissingCellReplacementError,
     apply_component_replacements,
+    apply_operation_primitive_replacement,
 )
 from .config import MemoryPowerConfig, find_project_root, load_power_config
 from .result import BackendEnergyResult, EnergyDecomposition, MemoryPowerResult
@@ -37,6 +38,7 @@ def _resolve_transport(
 def _memory_read_energy(
         backend: BackendEnergyResult,
         config: MemoryPowerConfig,
+        device: DeviceOperationEnergies | None,
         ) -> tuple[
             float, EnergyDecomposition, dict[str, float], dict[str, float]]:
     native = backend.read_default
@@ -58,11 +60,26 @@ def _memory_read_energy(
                 "validated DreamRAM replacement boundary")
         raise MissingCellReplacementError(
             "cell replacement mapping has not been validated")
-    resolved = apply_component_replacements(
-        backend.native_internal_components,
-        required_components=replacement.components,
-        replacement_components=replacement.component_energy_pj_per_bit,
-    )
+    if replacement.energy_source == "operation_table":
+        if device is None:
+            raise MissingCellReplacementError(
+                "operation-table replacement energy is unavailable")
+        probability = config.workload.read_data
+        if probability is None:
+            raise ValueError(
+                "operation-table read replacement requires workload.read_data")
+        resolved = apply_operation_primitive_replacement(
+            backend.native_internal_components,
+            required_components=replacement.components,
+            operation_energy_pj_per_bit=device.weighted_read(
+                p0=probability.p0, p1=probability.p1),
+        )
+    else:
+        resolved = apply_component_replacements(
+            backend.native_internal_components,
+            required_components=replacement.components,
+            replacement_components=replacement.component_energy_pj_per_bit,
+        )
     modified = EnergyDecomposition(
         memory_internal=resolved.memory_internal_pj_bit,
         vertical=native.vertical,
@@ -128,7 +145,7 @@ def calculate_memory_power(
 
     (memory_internal, dreamram_decomposition,
      native_components, replacement_components) = _memory_read_energy(
-         backend, config)
+         backend, config, device)
     vertical = _resolve_transport(
         "vertical", config.architecture.vertical.source,
         config.architecture.vertical.energy_pj_per_bit,
@@ -177,6 +194,11 @@ def calculate_memory_power(
         diagnostics={
             **backend.metadata,
             "cell_model": config.memory.cell_model.type,
+            "operation_energy_provenance": (
+                None
+                if config.memory.cell_model.operation_energy_provenance is None
+                else config.memory.cell_model.operation_energy_provenance.model_dump()
+            ),
             "native_components_pj_bit": native_components,
             "replacement_components_pj_bit": replacement_components,
         },

@@ -11,7 +11,7 @@ from om3dthermal.power.cell_model import (
     ONE_T_ONE_C_SPECIFIC,
     REUSABLE_STRUCTURE,
 )
-from om3dthermal.power.config import MemoryPowerConfig, RowPolicy
+from om3dthermal.power.config import MemoryPowerConfig, RowPolicy, TransportInput
 from om3dthermal.power.geometry import evaluate_geometry_fit
 
 
@@ -37,6 +37,12 @@ def _with_component_replacement(
         },
     }
     return MemoryPowerConfig.model_validate(raw)
+
+
+def _without_miv(config):
+    architecture = config.architecture.model_copy(update={
+        "vertical": TransportInput(type="none", source="none")})
+    return config.model_copy(update={"architecture": architecture})
 
 
 @pytest.fixture(scope="module")
@@ -105,6 +111,37 @@ def test_igzo_geometry_does_not_change_operation_energy_or_hold():
     assert cell_model.background is not None
     assert cell_model.background.type == "per_row"
     assert cell_model.background.value_w == pytest.approx(4.26e-15)
+
+
+def test_igzo_table_i_operation_values_and_provenance_are_frozen():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    cell_model = config.memory.cell_model
+    operations = cell_model.operations
+    provenance = cell_model.operation_energy_provenance
+    replacement = cell_model.replacement
+    assert cell_model.source == "IEDM2026_HaotongZhu_V5"
+    assert operations is not None
+    assert operations.model_dump() == pytest.approx({
+        "read_0_pj_per_bit": 0.00060,
+        "read_1_pj_per_bit": 0.36800,
+        "write_00_pj_per_bit": 0.00030,
+        "write_01_pj_per_bit": 0.00037,
+        "write_10_pj_per_bit": 0.00058,
+        "write_11_pj_per_bit": 0.00024,
+        "refresh_0_pj_per_bit": 0.00090,
+        "refresh_1_pj_per_bit": 0.37000,
+    })
+    assert provenance is not None
+    assert provenance.source == "IEDM2026_HaotongZhu_V5"
+    assert provenance.accounting_level == (
+        "SPICE_EXTRACTED_MAT_LOCAL_OPERATION_ENERGY")
+    assert provenance.sensing_included is True
+    assert provenance.distributed_rc_included is True
+    assert replacement is not None
+    assert replacement.mapping_status == "validated"
+    assert replacement.energy_source == "operation_table"
+    assert replacement.components == ("bl-act", "bl-pre")
+    assert replacement.component_energy_pj_per_bit == {}
 
 
 def test_igzo_pitch_maps_to_independent_dreamram_tech():
@@ -306,9 +343,22 @@ def test_operation_table_is_device_energy_not_complete_memory_energy():
     assert device.background_value_W == pytest.approx(4.26e-15)
 
 
-def test_igzo_nominal_fails_at_unvalidated_replacement_boundary():
+def test_igzo_operation_primitive_replaces_native_block_without_double_count():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    with pytest.raises(
-            MissingCellReplacementError,
-            match="IGZO cell energy exists but has not been mapped"):
-        calculate_memory_power(config, project_root=ROOT)
+    backend = DreamRAMBackend(ROOT).calculate(config)
+    result = calculate_memory_power(_without_miv(config), project_root=ROOT)
+    operation = 0.5 * 0.00060 + 0.5 * 0.36800
+    reusable = sum(
+        backend.native_internal_components[name]
+        for name in REUSABLE_STRUCTURE)
+    assert result.E_memory_internal_pj_bit == pytest.approx(
+        reusable + operation, abs=1e-15)
+    assert set(result.diagnostics["native_components_pj_bit"]) == (
+        REUSABLE_STRUCTURE)
+    assert result.diagnostics["replacement_components_pj_bit"] == {
+        "mat_local_operation": pytest.approx(operation)}
+    assert not ({"bl-act", "bl-pre"}
+                & set(result.diagnostics["native_components_pj_bit"]))
+    assert "current_sense_energy" not in result.diagnostics
+    assert "CSA_energy" not in result.diagnostics
+    assert "RBL_energy" not in result.diagnostics
