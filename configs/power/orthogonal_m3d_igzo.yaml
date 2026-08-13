@@ -111,9 +111,12 @@ architecture:
   vertical:
     type: miv
     source: miv_topology
-    # MODELING_CHOICE / TSV_EQUIVALENT_BASELINE. Values are resolved from the
-    # pinned DreamRAM organization/technology, not duplicated here.
-    electrical_model: tsv_equivalent_reference
+    # MODELING_CHOICE: DreamRAM TSV-derived distributed C/length with actual
+    # M3D length. The local endpoint load is explicit and is not DreamRAM's
+    # conventional-HBM receiver load.
+    electrical_model: dreamram_length_scaled_reference
+    fixed_load_pF: 0.006
+    fixed_load_provenance: MODELING_CHOICE
   base_route: {enabled: false, source: none}
   interface:
     type: contactless

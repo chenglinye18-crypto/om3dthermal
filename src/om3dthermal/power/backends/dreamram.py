@@ -19,7 +19,7 @@ from ..geometry import (
     load_m3d_geometry,
     load_memory_region_size,
 )
-from ..miv import build_miv_topology, calculate_tsv_equivalent_miv_energy
+from ..miv import build_miv_topology, calculate_length_scaled_miv_energy
 from ..m3d_subarray import M3DSubarrayResult
 from ..result import BackendEnergyResult, EnergyDecomposition
 
@@ -181,15 +181,33 @@ class DreamRAMBackend:
             wire_lengths = dram.wire_lengths(tech)
             wire_counts = dram.wire_counts()
             row_bits, col_bits = dram.ch_cmd_bits()
-            tsv_equivalent = (
+            length_scaled_reference = (
                 config.architecture.vertical.electrical_model
-                == "tsv_equivalent_reference")
-            if tsv_equivalent:
+                == "dreamram_length_scaled_reference")
+            if length_scaled_reference:
                 miv_serialization = int(dram.gbus_tsv_sd)
-                miv_capacitance_pF = float(tech.scaled_cap_tsv())
+                dreamram_scaled_tsv_capacitance_pF = float(
+                    tech.scaled_cap_tsv())
+                pitch_scale = float(
+                    (tech.tsv_pitch / tech._tsv_pitch)
+                    ** tech.tsv_c_pitch_scale_conf)
+                miv_vertical_capacitance_pF_per_um = float(
+                    tech._c_tsv / tech._tsv_height * pitch_scale)
+                dreamram_reference = {
+                    "dreamram_reference_tsv_height_um": float(tech._tsv_height),
+                    "dreamram_current_tsv_height_um": float(tech.tsv_height),
+                    "dreamram_reference_tsv_capacitance_pF": float(tech._c_tsv),
+                    "dreamram_reference_tsv_pitch_um": float(tech._tsv_pitch),
+                    "dreamram_current_tsv_pitch_um": float(tech.tsv_pitch),
+                    "dreamram_reference_load_capacitance_pF": float(tech._c_load),
+                    "dreamram_complete_scaled_tsv_capacitance_pF": (
+                        dreamram_scaled_tsv_capacitance_pF),
+                    "dreamram_tsv_pitch_capacitance_scale": pitch_scale,
+                }
             else:
                 miv_serialization = None
-                miv_capacitance_pF = None
+                miv_vertical_capacitance_pF_per_um = None
+                dreamram_reference = {}
             data_pumps = int(dram.pumps_per_atom())
             data_transition_factor = float(dram.dbi_transition_factor_max())
             row_col_voltage_product = float(tech.vcore_int * tech.vdd)
@@ -229,7 +247,7 @@ class DreamRAMBackend:
                     m3d_subarray.data_width_before_vertical),
                 vertical_serialization_factor=(
                     miv_serialization
-                    if tsv_equivalent
+                    if length_scaled_reference
                     else vertical.vertical_serialization_factor
                     if vertical.vertical_serialization_factor is not None
                     else "unresolved"),
@@ -238,8 +256,9 @@ class DreamRAMBackend:
                 layer_access_probability=(
                     config.workload.layer_access_probability),
                 capacitance_fF=(
-                    miv_capacitance_pF * 1e3
-                    if tsv_equivalent and miv_capacitance_pF is not None
+                    miv_vertical_capacitance_pF_per_um * 1e3
+                    if (length_scaled_reference
+                        and miv_vertical_capacitance_pF_per_um is not None)
                     else vertical.capacitance_fF
                     if vertical.capacitance_fF is not None else "unresolved"),
             )
@@ -252,12 +271,16 @@ class DreamRAMBackend:
                 "geometry_source.m3d_beol.bitcell_layer_pitch_nm")
             miv_metadata["dies_stacked"] = dies_stacked
             miv_metadata["m3d_layers_independent_of_dies_stacked"] = True
-            if tsv_equivalent:
-                if miv_capacitance_pF is None:
-                    raise RuntimeError("TSV-equivalent capacitance was not resolved")
-                miv_energy = calculate_tsv_equivalent_miv_energy(
+            if length_scaled_reference:
+                if miv_vertical_capacitance_pF_per_um is None:
+                    raise RuntimeError("length-scaled capacitance was not resolved")
+                if vertical.fixed_load_pF is None:
+                    raise RuntimeError("MIV fixed endpoint load was not configured")
+                miv_energy = calculate_length_scaled_miv_energy(
                     topology,
-                    capacitance_pF_per_segment=miv_capacitance_pF,
+                    vertical_capacitance_pF_per_um=(
+                        miv_vertical_capacitance_pF_per_um),
+                    fixed_load_pF=vertical.fixed_load_pF,
                     row_voltage_product_V2=row_col_voltage_product,
                     col_voltage_product_V2=row_col_voltage_product,
                     data_voltage_product_V2=data_voltage_product,
@@ -269,16 +292,33 @@ class DreamRAMBackend:
                 miv_access_energy = miv_energy.miv_access_energy_pJ_per_bit
                 miv_metadata.update(miv_energy.as_dict())
                 miv_metadata.update({
-                    "miv_electrical_model": "TSV_EQUIVALENT_BASELINE",
+                    **dreamram_reference,
+                    "miv_electrical_model": (
+                        "DREAMRAM_TSV_LENGTH_SCALED_REFERENCE"),
                     "miv_modeling_class": "MODELING_CHOICE",
                     "miv_serialization_factor": miv_serialization,
                     "miv_serialization_source": "DREAMRAM_TSV_EQUIVALENT",
-                    "miv_capacitance_per_segment_pF": miv_capacitance_pF,
-                    "miv_capacitance_per_segment": miv_capacitance_pF,
-                    "miv_capacitance_source": "DREAMRAM_TSV_EQUIVALENT",
-                    "miv_capacitance_physical_interpretation": (
-                        "effective_capacitance_per_vertical_segment"),
-                    "miv_segment_mapping": "one_m3d_layer_pitch_per_segment",
+                    "miv_vertical_capacitance_pF_per_um": (
+                        miv_vertical_capacitance_pF_per_um),
+                    "miv_vertical_capacitance_fF_per_um": (
+                        miv_vertical_capacitance_pF_per_um * 1e3),
+                    "miv_vertical_capacitance_source": (
+                        "DREAMRAM_DATE2026_TSV_REFERENCE"),
+                    "miv_vertical_capacitance_classification": (
+                        "DERIVED_FROM_REFERENCE"),
+                    "miv_fixed_load_pF": vertical.fixed_load_pF,
+                    "miv_fixed_load_fF": vertical.fixed_load_pF * 1e3,
+                    "miv_fixed_load_classification": (
+                        vertical.fixed_load_provenance),
+                    "dreamram_scaled_cap_tsv_used_per_m3d_segment": False,
+                    "dreamram_reference_load_used_as_miv_fixed_load": False,
+                    "miv_segments_energy_role": "GEOMETRY_DIAGNOSTIC_ONLY",
+                    "row_miv_energy_pj_per_bit": (
+                        miv_energy.row_miv_access_energy_pJ_per_bit),
+                    "col_miv_energy_pj_per_bit": (
+                        miv_energy.col_miv_access_energy_pJ_per_bit),
+                    "data_miv_energy_pj_per_bit": (
+                        miv_energy.data_miv_access_energy_pJ_per_bit),
                     "row_miv_voltage_source": "DREAMRAM_TSV_EQUIVALENT",
                     "col_miv_voltage_source": "DREAMRAM_TSV_EQUIVALENT",
                     "data_miv_voltage_source": "DREAMRAM_TSV_EQUIVALENT",
@@ -287,12 +327,15 @@ class DreamRAMBackend:
                     "data_miv_voltage_mapping": "data-tsv_voltage_domain",
                     "miv_geometry_source": "EXISTING_M3D_GEOMETRY",
                     "miv_electrical_provenance": {
-                        "type": "TSV_EQUIVALENT_BASELINE",
+                        "type": "DREAMRAM_TSV_LENGTH_SCALED_REFERENCE",
                         "classification": "MODELING_CHOICE",
                         "serialization_source": "DREAMRAM_TSV_EQUIVALENT",
-                        "capacitance_source": "DREAMRAM_TSV_EQUIVALENT",
-                        "capacitance_interpretation": (
-                            "effective_capacitance_per_vertical_segment"),
+                        "distributed_capacitance_source": (
+                            "DREAMRAM_DATE2026_TSV_REFERENCE"),
+                        "distributed_capacitance_classification": (
+                            "DERIVED_FROM_REFERENCE"),
+                        "fixed_load_classification": "MODELING_CHOICE",
+                        "fixed_load_source": "M3D_POWER_CONFIG",
                         "voltage_source": "DREAMRAM_TSV_EQUIVALENT",
                         "geometry_source": "EXISTING_M3D_GEOMETRY",
                     },

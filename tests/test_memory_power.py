@@ -615,14 +615,14 @@ def test_miv_adapter_tracks_existing_geometry_config(
     assert metadata["dies_stacked"] == 8
     expected_segments = (layers + 1) / 2
     assert metadata["miv_average_segments"] == pytest.approx(expected_segments)
-    if layers == 8:
-        # Physical pitch changes, but pF/segment energy does not.
-        assert metadata["miv_access_energy_pJ_per_bit"] == pytest.approx(
-            baseline["miv_access_energy_pJ_per_bit"], abs=0.0)
-    else:
-        assert metadata["miv_access_energy_pJ_per_bit"] == pytest.approx(
-            baseline["miv_access_energy_pJ_per_bit"]
-            * expected_segments / baseline["miv_average_segments"])
+    assert metadata["miv_average_effective_capacitance_pF"] == pytest.approx(
+        metadata["miv_fixed_load_pF"]
+        + metadata["miv_vertical_capacitance_pF_per_um"]
+        * expected_average_um)
+    assert metadata["miv_access_energy_pJ_per_bit"] == pytest.approx(
+        baseline["miv_access_energy_pJ_per_bit"]
+        * metadata["miv_average_effective_capacitance_pF"]
+        / baseline["miv_average_effective_capacitance_pF"])
 
 
 def test_miv_count_uses_dreamram_tsv_equivalent_serialization():
@@ -672,18 +672,51 @@ def test_m3d_path_excludes_hbm_vertical_base_dq_and_tsv_area():
     }
 
 
-def test_tsv_equivalent_miv_energy_resolves_and_access_closes():
+def test_length_scaled_miv_energy_resolves_and_access_closes():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     metadata = _m3d_backend(config).metadata
-    assert metadata["miv_electrical_model"] == "TSV_EQUIVALENT_BASELINE"
+    assert metadata["miv_electrical_model"] == (
+        "DREAMRAM_TSV_LENGTH_SCALED_REFERENCE")
     assert metadata["miv_modeling_class"] == "MODELING_CHOICE"
     assert metadata["miv_capacitance_status"] == "resolved"
     assert metadata["miv_energy_status"] == "resolved"
-    assert metadata["miv_capacitance_per_segment_pF"] == pytest.approx(0.78)
-    assert metadata["miv_capacitance_source"] == (
-        "DREAMRAM_TSV_EQUIVALENT")
-    assert metadata["miv_capacitance_physical_interpretation"] == (
-        "effective_capacitance_per_vertical_segment")
+    expected_slope = (
+        metadata["dreamram_reference_tsv_capacitance_pF"]
+        / metadata["dreamram_reference_tsv_height_um"]
+        * metadata["dreamram_tsv_pitch_capacitance_scale"])
+    assert metadata["miv_vertical_capacitance_pF_per_um"] == pytest.approx(
+        expected_slope)
+    assert metadata["miv_vertical_capacitance_pF_per_um"] == pytest.approx(
+        0.022)
+    assert metadata["miv_vertical_capacitance_fF_per_um"] == pytest.approx(22)
+    assert metadata["miv_fixed_load_pF"] == pytest.approx(0.006)
+    assert metadata["miv_fixed_load_fF"] == pytest.approx(6)
+    assert metadata["miv_fixed_load_classification"] == "MODELING_CHOICE"
+    assert metadata["dreamram_reference_load_capacitance_pF"] == pytest.approx(
+        0.120)
+    assert metadata["dreamram_complete_scaled_tsv_capacitance_pF"] == (
+        pytest.approx(0.78))
+    assert metadata["dreamram_scaled_cap_tsv_used_per_m3d_segment"] is False
+    assert metadata["dreamram_reference_load_used_as_miv_fixed_load"] is False
+    assert metadata["miv_segments_energy_role"] == "GEOMETRY_DIAGNOSTIC_ONLY"
+    assert metadata["row_miv_energy_pj_per_bit"] == pytest.approx(
+        metadata["row_miv_access_energy_pJ_per_bit"])
+    assert metadata["col_miv_energy_pj_per_bit"] == pytest.approx(
+        metadata["col_miv_access_energy_pJ_per_bit"])
+    assert metadata["data_miv_energy_pj_per_bit"] == pytest.approx(
+        metadata["data_miv_access_energy_pJ_per_bit"])
+    assert metadata["miv_length_per_layer_um"] == pytest.approx(
+        tuple(0.288 * index for index in range(1, 9)))
+    distributed = metadata["miv_distributed_capacitance_per_layer_pF"]
+    effective = metadata["miv_effective_capacitance_per_layer_pF"]
+    assert all(right > left for left, right in zip(distributed, distributed[1:]))
+    assert all(
+        total - partial == pytest.approx(0.006)
+        for total, partial in zip(effective, distributed, strict=True))
+    assert metadata["miv_average_distributed_capacitance_pF"] == pytest.approx(
+        0.022 * 1.296)
+    assert metadata["miv_average_effective_capacitance_pF"] == pytest.approx(
+        0.006 + 0.022 * 1.296)
     assert metadata["miv_segments_per_layer"] == tuple(range(1, 9))
     assert metadata["miv_average_segments"] == pytest.approx(4.5)
     assert metadata["row_miv_voltage_source"] == (
@@ -707,3 +740,19 @@ def test_tsv_equivalent_miv_energy_resolves_and_access_closes():
     assert result.E_access_total_pj_bit == pytest.approx(
         mat_local + routing + local + result.E_vertical_pj_bit
         + result.E_interface_pj_bit)
+
+
+def test_layer_probability_weights_physical_miv_capacitance_and_energy():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    near_workload = config.workload.model_copy(
+        update={"layer_access_probability": (1.0, 0, 0, 0, 0, 0, 0, 0)})
+    far_workload = config.workload.model_copy(
+        update={"layer_access_probability": (0, 0, 0, 0, 0, 0, 0, 1.0)})
+    near = _m3d_backend(config.model_copy(update={"workload": near_workload}))
+    far = _m3d_backend(config.model_copy(update={"workload": far_workload}))
+    assert near.metadata["miv_average_length_um"] == pytest.approx(0.288)
+    assert far.metadata["miv_average_length_um"] == pytest.approx(2.304)
+    assert far.metadata["miv_average_effective_capacitance_pF"] > (
+        near.metadata["miv_average_effective_capacitance_pF"])
+    assert far.metadata["miv_access_energy_pJ_per_bit"] > (
+        near.metadata["miv_access_energy_pJ_per_bit"])

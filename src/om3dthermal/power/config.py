@@ -251,21 +251,29 @@ class TransportInput(StrictModel):
     type: Literal["tsv", "miv", "none"]
     source: Literal["dreamram", "constant", "miv_topology", "none"]
     energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
-    electrical_model: Literal["tsv_equivalent_reference"] | None = None
+    electrical_model: Literal["dreamram_length_scaled_reference"] | None = None
     vertical_serialization_factor: int | Literal["unresolved"] | None = None
     capacitance_fF: float | Literal["unresolved"] | None = None
+    fixed_load_pF: float | None = Field(default=None, gt=0.0)
+    fixed_load_provenance: Literal["MODELING_CHOICE"] | None = None
 
     @model_validator(mode="after")
     def miv_inputs(self) -> "TransportInput":
         if self.source == "miv_topology":
             if self.type != "miv":
                 raise ValueError("miv_topology source requires type: miv")
-            if self.electrical_model == "tsv_equivalent_reference":
+            if self.electrical_model == "dreamram_length_scaled_reference":
                 if (self.vertical_serialization_factor is not None
                         or self.capacitance_fF is not None):
                     raise ValueError(
-                        "TSV-equivalent MIV parameters are resolved from "
+                        "length-scaled MIV slope/serialization are resolved from "
                         "DreamRAM and must not be duplicated in power config")
+                if self.fixed_load_pF is None:
+                    raise ValueError(
+                        "length-scaled MIV requires fixed_load_pF")
+                if self.fixed_load_provenance != "MODELING_CHOICE":
+                    raise ValueError(
+                        "MIV fixed load must be marked MODELING_CHOICE")
                 return self
             if self.vertical_serialization_factor is None:
                 raise ValueError(

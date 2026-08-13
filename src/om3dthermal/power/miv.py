@@ -11,6 +11,7 @@ class MIVTopology:
     m3d_layers: int
     layer_pitch_um: float
     layer_access_assumption: str
+    layer_access_probability: tuple[float, ...]
     miv_length_per_layer_um: tuple[float, ...]
     miv_average_length_um: float
     miv_segments_per_layer: tuple[int, ...]
@@ -101,6 +102,7 @@ def build_miv_topology(
         m3d_layers=m3d_layers,
         layer_pitch_um=layer_pitch_um,
         layer_access_assumption=access_assumption,
+        layer_access_probability=probabilities,
         miv_length_per_layer_um=lengths,
         miv_average_length_um=average_length,
         miv_segments_per_layer=segments,
@@ -131,6 +133,10 @@ def build_miv_topology(
 
 @dataclass(frozen=True)
 class MIVEnergy:
+    miv_distributed_capacitance_per_layer_pF: tuple[float, ...]
+    miv_effective_capacitance_per_layer_pF: tuple[float, ...]
+    miv_average_distributed_capacitance_pF: float
+    miv_average_effective_capacitance_pF: float
     row_miv_energy_pJ: float
     col_miv_energy_pJ: float
     data_miv_energy_pJ: float
@@ -140,39 +146,55 @@ class MIVEnergy:
     data_miv_access_energy_pJ_per_bit: float
     miv_access_energy_pJ_per_bit: float
 
-    def as_dict(self) -> dict[str, float]:
+    def as_dict(self) -> dict[str, object]:
         return asdict(self)
 
 
-def calculate_tsv_equivalent_miv_energy(
-        topology: MIVTopology, *, capacitance_pF_per_segment: float,
+def calculate_length_scaled_miv_energy(
+        topology: MIVTopology, *, vertical_capacitance_pF_per_um: float,
+        fixed_load_pF: float,
         row_voltage_product_V2: float, col_voltage_product_V2: float,
         data_voltage_product_V2: float, data_pumps: int,
         data_transition_factor: float, rd_per_act: int, atom_size_bits: int,
         ) -> MIVEnergy:
-    """Map DreamRAM TSV electrical semantics onto M3D vertical segments."""
+    """Use physical MIV length with a distributed-C reference and one load."""
     if topology.active_data_miv_count is None:
         raise ValueError("MIV serialization must be resolved before energy")
-    if capacitance_pF_per_segment <= 0.0:
-        raise ValueError("MIV capacitance per segment must be positive")
+    if vertical_capacitance_pF_per_um <= 0.0 or fixed_load_pF <= 0.0:
+        raise ValueError("MIV distributed capacitance and fixed load must be positive")
     if data_pumps <= 0 or rd_per_act <= 0 or atom_size_bits <= 0:
         raise ValueError("MIV access accounting counts must be positive")
-    segments = topology.miv_average_segments
+    distributed = tuple(
+        vertical_capacitance_pF_per_um * length
+        for length in topology.miv_length_per_layer_um)
+    effective = tuple(fixed_load_pF + value for value in distributed)
+    average_distributed = sum(
+        probability * value
+        for probability, value in zip(
+            topology.layer_access_probability, distributed, strict=True))
+    average_effective = sum(
+        probability * value
+        for probability, value in zip(
+            topology.layer_access_probability, effective, strict=True))
     row = (
-        topology.row_miv_count / 2 * segments
-        * capacitance_pF_per_segment * row_voltage_product_V2)
+        topology.row_miv_count / 2
+        * average_effective * row_voltage_product_V2)
     col = (
-        topology.col_miv_count / 2 * segments
-        * capacitance_pF_per_segment * col_voltage_product_V2)
+        topology.col_miv_count / 2
+        * average_effective * col_voltage_product_V2)
     data = (
-        topology.active_data_miv_count * data_pumps / 2 * segments
-        * capacitance_pF_per_segment * data_voltage_product_V2
+        topology.active_data_miv_count * data_pumps / 2
+        * average_effective * data_voltage_product_V2
         * data_transition_factor)
     denominator = rd_per_act * atom_size_bits
     row_access = 1.5 * row / denominator
     col_access = rd_per_act * col / denominator
     data_access = rd_per_act * data / denominator
     return MIVEnergy(
+        miv_distributed_capacitance_per_layer_pF=distributed,
+        miv_effective_capacitance_per_layer_pF=effective,
+        miv_average_distributed_capacitance_pF=average_distributed,
+        miv_average_effective_capacitance_pF=average_effective,
         row_miv_energy_pJ=row,
         col_miv_energy_pJ=col,
         data_miv_energy_pJ=data,
