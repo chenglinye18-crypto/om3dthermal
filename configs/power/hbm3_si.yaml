@@ -22,5 +22,9 @@ workload:
   row_policy: {rd_per_act: 64}
 
 power:
-  refresh: {enabled: false}
+  refresh:
+    enabled: true
+    model: dreamram_internal_refresh
+    refresh_window_s: 0.032
+    refresh_window_provenance: EXPLICIT_EXTERNAL_BASELINE_REQUIRES_DOCUMENTED_SOURCE
   background: {enabled: false}

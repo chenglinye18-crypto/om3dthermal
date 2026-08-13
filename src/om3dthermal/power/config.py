@@ -398,12 +398,49 @@ class WorkloadInput(StrictModel):
         return value
 
 
+class RefreshInput(StrictModel):
+    enabled: bool
+    model: Literal[
+        "dreamram_internal_refresh", "operation_table_retention"
+    ] | None = None
+    refresh_window_s: float | None = Field(default=None, gt=0.0)
+    refresh_window_provenance: str | None = None
+    retention_reference_s: float | None = Field(default=None, gt=0.0)
+    retention_reference_source: Literal["TANG_IEDM2023_IGZO_2T0C"] | None = None
+    retention_reference_provenance: Literal["PAPER_REPORTED"] | None = None
+    refresh_safety_factor: float | None = Field(default=None, gt=0.0)
+    refresh_interval_provenance: Literal["MODELING_CHOICE"] | None = None
+
+    @model_validator(mode="after")
+    def model_inputs(self) -> "RefreshInput":
+        if not self.enabled:
+            if self.model is not None:
+                raise ValueError("disabled refresh must not select a model")
+            return self
+        if self.model == "dreamram_internal_refresh":
+            if self.refresh_window_s is None or self.refresh_window_provenance is None:
+                raise ValueError(
+                    "DreamRAM refresh requires window and provenance")
+        elif self.model == "operation_table_retention":
+            if (self.retention_reference_s is None
+                    or self.retention_reference_source is None
+                    or self.retention_reference_provenance != "PAPER_REPORTED"
+                    or self.refresh_safety_factor is None
+                    or self.refresh_interval_provenance != "MODELING_CHOICE"):
+                raise ValueError(
+                    "operation-table refresh requires retention reference, "
+                    "safety factor, and explicit provenance")
+        else:
+            raise ValueError("enabled refresh requires a refresh model")
+        return self
+
+
 class EnableInput(StrictModel):
     enabled: bool
 
 
 class PowerInput(StrictModel):
-    refresh: EnableInput
+    refresh: RefreshInput
     background: EnableInput
 
 

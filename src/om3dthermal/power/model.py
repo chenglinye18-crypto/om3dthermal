@@ -15,6 +15,7 @@ from .config import MemoryPowerConfig, find_project_root, load_power_config
 from .geometry import load_m3d_geometry
 from .feol_route import calculate_feol_route
 from .m3d_subarray import calculate_m3d_subarray
+from .refresh import calculate_refresh_power
 from .result import BackendEnergyResult, EnergyDecomposition, MemoryPowerResult
 
 
@@ -109,24 +110,6 @@ def _memory_read_energy(
         resolved.native_components, resolved.replacement_components)
 
 
-def _refresh_power(
-        device: DeviceOperationEnergies | None,
-        config: MemoryPowerConfig) -> float:
-    if not config.power.refresh.enabled:
-        return 0.0
-    if device is None:
-        raise ValueError("refresh enabled but cell model refresh is unsupported")
-    if config.workload.stored_bits is None:
-        raise ValueError("refresh enabled but workload.stored_bits is unresolved")
-    if device.retention_s is None:
-        raise ValueError("refresh enabled but cell_model.retention_s is unresolved")
-    probability = config.workload.refresh_data
-    if probability is None:
-        raise ValueError("refresh enabled but workload.refresh_data is unresolved")
-    energy = device.weighted_refresh(p0=probability.p0, p1=probability.p1)
-    return config.workload.stored_bits * energy * 1e-12 / device.retention_s
-
-
 def _background_power(
         device: DeviceOperationEnergies | None,
         config: MemoryPowerConfig) -> float:
@@ -187,6 +170,7 @@ def _scaled_m3d_read_energy(
 def calculate_memory_power(
         config: MemoryPowerConfig, *, project_root: Path) -> MemoryPowerResult:
     m3d_subarray = None
+    m3d_geometry = None
     if config.architecture.m3d_subarray is not None:
         m3d_geometry = load_m3d_geometry(
             project_root, config.architecture.geometry_source)
@@ -264,7 +248,15 @@ def calculate_memory_power(
     read_W = config.workload.read_bandwidth_gbps * read_total * 1e-3
     write_W = 0.0
     access_W = read_W + write_W
-    refresh_W = _refresh_power(device, config)
+    refresh_result = calculate_refresh_power(
+        config,
+        backend=backend,
+        device=device,
+        m3d_subarray=m3d_subarray,
+        m3d_layer_count=(
+            None if m3d_geometry is None else m3d_geometry.layers),
+    )
+    refresh_W = refresh_result.power_W
     background_W = _background_power(device, config)
     logic_W = config.architecture.logic_background_w
     total_W = None if logic_W is None else (
@@ -292,6 +284,7 @@ def calculate_memory_power(
             **({} if m3d_subarray is None else m3d_subarray.as_dict()),
             **({} if feol_route_result is None else feol_route_result.as_dict()),
             **({} if m3d_subarray is None else zhu_scaling_diagnostics),
+            **refresh_result.diagnostics,
             "cell_model": config.memory.cell_model.type,
             "operation_energy_provenance": (
                 None
@@ -307,6 +300,7 @@ def calculate_memory_power(
                 ]
             ),
             "interface_energy_pj_per_bit": interface,
+            "P_memory_dynamic_W": access_W + refresh_W + background_W,
         },
     )
 

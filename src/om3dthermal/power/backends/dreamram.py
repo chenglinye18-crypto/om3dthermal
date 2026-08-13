@@ -215,6 +215,39 @@ class DreamRAMBackend:
             command_energy, components = dram.per_cmd_energy(tech)
             atoms_per_page = int(dram.atoms_per_page())
             atom_size = int(dram.atom_size)
+            independent_row_pages = int(dram.ind_row_pages())
+            refresh_component_energy_pJ = {
+                "row": 1.5 * float(components["row"]),
+                "mwl": float(components["mwl"]),
+                "lwl": float(components["lwl"]),
+                "bl-pre": float(components["bl-pre"]),
+                "bl-act": float(components["bl-act"]),
+            }
+            refresh_internal_event_energy_pJ = sum(
+                refresh_component_energy_pJ.values())
+            refresh_events_per_full_memory_cycle = int(
+                dram.ranks * dram.channels * dram.pch
+                * dram.horiz_bg * dram.vert_bg * dram.banks
+                * dram.subarrays * dram.mat_rows * independent_row_pages)
+            refresh_bits_per_event = int(
+                dram.mats * dram.mat_cols / independent_row_pages)
+            dreamram_total_stored_bits = (
+                refresh_events_per_full_memory_cycle * refresh_bits_per_event)
+            refresh_organization = {
+                "dies": dies_stacked,
+                "ranks": int(dram.ranks),
+                "channels": int(dram.channels),
+                "channels_per_die": int(dram.ch_per_die),
+                "pseudochannels": int(dram.pch),
+                "horizontal_bankgroups": int(dram.horiz_bg),
+                "vertical_bankgroups": int(dram.vert_bg),
+                "banks_per_bankgroup": int(dram.banks),
+                "subarrays_per_bank": int(dram.subarrays),
+                "mats_per_subarray": int(dram.mats),
+                "rows_per_mat": int(dram.mat_rows),
+                "columns_per_mat": int(dram.mat_cols),
+                "independent_row_pages": independent_row_pages,
+            }
 
         n_read = config.workload.row_policy.rd_per_act
         if n_read > atoms_per_page:
@@ -412,7 +445,7 @@ class DreamRAMBackend:
             "memory_region": config.architecture.geometry_source.memory_region,
             **geometry_fit.as_dict(),
             **miv_metadata,
-            "unsupported_operations": ["write", "refresh", "background"],
+            "unsupported_operations": ["write", "background"],
         }
         if m3d_subarray is None:
             metadata.update({
@@ -437,6 +470,27 @@ class DreamRAMBackend:
                     "1T1C_SPECIFIC": sorted(ONE_T_ONE_C_SPECIFIC),
                     "REUSABLE_STRUCTURE": sorted(REUSABLE_STRUCTURE),
                 },
+                "dreamram_refresh_included_components": list(
+                    refresh_component_energy_pJ),
+                "dreamram_refresh_included_component_energy_pJ": (
+                    refresh_component_energy_pJ),
+                "dreamram_refresh_excluded_components": [
+                    "row-tsv", "col-tsv", "tsv",
+                    "row-base", "col-base", "base",
+                    "row-dq", "col-dq", "dq",
+                    "col", "csl", "ldl", "mdl", "bgbus+gbus",
+                ],
+                "refresh_internal_event_energy_pJ": (
+                    refresh_internal_event_energy_pJ),
+                "refresh_event_scope": (
+                    "ONE_SELECTED_BANK_SUBARRAY_ROW_ACROSS_PARALLEL_MATS"),
+                "refresh_events_per_full_memory_cycle": (
+                    refresh_events_per_full_memory_cycle),
+                "refresh_bits_per_event": refresh_bits_per_event,
+                "dreamram_total_stored_bits": dreamram_total_stored_bits,
+                "dreamram_refresh_organization": refresh_organization,
+                "dreamram_refresh_equations_provenance": (
+                    "DERIVED_FROM_REFERENCE"),
             })
         else:
             metadata.update({

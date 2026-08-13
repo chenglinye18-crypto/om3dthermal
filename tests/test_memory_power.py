@@ -21,6 +21,7 @@ from om3dthermal.power.geometry import (
 from om3dthermal.power.feol_route import calculate_feol_route
 from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
 from om3dthermal.power.miv import build_miv_topology
+from om3dthermal.power.refresh import calculate_refresh_power
 
 
 ROOT = Path(__file__).parents[1]
@@ -1061,3 +1062,144 @@ def test_local_energy_removal_preserves_frozen_transports_and_geometry():
         0.002445862111816407, abs=0.0)
     assert result.E_interface_pj_bit == pytest.approx(0.5, abs=0.0)
     assert result.diagnostics["miv_fixed_load_pF"] == pytest.approx(0.006)
+
+
+def test_igzo_refresh_operation_table_and_capacity_accounting():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    result = calculate_memory_power(config, project_root=ROOT)
+    diagnostics = result.diagnostics
+    assert diagnostics["refresh_reference_0_pj_per_bit"] == 0.00090
+    assert diagnostics["refresh_reference_1_pj_per_bit"] == 0.37000
+    assert diagnostics["refresh_weighted_energy_pj_per_bit"] == pytest.approx(
+        0.18545, abs=0.0)
+    assert diagnostics["zhu_refresh_size_scaling"] == "NOT_MODELED"
+    assert diagnostics["retention_reference_s"] == 20.0
+    assert diagnostics["retention_reference_source"] == (
+        "TANG_IEDM2023_IGZO_2T0C")
+    assert diagnostics["retention_provenance"] == "PAPER_REPORTED"
+    assert diagnostics["refresh_interval_provenance"] == "MODELING_CHOICE"
+    assert diagnostics["total_stored_bits"] == (
+        diagnostics["bits_per_layer"] * diagnostics["memory_layer_count"])
+    expected_energy_J = (
+        diagnostics["total_stored_bits"] * 0.18545e-12)
+    assert diagnostics["full_memory_refresh_energy_J"] == pytest.approx(
+        expected_energy_J)
+    assert result.P_refresh_W == pytest.approx(expected_energy_J / 20.0)
+    assert diagnostics["refresh_route_boundary"] == "INTERNAL_MEMORY_ONLY"
+    assert "dreamram_refresh_included_components" not in diagnostics
+
+
+def test_igzo_refresh_scales_with_capacity_interval_and_safety_factor():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    topology = _m3d_subarray(config)
+    backend = _m3d_backend(config)
+    device = OperationTableCellModel().calculate(config)
+    baseline = calculate_refresh_power(
+        config, backend=backend, device=device, m3d_subarray=topology,
+        m3d_layer_count=8)
+    twice_capacity = calculate_refresh_power(
+        config, backend=backend, device=device, m3d_subarray=topology,
+        m3d_layer_count=16)
+    assert twice_capacity.power_W == pytest.approx(2.0 * baseline.power_W)
+
+    refresh = config.power.refresh.model_copy(
+        update={"retention_reference_s": 40.0})
+    slower = calculate_refresh_power(
+        config.model_copy(update={
+            "power": config.power.model_copy(update={"refresh": refresh})}),
+        backend=backend, device=device, m3d_subarray=topology,
+        m3d_layer_count=8)
+    assert slower.power_W == pytest.approx(0.5 * baseline.power_W)
+
+    refresh = config.power.refresh.model_copy(
+        update={"refresh_safety_factor": 2.0})
+    safer = calculate_refresh_power(
+        config.model_copy(update={
+            "power": config.power.model_copy(update={"refresh": refresh})}),
+        backend=backend, device=device, m3d_subarray=topology,
+        m3d_layer_count=8)
+    assert safer.power_W == pytest.approx(2.0 * baseline.power_W)
+
+
+def test_si_refresh_uses_internal_act_pre_components_and_organization():
+    config = load_power_config(POWER_CONFIGS / "hbm3_si.yaml")
+    result = calculate_memory_power(config, project_root=ROOT)
+    diagnostics = result.diagnostics
+    included = diagnostics["dreamram_refresh_included_components"]
+    excluded = diagnostics["dreamram_refresh_excluded_components"]
+    assert included == ["row", "mwl", "lwl", "bl-pre", "bl-act"]
+    assert {"tsv", "base", "dq", "bgbus+gbus"}.issubset(excluded)
+    organization = diagnostics["dreamram_refresh_organization"]
+    expected_events = (
+        organization["ranks"]
+        * organization["channels"]
+        * organization["pseudochannels"]
+        * organization["horizontal_bankgroups"]
+        * organization["vertical_bankgroups"]
+        * organization["banks_per_bankgroup"]
+        * organization["subarrays_per_bank"]
+        * organization["rows_per_mat"]
+        * organization["independent_row_pages"])
+    assert diagnostics["refresh_events_per_full_memory_cycle"] == (
+        expected_events)
+    assert diagnostics["total_stored_bits"] == (
+        expected_events * diagnostics["refresh_bits_per_event"])
+    expected_full_energy = (
+        diagnostics["refresh_internal_event_energy_pJ"] * expected_events)
+    assert diagnostics["full_memory_refresh_energy_pJ"] == pytest.approx(
+        expected_full_energy)
+    assert result.P_refresh_W == pytest.approx(
+        expected_full_energy * 1e-12 / 0.032)
+    assert result.P_refresh_W > 0.0
+
+
+@pytest.mark.parametrize("name", ["hbm3_si.yaml", "orthogonal_m3d_igzo.yaml"])
+def test_refresh_is_independent_of_read_bandwidth(name):
+    config = load_power_config(POWER_CONFIGS / name)
+    baseline = calculate_memory_power(config, project_root=ROOT)
+    workload = config.workload.model_copy(update={
+        "read_bandwidth_gbps": config.workload.read_bandwidth_gbps / 2.0})
+    slower = calculate_memory_power(
+        config.model_copy(update={"workload": workload}), project_root=ROOT)
+    assert slower.P_read_W == pytest.approx(0.5 * baseline.P_read_W)
+    assert slower.P_refresh_W == pytest.approx(baseline.P_refresh_W, abs=0.0)
+
+
+def test_si_refresh_window_scaling_and_read_regression():
+    config = load_power_config(POWER_CONFIGS / "hbm3_si.yaml")
+    baseline = calculate_memory_power(config, project_root=ROOT)
+    refresh = config.power.refresh.model_copy(update={"refresh_window_s": 0.064})
+    modified = calculate_memory_power(
+        config.model_copy(update={
+            "power": config.power.model_copy(update={"refresh": refresh})}),
+        project_root=ROOT)
+    assert modified.P_refresh_W == pytest.approx(0.5 * baseline.P_refresh_W)
+    assert modified.E_access_total_pj_bit == 0.9782367130708566
+    assert baseline.E_access_total_pj_bit == 0.9782367130708566
+
+
+def test_refresh_disable_is_zero_and_read_paths_are_frozen():
+    for name, expected_access in (
+            ("hbm3_si.yaml", 0.9782367130708566),
+            ("orthogonal_m3d_igzo.yaml", 0.8552605756733209)):
+        config = load_power_config(POWER_CONFIGS / name)
+        raw = config.model_dump(mode="json")
+        raw["power"]["refresh"] = {"enabled": False}
+        disabled = MemoryPowerConfig.model_validate(raw)
+        result = calculate_memory_power(disabled, project_root=ROOT)
+        assert result.P_refresh_W == 0.0
+        assert result.E_access_total_pj_bit == pytest.approx(
+            expected_access, abs=0.0)
+        assert result.diagnostics["refresh_enabled"] is False
+
+
+def test_refresh_does_not_change_m3d_read_transport_terms():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    result = calculate_memory_power(config, project_root=ROOT)
+    assert result.E_access_total_pj_bit == pytest.approx(
+        0.8552605756733209, abs=0.0)
+    assert result.E_vertical_pj_bit == pytest.approx(
+        0.002445862111816407, abs=0.0)
+    assert result.E_feol_route_pj_bit == pytest.approx(
+        0.16705631334524151, abs=0.0)
+    assert result.E_interface_pj_bit == pytest.approx(0.5, abs=0.0)

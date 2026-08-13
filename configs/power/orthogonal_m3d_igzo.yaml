@@ -143,8 +143,16 @@ workload:
   read_bandwidth_gbps: 39200
   write_bandwidth_gbps: 0
   read_data: {p0: 0.5, p1: 0.5}
+  refresh_data: {p0: 0.5, p1: 0.5}
   row_policy: {rd_per_act: 64}
 
 power:
-  refresh: {enabled: false}
+  refresh:
+    enabled: true
+    model: operation_table_retention
+    retention_reference_s: 20.0
+    retention_reference_source: TANG_IEDM2023_IGZO_2T0C
+    retention_reference_provenance: PAPER_REPORTED
+    refresh_safety_factor: 1.0
+    refresh_interval_provenance: MODELING_CHOICE
   background: {enabled: false}
