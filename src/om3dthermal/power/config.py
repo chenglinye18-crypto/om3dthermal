@@ -141,6 +141,14 @@ class SubarrayClusterInput(StrictModel):
     provenance: Literal["MODELING_CHOICE"]
 
 
+class M3DSpacingInput(StrictModel):
+    subarray_gap_x_f: float = Field(ge=0.0)
+    subarray_gap_y_f: float = Field(ge=0.0)
+    cluster_gap_x_f: float = Field(ge=0.0)
+    cluster_gap_y_f: float = Field(ge=0.0)
+    provenance: Literal["MODELING_CHOICE"]
+
+
 class GlobalPeripheralInput(StrictModel):
     row_selection_band_f: float = Field(ge=0.0)
     column_write_selection_band_f: float = Field(ge=0.0)
@@ -174,6 +182,7 @@ class M3DSubarrayInput(StrictModel):
     type: Literal["tang_embedded_subarray"]
     subarray: SubarrayCoreInput
     subarray_cluster: SubarrayClusterInput
+    spacing: M3DSpacingInput
     global_peripheral: GlobalPeripheralInput
     local_mux: LocalMuxInput
     interconnect: M3DInterconnectInput

@@ -53,6 +53,12 @@ architecture:
       subarrays_y: 8
       grid: {nx: auto, ny: auto}
       provenance: MODELING_CHOICE
+    spacing:
+      subarray_gap_x_f: 2.0
+      subarray_gap_y_f: 2.0
+      cluster_gap_x_f: 2.0
+      cluster_gap_y_f: 2.0
+      provenance: MODELING_CHOICE
     global_peripheral:
       row_selection_band_f: 4.0
       column_write_selection_band_f: 2.0

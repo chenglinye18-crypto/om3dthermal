@@ -29,9 +29,22 @@ class M3DSubarrayResult:
     shared_column_write_selection_band_um: float
     row_selection_band_axis: str
     column_write_selection_band_axis: str
+    subarray_gap_x_f: float
+    subarray_gap_y_f: float
+    subarray_gap_x_um: float
+    subarray_gap_y_um: float
+    cluster_gap_x_f: float
+    cluster_gap_y_f: float
+    cluster_gap_x_um: float
+    cluster_gap_y_um: float
+    spacing_provenance: str
     cluster_subarrays_x: int
     cluster_subarrays_y: int
     subarrays_per_cluster: int
+    cluster_array_width_without_spacing_um: float
+    cluster_array_height_without_spacing_um: float
+    subarray_spacing_width_overhead_um: float
+    subarray_spacing_height_overhead_um: float
     cluster_array_width_um: float
     cluster_array_height_um: float
     cluster_width_um: float
@@ -46,9 +59,12 @@ class M3DSubarrayResult:
     local_mux_instances_per_layer: int
     bits_per_subarray: int
     bits_per_layer: int
+    cluster_spacing_width_overhead_um: float
+    cluster_spacing_height_overhead_um: float
     placed_width_um: float
     placed_height_um: float
     layout_utilization: float
+    effective_density_Mb_per_mm2: float
     row_address_bits: int
     column_address_bits: int
     accessed_clusters_per_access: int
@@ -141,9 +157,20 @@ def calculate_m3d_subarray(
     subarray_height = core_height + mux_footprint
 
     cluster = spec.subarray_cluster
+    spacing = spec.spacing
+    subarray_gap_x = spacing.subarray_gap_x_f * F_um
+    subarray_gap_y = spacing.subarray_gap_y_f * F_um
+    cluster_gap_x = spacing.cluster_gap_x_f * F_um
+    cluster_gap_y = spacing.cluster_gap_y_f * F_um
     subarrays_per_cluster = cluster.subarrays_x * cluster.subarrays_y
-    cluster_array_width = cluster.subarrays_x * subarray_width
-    cluster_array_height = cluster.subarrays_y * subarray_height
+    cluster_array_width_without_spacing = cluster.subarrays_x * subarray_width
+    cluster_array_height_without_spacing = cluster.subarrays_y * subarray_height
+    subarray_spacing_width = (cluster.subarrays_x - 1) * subarray_gap_x
+    subarray_spacing_height = (cluster.subarrays_y - 1) * subarray_gap_y
+    cluster_array_width = (
+        cluster_array_width_without_spacing + subarray_spacing_width)
+    cluster_array_height = (
+        cluster_array_height_without_spacing + subarray_spacing_height)
     global_spec = spec.global_peripheral
     row_band = global_spec.row_selection_band_f * F_um
     col_band = global_spec.column_write_selection_band_f * F_um
@@ -156,8 +183,12 @@ def calculate_m3d_subarray(
         col_axis=global_spec.column_write_selection_band_axis,
     )
 
-    max_cluster_x = math.floor(geometry.slab_x_um / cluster_width)
-    max_cluster_y = math.floor(geometry.slab_y_um / cluster_height)
+    max_cluster_x = math.floor(
+        (geometry.slab_x_um + cluster_gap_x)
+        / (cluster_width + cluster_gap_x))
+    max_cluster_y = math.floor(
+        (geometry.slab_y_um + cluster_gap_y)
+        / (cluster_height + cluster_gap_y))
     if max_cluster_x < 1 or max_cluster_y < 1:
         raise ValueError("one complete SubarrayCluster does not fit the M3D slab")
     cluster_count_x = (
@@ -220,9 +251,12 @@ def calculate_m3d_subarray(
     mux = mux_raw / delivered_bits
     global_energy = rwl + wwl + wbl
     local_energy = local_rbl + mux
-    placed_width = cluster_count_x * cluster_width
-    placed_height = cluster_count_y * cluster_height
+    cluster_spacing_width = (cluster_count_x - 1) * cluster_gap_x
+    cluster_spacing_height = (cluster_count_y - 1) * cluster_gap_y
+    placed_width = cluster_count_x * cluster_width + cluster_spacing_width
+    placed_height = cluster_count_y * cluster_height + cluster_spacing_height
     bits_per_subarray = core.n_rows * core.n_cols
+    slab_area_mm2 = geometry.slab_x_um * geometry.slab_y_um * 1e-6
 
     return M3DSubarrayResult(
         slab_x_um=geometry.slab_x_um,
@@ -244,9 +278,24 @@ def calculate_m3d_subarray(
         row_selection_band_axis=global_spec.row_selection_band_axis,
         column_write_selection_band_axis=(
             global_spec.column_write_selection_band_axis),
+        subarray_gap_x_f=spacing.subarray_gap_x_f,
+        subarray_gap_y_f=spacing.subarray_gap_y_f,
+        subarray_gap_x_um=subarray_gap_x,
+        subarray_gap_y_um=subarray_gap_y,
+        cluster_gap_x_f=spacing.cluster_gap_x_f,
+        cluster_gap_y_f=spacing.cluster_gap_y_f,
+        cluster_gap_x_um=cluster_gap_x,
+        cluster_gap_y_um=cluster_gap_y,
+        spacing_provenance=spacing.provenance,
         cluster_subarrays_x=cluster.subarrays_x,
         cluster_subarrays_y=cluster.subarrays_y,
         subarrays_per_cluster=subarrays_per_cluster,
+        cluster_array_width_without_spacing_um=(
+            cluster_array_width_without_spacing),
+        cluster_array_height_without_spacing_um=(
+            cluster_array_height_without_spacing),
+        subarray_spacing_width_overhead_um=subarray_spacing_width,
+        subarray_spacing_height_overhead_um=subarray_spacing_height,
         cluster_array_width_um=cluster_array_width,
         cluster_array_height_um=cluster_array_height,
         cluster_width_um=cluster_width,
@@ -263,11 +312,15 @@ def calculate_m3d_subarray(
         local_mux_instances_per_layer=subarrays_per_layer,
         bits_per_subarray=bits_per_subarray,
         bits_per_layer=subarrays_per_layer * bits_per_subarray,
+        cluster_spacing_width_overhead_um=cluster_spacing_width,
+        cluster_spacing_height_overhead_um=cluster_spacing_height,
         placed_width_um=placed_width,
         placed_height_um=placed_height,
         layout_utilization=(
-            placed_width * placed_height
+            clusters_per_layer * cluster_width * cluster_height
             / (geometry.slab_x_um * geometry.slab_y_um)),
+        effective_density_Mb_per_mm2=(
+            subarrays_per_layer * bits_per_subarray / 1e6 / slab_area_mm2),
         row_address_bits=(
             _address_bits(cluster_count_y)
             + _address_bits(cluster.subarrays_y)

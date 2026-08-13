@@ -228,6 +228,22 @@ def test_shared_bands_apply_once_per_cluster_and_mux_per_subarray():
     assert topology.cluster_subarrays_x == 8
     assert topology.cluster_subarrays_y == 8
     assert topology.subarrays_per_cluster == 64
+    assert topology.subarray_spacing_width_overhead_um == pytest.approx(
+        7 * topology.subarray_gap_x_um)
+    assert topology.subarray_spacing_height_overhead_um == pytest.approx(
+        7 * topology.subarray_gap_y_um)
+    assert topology.cluster_array_width_um == pytest.approx(
+        topology.cluster_array_width_without_spacing_um
+        + topology.subarray_spacing_width_overhead_um)
+    assert topology.cluster_array_height_um == pytest.approx(
+        topology.cluster_array_height_without_spacing_um
+        + topology.subarray_spacing_height_overhead_um)
+    assert topology.placed_width_um == pytest.approx(
+        topology.cluster_count_x * topology.cluster_width_um
+        + (topology.cluster_count_x - 1) * topology.cluster_gap_x_um)
+    assert topology.placed_height_um == pytest.approx(
+        topology.cluster_count_y * topology.cluster_height_um
+        + (topology.cluster_count_y - 1) * topology.cluster_gap_y_um)
     assert topology.global_rwl_route_length_um_per_cluster < 1000.0
     assert topology.global_wwl_route_length_um_per_cluster < 1000.0
     assert topology.global_wbl_route_length_um_per_cluster < 1000.0
@@ -301,9 +317,9 @@ def test_cluster_geometry_controls_global_route_not_slab_size():
         update={"subarray_cluster": cluster, "access": access})
     changed = calculate_m3d_subarray(changed_spec, geometry)
     assert changed.global_rwl_route_length_um_per_cluster == pytest.approx(
-        0.5 * baseline.global_rwl_route_length_um_per_cluster)
+        4 * changed.subarray_width_um + 3 * changed.subarray_gap_x_um)
     assert changed.global_wbl_route_length_um_per_cluster == pytest.approx(
-        0.5 * baseline.global_wbl_route_length_um_per_cluster)
+        4 * changed.subarray_height_um + 3 * changed.subarray_gap_y_um)
     assert changed.global_control_routing_energy_pj_per_bit != pytest.approx(
         baseline.global_control_routing_energy_pj_per_bit)
 
@@ -317,6 +333,88 @@ def test_cluster_geometry_controls_global_route_not_slab_size():
         baseline.global_wbl_route_length_um_per_cluster)
     assert larger.global_control_routing_energy_pj_per_bit == pytest.approx(
         baseline.global_control_routing_energy_pj_per_bit)
+
+
+def test_spacing_hierarchy_changes_only_its_physical_scope():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
+    baseline = _m3d_subarray(config)
+
+    one_wide_cluster = config.architecture.m3d_subarray.subarray_cluster.model_copy(
+        update={"subarrays_x": 1, "subarrays_y": 1})
+    one_access = config.architecture.m3d_subarray.access.model_copy(update={
+        "accessed_clusters_per_access": 256,
+    })
+    one_spec = config.architecture.m3d_subarray.model_copy(update={
+        "subarray_cluster": one_wide_cluster,
+        "access": one_access,
+    })
+    one = calculate_m3d_subarray(one_spec, geometry)
+    assert one.subarray_spacing_width_overhead_um == 0.0
+    assert one.subarray_spacing_height_overhead_um == 0.0
+
+    wider_spacing = config.architecture.m3d_subarray.spacing.model_copy(update={
+        "subarray_gap_x_f": 8.0,
+        "subarray_gap_y_f": 8.0,
+    })
+    wider_spec = config.architecture.m3d_subarray.model_copy(
+        update={"spacing": wider_spacing})
+    wider = calculate_m3d_subarray(wider_spec, geometry)
+    assert wider.cluster_width_um > baseline.cluster_width_um
+    assert wider.cluster_height_um > baseline.cluster_height_um
+    assert wider.global_rwl_route_length_um_per_cluster > (
+        baseline.global_rwl_route_length_um_per_cluster)
+    assert wider.global_wbl_route_length_um_per_cluster > (
+        baseline.global_wbl_route_length_um_per_cluster)
+    assert wider.global_control_routing_energy_pj_per_bit > (
+        baseline.global_control_routing_energy_pj_per_bit)
+
+    large_cluster_gap = config.architecture.m3d_subarray.spacing.model_copy(
+        update={"cluster_gap_x_f": 500.0, "cluster_gap_y_f": 500.0})
+    gap_spec = config.architecture.m3d_subarray.model_copy(
+        update={"spacing": large_cluster_gap})
+    gapped = calculate_m3d_subarray(gap_spec, geometry)
+    assert gapped.clusters_per_layer < baseline.clusters_per_layer
+    assert gapped.layout_utilization != pytest.approx(baseline.layout_utilization)
+    assert gapped.global_rwl_route_length_um_per_cluster == pytest.approx(
+        baseline.global_rwl_route_length_um_per_cluster)
+    assert gapped.global_wbl_route_length_um_per_cluster == pytest.approx(
+        baseline.global_wbl_route_length_um_per_cluster)
+    assert gapped.global_control_routing_energy_pj_per_bit == pytest.approx(
+        baseline.global_control_routing_energy_pj_per_bit)
+    assert gapped.local_read_routing_energy_pj_per_bit == pytest.approx(
+        baseline.local_read_routing_energy_pj_per_bit)
+
+
+def test_nominal_spacing_diagnostics_density_and_miv_independence():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    baseline_topology = _m3d_subarray(config)
+    assert baseline_topology.subarray_gap_x_f == pytest.approx(2.0)
+    assert baseline_topology.subarray_gap_y_f == pytest.approx(2.0)
+    assert baseline_topology.cluster_gap_x_f == pytest.approx(2.0)
+    assert baseline_topology.cluster_gap_y_f == pytest.approx(2.0)
+    assert baseline_topology.spacing_provenance == "MODELING_CHOICE"
+    expected_density = (
+        baseline_topology.bits_per_layer / 1e6
+        / (baseline_topology.slab_x_um * baseline_topology.slab_y_um * 1e-6))
+    assert baseline_topology.effective_density_Mb_per_mm2 == pytest.approx(
+        expected_density)
+
+    zero_cluster_gap = config.architecture.m3d_subarray.spacing.model_copy(
+        update={"cluster_gap_x_f": 0.0, "cluster_gap_y_f": 0.0})
+    zero_spec = config.architecture.m3d_subarray.model_copy(
+        update={"spacing": zero_cluster_gap})
+    zero_architecture = config.architecture.model_copy(
+        update={"m3d_subarray": zero_spec})
+    zero_config = config.model_copy(update={"architecture": zero_architecture})
+    baseline_result = calculate_memory_power(config, project_root=ROOT)
+    zero_result = calculate_memory_power(zero_config, project_root=ROOT)
+    assert zero_result.diagnostics["cluster_count_x"] == (
+        baseline_result.diagnostics["cluster_count_x"])
+    assert zero_result.diagnostics["cluster_count_y"] == (
+        baseline_result.diagnostics["cluster_count_y"])
+    assert zero_result.E_vertical_pj_bit == pytest.approx(
+        baseline_result.E_vertical_pj_bit, abs=0.0)
 
 
 def test_impossible_cluster_access_fails_loudly():
