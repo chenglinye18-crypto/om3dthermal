@@ -344,6 +344,15 @@ class DreamRAMBackend:
                     "BANK_SELECT_DECODER_SWD_BLSA_OPEN_BITLINE_AND_"
                     "ECC_FOOTPRINT"),
             }
+        elif (m3d_subarray is None
+              and geometry.memory_region == "hbm_dram_die"
+              and geometry.memory_region_count > 1):
+            refresh_events_per_full_memory_cycle *= geometry.memory_region_count
+            dreamram_total_stored_bits *= geometry.memory_region_count
+            refresh_organization.update({
+                "capacity_basis": "DREAMRAM_STACK_CAPACITY_TIMES_SYSTEM_STACKS",
+                "physical_stack_equivalents": geometry.memory_region_count,
+            })
         miv_metadata: dict[str, object] = {}
         miv_access_energy: float | None = None
         if config.architecture.vertical.type == "miv":

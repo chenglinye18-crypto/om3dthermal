@@ -32,6 +32,7 @@ from .discretization import (
     validate_volume_conservation,
 )
 from .geometry.horizontal_columns import HorizontalColumnsBuilder
+from .geometry.orthogonal_hbm import OrthogonalHBMBuilder
 from .thermal import (
     PowerVector,
     build_boundary_link_table,
@@ -179,7 +180,10 @@ def run_steady_pipeline(
         config = _override_discretization(config, max_cell_size_m)
 
     # Geometry.
-    scene = HorizontalColumnsBuilder(config).build()
+    scene = (
+        OrthogonalHBMBuilder(config).build()
+        if config.orthogonal_hbm is not None
+        else HorizontalColumnsBuilder(config).build())
     boxes = list(scene.boxes)
 
     # Discretise.

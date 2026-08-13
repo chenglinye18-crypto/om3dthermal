@@ -77,7 +77,8 @@ def resolve_case_geometry(case: CanonicalCaseConfig) -> ResolvedGeometry:
         x_mm = geometry.memory_region.width_mm
         y_mm = geometry.memory_region.height_mm
         region = "hbm_dram_die"
-        region_count = 1
+        region_count = int(
+            geometry.layout.get("total_physical_stack_equivalents", 1))
     return ResolvedGeometry(
         source=f"canonical_case:{case.name}",
         memory_region=region,

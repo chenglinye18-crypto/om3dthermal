@@ -155,11 +155,26 @@ thermal:
     feol_route: M3D_FEOL
     approximation: MODELING_CHOICE_COARSE_MIV_INTERFACE_TO_ACTIVE_STACK
   materials:
-    si_k_W_mK: 140.0
-    feol_k_W_mK: 7.9
-    m3d_bitcell_stack_k_W_mK: 0.85
-    beol_interconnect_k_W_mK: 0.85
-    daa_k_W_mK: 0.2
+    Lid: 400.0
+    TIM: 9.71
+    M3D_Si: 140.0
+    M3D_FEOL: 7.9
+    M3D_Bitcell: 0.85
+    M3D_BEOL: 0.85
+    M3D_DAA: 0.2
+    Adhesive: 0.2
+    BEOL_MXY: 1.5
+    FEOL: 7.9
+    BSPDN: [83.0, 83.0, 71.0]
+    Cu_Pillar_Bump: [0.54, 0.54, 13.25]
+    Laminate: 13.0
+    Mold: 3.0
+  common_stack:
+    foundation_um: 300.0
+    gpu: {cu_pillar_um: 70.0, bspdn_um: 1.715, feol_um: 0.15, beol_um: 1.4}
+    tim_um: 200.0
+    lid_um: 3000.0
+  adhesive: {thickness_um: 3.0}
   solve_status: NOT_RUN_BY_CONFIG_UNIFICATION
   mesh: {dx_mm: 0.5, dy_mm: 0.5, dz_max_um: 100.0}
   boundary:

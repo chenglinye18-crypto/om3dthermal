@@ -52,7 +52,29 @@ thermal:
     gpu_hbm_ubump_um: 40.0
     base_logic_die: removed
     dram_die_count_source: resolved_dreamram_organization
+    repeated_dram: {hybrid_bonding_um: 2.0, beol_um: 3.0, si_um: 41.0}
+    top_dram: {hybrid_bonding_um: 2.0, beol_um: 3.0, si_um: 169.0}
     hbm_top_to_tim: direct
+  materials:
+    Lid: 400.0
+    TIM: 9.71
+    Silicon: 140.0
+    Thermal_Silicon: 140.0
+    DRAM_BEOL: 0.85
+    BEOL_MXY: 1.5
+    Oxide: 1.5
+    FEOL: 7.9
+    BSPDN: [83.0, 83.0, 71.0]
+    Cu_Pillar_Bump: [0.54, 0.54, 13.25]
+    GPU_HBM_uBump: [0.59, 0.59, 19.28]
+    Hybrid_Bonding: 4.8
+    Laminate: 13.0
+    Mold: 3.0
+  common_stack:
+    foundation_um: 300.0
+    gpu: {cu_pillar_um: 70.0, bspdn_um: 1.715, feol_um: 0.15, beol_um: 1.4}
+    tim_um: 200.0
+    lid_um: 3000.0
   mesh: {dx_mm: 0.5, dy_mm: 0.5, dz_max_um: 100.0}
   boundary:
     ambient_degC: 20.0
@@ -64,6 +86,7 @@ provenance:
   geometry_starting_reference: configs/legacy/exp_conv_2x1_nobase_g300_m128.yaml
   two_by_one_semantics: TWO_VISIBLE_Y_MERGED_GROUPS_FOUR_STACK_EQUIVALENTS
   stack_organization: DREAMRAM_HBM3_8HI_ANALYTICAL
+  thermal_die_layer_thicknesses: INHERITED_CURRENT_NOBASE_STACK
   legacy_12hi_geometry_status: ARCHIVED_SEPARATE_REFERENCE_NOT_SILENTLY_MERGED
   analytical_power_scope: WHOLE_CASE_AT_CONFIGURED_AGGREGATE_BANDWIDTH
   bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED

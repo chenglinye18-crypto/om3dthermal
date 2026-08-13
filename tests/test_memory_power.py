@@ -1292,7 +1292,8 @@ def test_active_cases_parse_and_resolve_system_power():
     hbm = hbm_system.memory_result
     assert hbm.diagnostics["activated_row_data_utilization"] == 0.10
     assert hbm.diagnostics["effective_rd_per_act"] == 6.4
-    assert hbm.P_refresh_W == 0.11395159240799647
+    assert hbm.P_refresh_W == 4 * 0.11395159240799647
+    assert hbm.diagnostics["total_stored_bits"] == 4 * 137438953472
     assert hbm.E_base_route_pj_bit == 0.0
     assert hbm.E_vertical_pj_bit > 0.0
     assert hbm_case.architecture.geometry_source is None
@@ -1307,7 +1308,7 @@ def test_active_cases_parse_and_resolve_system_power():
     assert m3d.E_vertical_pj_bit == 0.002445862111816407
     assert m3d.E_feol_route_pj_bit == 0.16705631334524151
     assert m3d.E_interface_pj_bit == 0.5
-    assert m3d.P_refresh_W == 0.0003484694872064
+    assert m3d.P_refresh_W == 98 * 0.0003484694872064
     assert m3d.diagnostics["geometry_source_config"] == (
         "canonical_case:orthogonal_m3d_igzo")
 
@@ -1480,7 +1481,7 @@ def test_conventional_full_row_same_boundary_remains_stable():
     assert result.E_access_total_pj_bit == legacy.E_access_total_pj_bit
     # Refresh is deliberately enabled in the active case; the old split
     # logic-removed power input predated refresh accounting.
-    assert result.P_refresh_W == 0.11395159240799647
+    assert result.P_refresh_W == 4 * 0.11395159240799647
 
 
 def test_canonical_m3d_has_single_geometry_and_operation_sources():
@@ -1510,7 +1511,7 @@ def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
     assert baseline.diagnostics["clusters_per_layer"] == 280
     assert baseline.diagnostics["subarrays_per_layer"] == 17920
     assert baseline.diagnostics["bits_per_layer"] == 4697620480
-    assert baseline.diagnostics["total_stored_bits"] == 37580963840
+    assert baseline.diagnostics["total_stored_bits"] == 98 * 37580963840
     assert baseline.diagnostics["placed_width_um"] == pytest.approx(
         21794.548876360117)
     assert baseline.diagnostics["placed_height_um"] == pytest.approx(

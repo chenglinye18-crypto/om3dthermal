@@ -23,6 +23,7 @@ def calculate_refresh_power(
         device: DeviceOperationEnergies | None,
         m3d_subarray: M3DSubarrayResult | None,
         m3d_layer_count: int | None,
+        memory_region_count: int = 1,
         ) -> RefreshPowerResult:
     """Resolve refresh independently of bandwidth-driven access energy."""
     refresh = config.power.refresh
@@ -53,7 +54,9 @@ def calculate_refresh_power(
             p0=probability.p0, p1=probability.p1)
         interval_s = (
             refresh.retention_reference_s / refresh.refresh_safety_factor)
-        total_bits = m3d_subarray.bits_per_layer * m3d_layer_count
+        total_bits = (
+            m3d_subarray.bits_per_layer * m3d_layer_count
+            * memory_region_count)
         full_energy_J = total_bits * weighted_energy * 1e-12
         power_W = full_energy_J / interval_s
         return RefreshPowerResult(
@@ -73,6 +76,7 @@ def calculate_refresh_power(
                 "resolved_refresh_interval_s": interval_s,
                 "bits_per_layer": m3d_subarray.bits_per_layer,
                 "memory_layer_count": m3d_layer_count,
+                "physical_slab_count": memory_region_count,
                 "total_stored_bits": total_bits,
                 "full_memory_refresh_energy_J": full_energy_J,
                 "refresh_power_W": power_W,

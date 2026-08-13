@@ -272,6 +272,7 @@ def calculate_memory_power(
         m3d_subarray=m3d_subarray,
         m3d_layer_count=(
             None if m3d_geometry is None else m3d_geometry.layers),
+        memory_region_count=geometry.memory_region_count,
     )
     refresh_W = refresh_result.power_W
     background_W = _background_power(device, config)
