@@ -190,6 +190,24 @@ class M3DSubarrayInput(StrictModel):
     topology_provenance: Literal["MODELING_CHOICE"]
 
 
+class FEOLWireInput(StrictModel):
+    capacitance_fF_per_um: float = Field(gt=0.0)
+    voltage_V: float = Field(gt=0.0)
+    activity_factor: float = Field(ge=0.0, le=1.0)
+    provenance: Literal["MODELING_CHOICE"]
+
+
+class FEOLRouteInput(StrictModel):
+    type: Literal["nearest_edge_io"]
+    edge: Literal["x_min", "x_max", "y_min", "y_max"]
+    io_channels: int = Field(gt=0)
+    io_channel_distribution: Literal["uniform_centered_bins"]
+    wire: FEOLWireInput
+    access_assumption: Literal["UNIFORM_CLUSTER_ACCESS"]
+    topology_provenance: Literal["MODELING_CHOICE"]
+    io_channel_count_source: str
+
+
 class CellReplacementInput(StrictModel):
     mapping_status: Literal["validated", "unresolved"]
     components: tuple[str, ...]
@@ -331,6 +349,7 @@ class ArchitectureInput(StrictModel):
     dies: int | None = Field(default=None, gt=0)
     geometry_source: GeometrySourceInput
     m3d_subarray: M3DSubarrayInput | None = None
+    feol_route: FEOLRouteInput | None = None
     vertical: TransportInput
     base_route: BaseRouteInput
     interface: InterfaceInput
@@ -341,6 +360,8 @@ class ArchitectureInput(StrictModel):
         if self.vertical.type == "miv" and self.m3d_subarray is None:
             raise ValueError(
                 "MIV architecture requires architecture.m3d_subarray")
+        if self.feol_route is not None and self.m3d_subarray is None:
+            raise ValueError("FEOL route requires architecture.m3d_subarray")
         return self
 
 

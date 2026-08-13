@@ -18,6 +18,7 @@ from om3dthermal.power.geometry import (
     evaluate_geometry_fit,
     load_m3d_geometry,
 )
+from om3dthermal.power.feol_route import calculate_feol_route
 from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
 from om3dthermal.power.miv import build_miv_topology
 
@@ -837,7 +838,7 @@ def test_length_scaled_miv_energy_resolves_and_access_closes():
     assert result.E_interface_pj_bit == pytest.approx(0.5)
     assert result.E_access_total_pj_bit == pytest.approx(
         mat_local + routing + local + result.E_vertical_pj_bit
-        + result.E_interface_pj_bit)
+        + result.E_feol_route_pj_bit + result.E_interface_pj_bit)
 
 
 def test_layer_probability_weights_physical_miv_capacitance_and_energy():
@@ -854,3 +855,117 @@ def test_layer_probability_weights_physical_miv_capacitance_and_energy():
         near.metadata["miv_average_effective_capacitance_pF"])
     assert far.metadata["miv_access_energy_pJ_per_bit"] > (
         near.metadata["miv_access_energy_pJ_per_bit"])
+
+
+def test_feol_route_config_and_centered_edge_ports():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    spec = config.architecture.feol_route
+    assert spec is not None
+    topology = _m3d_subarray(config)
+    route = calculate_feol_route(spec, topology)
+    assert route.feol_io_channel_count == 50
+    assert route.feol_io_channel_pitch_um == pytest.approx(
+        topology.slab_x_um / 50)
+    assert route.feol_io_channel_pitch_um == pytest.approx(440.0)
+    ports = route.feol_io_channel_coordinates_um
+    assert len(ports) == 50
+    assert ports[0] == pytest.approx((220.0, 0.0))
+    assert ports[-1] == pytest.approx((21780.0, 0.0))
+    assert all(
+        right[0] - left[0] == pytest.approx(route.feol_io_channel_pitch_um)
+        for left, right in zip(ports, ports[1:]))
+    raw = config.model_dump()
+    raw["architecture"]["feol_route"]["io_channels"] = 0
+    with pytest.raises(ValueError, match="greater than 0"):
+        MemoryPowerConfig.model_validate(raw)
+
+
+def test_feol_cluster_to_port_mapping_is_nearest_manhattan():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    topology = _m3d_subarray(config)
+    route = calculate_feol_route(config.architecture.feol_route, topology)
+    assert route.feol_route_cluster_count == topology.clusters_per_layer
+    assert len(route.feol_route_nearest_port_index) == topology.clusters_per_layer
+    for index, ((xc, yc), port_index, length) in enumerate(zip(
+            route.feol_route_cluster_centers_um,
+            route.feol_route_nearest_port_index,
+            route.feol_route_length_per_cluster_um,
+            strict=True)):
+        xp, yp = route.feol_io_channel_coordinates_um[port_index]
+        assert length == pytest.approx(abs(xc - xp) + abs(yc - yp))
+        assert length == pytest.approx(
+            route.feol_route_lateral_component_per_cluster_um[index]
+            + route.feol_route_perpendicular_component_per_cluster_um[index])
+    assert route.feol_route_average_length_um > 1000.0
+    assert route.feol_route_average_length_um < 10000.0
+    # Same X column: farther cluster rows have a larger y_min route.
+    first_column = route.feol_route_length_per_cluster_um[
+        ::topology.cluster_count_x]
+    assert all(right > left for left, right in zip(first_column, first_column[1:]))
+
+
+def test_feol_io_count_and_slab_depth_control_physical_route():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    topology = _m3d_subarray(config)
+    spec = config.architecture.feol_route
+    baseline = calculate_feol_route(spec, topology)
+    more_ports = spec.model_copy(update={"io_channels": 100})
+    denser = calculate_feol_route(more_ports, topology)
+    assert denser.feol_route_average_lateral_component_um <= (
+        baseline.feol_route_average_lateral_component_um)
+
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
+    deeper_geometry = replace(geometry, slab_y_um=7000.0)
+    deeper_topology = calculate_m3d_subarray(
+        config.architecture.m3d_subarray, deeper_geometry)
+    deeper = calculate_feol_route(spec, deeper_topology)
+    assert deeper.feol_route_average_length_um > baseline.feol_route_average_length_um
+
+
+@pytest.mark.parametrize(
+    "wire_update, expected_factor",
+    [
+        ({"capacitance_fF_per_um": 0.40}, 2.0),
+        ({"voltage_V": 1.60}, 4.0),
+        ({"activity_factor": 1.0}, 2.0),
+    ],
+)
+def test_feol_wire_energy_scaling(wire_update, expected_factor):
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    topology = _m3d_subarray(config)
+    spec = config.architecture.feol_route
+    baseline = calculate_feol_route(spec, topology)
+    wire = spec.wire.model_copy(update=wire_update)
+    modified = calculate_feol_route(spec.model_copy(update={"wire": wire}), topology)
+    assert modified.feol_route_energy_pj_per_bit == pytest.approx(
+        expected_factor * baseline.feol_route_energy_pj_per_bit)
+
+
+def test_feol_boundary_is_additive_and_frozen_terms_are_unchanged():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    with_route = calculate_memory_power(config, project_root=ROOT)
+    architecture = config.architecture.model_copy(update={"feol_route": None})
+    without_route = calculate_memory_power(
+        config.model_copy(update={"architecture": architecture}),
+        project_root=ROOT)
+    assert with_route.E_access_total_pj_bit == pytest.approx(
+        without_route.E_access_total_pj_bit + with_route.E_feol_route_pj_bit)
+    assert with_route.E_memory_internal_pj_bit == pytest.approx(
+        without_route.E_memory_internal_pj_bit, abs=0.0)
+    assert with_route.E_vertical_pj_bit == pytest.approx(
+        without_route.E_vertical_pj_bit, abs=0.0)
+    assert with_route.E_base_route_pj_bit == 0.0
+    assert with_route.E_interface_pj_bit == pytest.approx(0.5, abs=0.0)
+    assert with_route.diagnostics["miv_fixed_load_pF"] == pytest.approx(0.006)
+    assert with_route.diagnostics["feol_route_start"] == "MIV_FEOL_LANDING"
+    assert with_route.diagnostics["feol_route_end"] == "EDGE_IO_INTERFACE_INPUT"
+    assert with_route.diagnostics["interface_boundary"] == (
+        "EDGE_IO_INTERFACE_INPUT_TO_GPU_RECEIVER")
+    assert with_route.diagnostics["interface_energy_pj_per_bit"] == 0.5
+    assert with_route.diagnostics["feol_serialization_applied"] is False
+
+    conventional = calculate_memory_power(
+        load_power_config(POWER_CONFIGS / "hbm3_si.yaml"), project_root=ROOT)
+    assert conventional.E_feol_route_pj_bit == 0.0
+    assert conventional.E_vertical_pj_bit == pytest.approx(0.22048568115234377)
+    assert conventional.E_access_total_pj_bit == 0.9782367130708566

@@ -13,6 +13,7 @@ from .cell_model import (
 )
 from .config import MemoryPowerConfig, find_project_root, load_power_config
 from .geometry import load_m3d_geometry
+from .feol_route import calculate_feol_route
 from .m3d_subarray import calculate_m3d_subarray
 from .result import BackendEnergyResult, EnergyDecomposition, MemoryPowerResult
 
@@ -218,7 +219,17 @@ def calculate_memory_power(
         "interface", config.architecture.interface.source,
         config.architecture.interface.energy_pj_per_bit,
         dreamram_decomposition)
-    read_total = memory_internal + vertical + base_route + interface
+    feol_route_result = None
+    if config.architecture.feol_route is not None:
+        if m3d_subarray is None:
+            raise ValueError("FEOL route requires resolved M3D topology")
+        feol_route_result = calculate_feol_route(
+            config.architecture.feol_route, m3d_subarray)
+    feol_route = (
+        0.0 if feol_route_result is None
+        else feol_route_result.feol_route_energy_pj_per_bit)
+    read_total = (
+        memory_internal + vertical + feol_route + base_route + interface)
 
     if config.workload.write_bandwidth_gbps > 0:
         raise ValueError(
@@ -241,6 +252,7 @@ def calculate_memory_power(
         architecture=config.architecture.name,
         E_memory_internal_pj_bit=memory_internal,
         E_vertical_pj_bit=vertical,
+        E_feol_route_pj_bit=feol_route,
         E_base_route_pj_bit=base_route,
         E_interface_pj_bit=interface,
         E_access_total_pj_bit=read_total,
@@ -254,6 +266,7 @@ def calculate_memory_power(
         diagnostics={
             **backend.metadata,
             **({} if m3d_subarray is None else m3d_subarray.as_dict()),
+            **({} if feol_route_result is None else feol_route_result.as_dict()),
             "cell_model": config.memory.cell_model.type,
             "operation_energy_provenance": (
                 None
@@ -268,6 +281,7 @@ def calculate_memory_power(
                     "csl", "ldl", "mdl", "bgbus+gbus",
                 ]
             ),
+            "interface_energy_pj_per_bit": interface,
         },
     )
 

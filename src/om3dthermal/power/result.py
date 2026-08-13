@@ -53,6 +53,7 @@ class MemoryPowerResult:
     architecture: str
     E_memory_internal_pj_bit: float
     E_vertical_pj_bit: float
+    E_feol_route_pj_bit: float
     E_base_route_pj_bit: float
     E_interface_pj_bit: float
     E_access_total_pj_bit: float

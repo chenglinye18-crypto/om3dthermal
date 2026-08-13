@@ -114,6 +114,19 @@ architecture:
       selected_bits_per_subarray: 1
       provenance: MODELING_CHOICE
     topology_provenance: MODELING_CHOICE
+  feol_route:
+    type: nearest_edge_io
+    edge: y_min
+    io_channels: 50
+    io_channel_distribution: uniform_centered_bins
+    wire:
+      capacitance_fF_per_um: 0.20
+      voltage_V: 0.80
+      activity_factor: 0.50
+      provenance: MODELING_CHOICE
+    access_assumption: UNIFORM_CLUSTER_ACCESS
+    topology_provenance: MODELING_CHOICE
+    io_channel_count_source: EXISTING_INDUCTIVE_INTERFACE_REFERENCE
   vertical:
     type: miv
     source: miv_topology
