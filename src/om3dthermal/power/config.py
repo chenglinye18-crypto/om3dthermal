@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -349,10 +349,10 @@ class GeometrySourceInput(StrictModel):
 
 
 class ArchitectureInput(StrictModel):
-    name: str
+    name: str | None = None
     layers: int | None = Field(default=None, gt=0)
     dies: int | None = Field(default=None, gt=0)
-    geometry_source: GeometrySourceInput
+    geometry_source: GeometrySourceInput | None = None
     m3d_subarray: M3DSubarrayInput | None = None
     feol_route: FEOLRouteInput | None = None
     vertical: TransportInput
@@ -471,6 +471,84 @@ class MemoryPowerConfig(StrictModel):
         return self
 
 
+class CaseMemoryRegionInput(StrictModel):
+    width_mm: float = Field(gt=0.0)
+    height_mm: float = Field(gt=0.0)
+
+
+class CaseOrthogonalGeometryInput(StrictModel):
+    slab_count: int = Field(gt=0)
+    cube_length_x_mm: float = Field(gt=0.0)
+    slab_plane_y_mm: float = Field(gt=0.0)
+    slab_height_z_mm: float = Field(gt=0.0)
+    slab_pitch_x_um: float = Field(gt=0.0)
+    slab_plane: Literal["y-z"]
+    thickness_direction: Literal["global_x"]
+
+
+class CaseM3DStackGeometryInput(StrictModel):
+    si_substrate_um: float = Field(gt=0.0)
+    feol_um: float = Field(gt=0.0)
+    bitcell_layers: int = Field(gt=0)
+    bitcell_layer_pitch_nm: float = Field(gt=0.0)
+    beol_interconnect_um: float = Field(gt=0.0)
+    daa_um: float = Field(gt=0.0)
+    cell_area_um2: float = Field(gt=0.0)
+
+
+class CaseGeometryInput(StrictModel):
+    type: Literal["dreamram_hbm", "orthogonal_m3d"]
+    memory_region: CaseMemoryRegionInput | None = None
+    orthogonal: CaseOrthogonalGeometryInput | None = None
+    m3d_stack: CaseM3DStackGeometryInput | None = None
+
+    @model_validator(mode="after")
+    def type_fields(self) -> "CaseGeometryInput":
+        if self.type == "orthogonal_m3d":
+            if self.orthogonal is None or self.m3d_stack is None:
+                raise ValueError(
+                    "orthogonal_m3d geometry requires orthogonal and m3d_stack")
+            if self.memory_region is not None:
+                raise ValueError(
+                    "M3D memory region is derived from orthogonal slab geometry")
+            bitcell_um = (
+                self.m3d_stack.bitcell_layers
+                * self.m3d_stack.bitcell_layer_pitch_nm * 1e-3)
+            resolved = (
+                self.m3d_stack.si_substrate_um + self.m3d_stack.feol_um
+                + bitcell_um + self.m3d_stack.beol_interconnect_um
+                + self.m3d_stack.daa_um)
+            if not math.isclose(
+                    resolved, self.orthogonal.slab_pitch_x_um,
+                    rel_tol=0.0, abs_tol=1e-9):
+                raise ValueError(
+                    f"M3D slab thickness does not close: {resolved} um != "
+                    f"slab pitch {self.orthogonal.slab_pitch_x_um} um")
+        else:
+            if self.memory_region is None:
+                raise ValueError("dreamram_hbm requires a memory region")
+            if self.orthogonal is not None or self.m3d_stack is not None:
+                raise ValueError("dreamram_hbm must not duplicate an M3D stack")
+        return self
+
+
+class CanonicalCaseConfig(MemoryPowerConfig):
+    name: str
+    geometry: CaseGeometryInput
+    thermal: dict[str, Any] = Field(default_factory=dict)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def canonical_sources(self) -> "CanonicalCaseConfig":
+        if self.architecture.geometry_source is not None:
+            raise ValueError(
+                "canonical case must use its inline geometry, not geometry_source")
+        is_m3d = self.architecture.m3d_subarray is not None
+        if is_m3d != (self.geometry.type == "orthogonal_m3d"):
+            raise ValueError("architecture and canonical geometry type disagree")
+        return self
+
+
 def load_power_config(path: str | Path) -> MemoryPowerConfig:
     config_path = Path(path).resolve()
     with config_path.open("r", encoding="utf-8") as stream:
@@ -478,6 +556,15 @@ def load_power_config(path: str | Path) -> MemoryPowerConfig:
     if not isinstance(raw, dict):
         raise ValueError("memory-power YAML root must be a mapping")
     return MemoryPowerConfig.model_validate(raw)
+
+
+def load_case_config(path: str | Path) -> CanonicalCaseConfig:
+    config_path = Path(path).resolve()
+    with config_path.open("r", encoding="utf-8") as stream:
+        raw = yaml.safe_load(stream)
+    if not isinstance(raw, dict):
+        raise ValueError("canonical case YAML root must be a mapping")
+    return CanonicalCaseConfig.model_validate(raw)
 
 
 def find_project_root(config_path: str | Path) -> Path:

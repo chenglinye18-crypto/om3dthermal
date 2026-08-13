@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import yaml
 
 from .backends import DreamRAMBackend, OperationTableCellModel
 from .cell_model import (
@@ -11,8 +12,17 @@ from .cell_model import (
     apply_component_replacements,
     apply_operation_primitive_replacement,
 )
-from .config import MemoryPowerConfig, find_project_root, load_power_config
-from .geometry import load_m3d_geometry
+from .config import (
+    MemoryPowerConfig,
+    find_project_root,
+    load_case_config,
+    load_power_config,
+)
+from .geometry import (
+    ResolvedGeometry,
+    resolve_case_geometry,
+    resolve_legacy_geometry,
+)
 from .feol_route import calculate_feol_route
 from .m3d_subarray import calculate_m3d_subarray
 from .refresh import calculate_refresh_power
@@ -168,16 +178,23 @@ def _scaled_m3d_read_energy(
 
 
 def calculate_memory_power(
-        config: MemoryPowerConfig, *, project_root: Path) -> MemoryPowerResult:
+        config: MemoryPowerConfig, *, project_root: Path,
+        geometry: ResolvedGeometry | None = None) -> MemoryPowerResult:
+    if geometry is None:
+        source = config.architecture.geometry_source
+        if source is None:
+            raise ValueError(
+                "canonical case requires its resolved geometry object")
+        geometry = resolve_legacy_geometry(project_root, source)
     m3d_subarray = None
-    m3d_geometry = None
+    m3d_geometry = geometry.m3d
     if config.architecture.m3d_subarray is not None:
-        m3d_geometry = load_m3d_geometry(
-            project_root, config.architecture.geometry_source)
+        if m3d_geometry is None:
+            raise ValueError("M3D power requires resolved M3D geometry")
         m3d_subarray = calculate_m3d_subarray(
             config.architecture.m3d_subarray, m3d_geometry)
     backend = DreamRAMBackend(project_root).calculate(
-        config, m3d_subarray=m3d_subarray)
+        config, m3d_subarray=m3d_subarray, geometry=geometry)
     device = (
         OperationTableCellModel().calculate(config)
         if config.memory.cell_model.type == "operation_table" else None)
@@ -265,7 +282,9 @@ def calculate_memory_power(
     return MemoryPowerResult(
         technology=backend.technology,
         backend=backend.backend,
-        architecture=config.architecture.name,
+        architecture=(
+            config.architecture.name
+            or getattr(config, "name", "unnamed_architecture")),
         E_memory_internal_pj_bit=memory_internal,
         E_vertical_pj_bit=vertical,
         E_feol_route_pj_bit=feol_route,
@@ -307,5 +326,14 @@ def calculate_memory_power(
 
 def run_memory_power(config_path: str | Path) -> MemoryPowerResult:
     path = Path(config_path).resolve()
+    with path.open("r", encoding="utf-8") as stream:
+        raw = yaml.safe_load(stream)
+    if isinstance(raw, dict) and "geometry" in raw:
+        case = load_case_config(path)
+        return calculate_memory_power(
+            case,
+            project_root=find_project_root(path),
+            geometry=resolve_case_geometry(case),
+        )
     return calculate_memory_power(
         load_power_config(path), project_root=find_project_root(path))

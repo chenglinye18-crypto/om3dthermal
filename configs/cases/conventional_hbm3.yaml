@@ -1,4 +1,11 @@
-# LEGACY SPLIT POWER CONFIG. Prefer configs/cases/conventional_hbm3.yaml.
+name: conventional_hbm3
+
+geometry:
+  type: dreamram_hbm
+  memory_region:
+    width_mm: 9.797298229634182
+    height_mm: 11.325286643326368
+
 memory:
   technology: si_dram
   backend: dreamram
@@ -7,11 +14,6 @@ memory:
     technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
 
 architecture:
-  name: conventional_hbm3
-  layers: 8
-  geometry_source:
-    config: configs/exp_conv_2x2_g414_m160.yaml
-    memory_region: hbm_dram_die
   vertical: {type: tsv, source: dreamram}
   base_route: {enabled: true, source: dreamram}
   interface: {type: hbm_dq, source: dreamram}
@@ -20,7 +22,6 @@ architecture:
 workload:
   read_bandwidth_gbps: 39200
   write_bandwidth_gbps: 0
-  # Fraction of an activated DRAM row consumed before PRE closes the row.
   row_policy: {activated_row_data_utilization: 1.0}
 
 power:
@@ -30,3 +31,18 @@ power:
     refresh_window_s: 0.032
     refresh_window_provenance: EXPLICIT_EXTERNAL_BASELINE_REQUIRES_DOCUMENTED_SOURCE
   background: {enabled: false}
+
+thermal:
+  migration_status: NOT_MIGRATED
+  reason: >-
+    The analytical DreamRAM HBM3 organization has 8 stacked memory dies,
+    while the existing fixed-power thermal reference is conventional 12Hi.
+    The 12Hi reference remains a separate case and is not silently merged.
+  legacy_12hi_reference: configs/exp_conv_2x2_g414_m160.yaml
+
+provenance:
+  organization_owner: DREAMRAM_DATE2026_HBM3_BASELINE
+  memory_region_footprint: DERIVED_FROM_DREAMRAM_DATE2026
+  analytical_stack_dies: 8
+  legacy_thermal_stack_dies: 12
+  legacy_thermal_dram_footprint_mm: [10.8, 10.8]

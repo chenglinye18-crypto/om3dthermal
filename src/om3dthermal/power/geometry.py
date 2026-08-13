@@ -10,7 +10,11 @@ import yaml
 
 from om3dthermal.units import parse_length
 
-from .config import GeometrySourceInput, resolve_project_path
+from .config import (
+    CanonicalCaseConfig,
+    GeometrySourceInput,
+    resolve_project_path,
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,62 @@ class M3DGeometry:
     slab_x_um: float
     slab_y_um: float
     cell_area_um2: float
+
+
+@dataclass(frozen=True)
+class ResolvedGeometry:
+    source: str
+    memory_region: str
+    configured_x_mm: float
+    configured_y_mm: float
+    m3d: M3DGeometry | None = None
+
+
+def resolve_case_geometry(case: CanonicalCaseConfig) -> ResolvedGeometry:
+    """Resolve canonical geometry without opening another YAML file."""
+    geometry = case.geometry
+    m3d = None
+    if geometry.type == "orthogonal_m3d":
+        assert geometry.m3d_stack is not None
+        assert geometry.orthogonal is not None
+        x_mm = geometry.orthogonal.slab_plane_y_mm
+        y_mm = geometry.orthogonal.slab_height_z_mm
+        m3d = M3DGeometry(
+            layers=geometry.m3d_stack.bitcell_layers,
+            layer_pitch_um=(
+                geometry.m3d_stack.bitcell_layer_pitch_nm * 1e-3),
+            slab_x_um=x_mm * 1e3,
+            slab_y_um=y_mm * 1e3,
+            cell_area_um2=geometry.m3d_stack.cell_area_um2,
+        )
+        region = "orthogonal_m3d_slab"
+    else:
+        assert geometry.memory_region is not None
+        x_mm = geometry.memory_region.width_mm
+        y_mm = geometry.memory_region.height_mm
+        region = "hbm_dram_die"
+    return ResolvedGeometry(
+        source=f"canonical_case:{case.name}",
+        memory_region=region,
+        configured_x_mm=x_mm,
+        configured_y_mm=y_mm,
+        m3d=m3d,
+    )
+
+
+def resolve_legacy_geometry(
+        project_root: Path, source: GeometrySourceInput) -> ResolvedGeometry:
+    path, x_mm, y_mm = load_memory_region_size(project_root, source)
+    m3d = (
+        load_m3d_geometry(project_root, source)
+        if source.memory_region == "orthogonal_m3d_slab" else None)
+    return ResolvedGeometry(
+        source=str(path),
+        memory_region=source.memory_region,
+        configured_x_mm=x_mm,
+        configured_y_mm=y_mm,
+        m3d=m3d,
+    )
 
 
 def _length_mm(value: Any) -> float:

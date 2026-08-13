@@ -1,4 +1,24 @@
-# LEGACY SPLIT POWER CONFIG. Prefer configs/cases/orthogonal_m3d_igzo.yaml.
+name: orthogonal_m3d_igzo
+
+geometry:
+  type: orthogonal_m3d
+  orthogonal:
+    slab_count: 98
+    cube_length_x_mm: 30.0
+    slab_plane_y_mm: 22.0
+    slab_height_z_mm: 5.5
+    slab_pitch_x_um: 300.0
+    slab_plane: y-z
+    thickness_direction: global_x
+  m3d_stack:
+    si_substrate_um: 292.546
+    feol_um: 0.150
+    bitcell_layers: 8
+    bitcell_layer_pitch_nm: 288.0
+    beol_interconnect_um: 3.0
+    daa_um: 2.0
+    cell_area_um2: 0.023
+
 memory:
   technology: igzo_2t0c
   backend: dreamram
@@ -9,8 +29,6 @@ memory:
     type: operation_table
     source: IEDM2026_HaotongZhu_V5
     replacement:
-      # Schema carrier for the indivisible Zhu primitive. The Tang-style M3D
-      # path does not instantiate or replace any DreamRAM internal component.
       mapping_status: validated
       components: []
       energy_source: operation_table
@@ -36,25 +54,14 @@ memory:
       sensing_included: true
       distributed_rc_included: true
       accounting_note: >-
-        Full-row SPICE includes distributed WWL/WBL/RWL/RBL RC. The current
-        Tang-style embedded-peripheral M3D path treats this as an indivisible
-        local-operation primitive and excludes all DreamRAM HBM internal
-        routing components.
-    background:
-      type: per_row
-      value_w: 4.26e-15
+        Full-row SPICE includes distributed WWL/WBL/RWL/RBL RC and sensing.
+    background: {type: per_row, value_w: 4.26e-15}
     retention_s: null
 
 architecture:
-  name: orthogonal_m3d_igzo
-  geometry_source:
-    config: configs/orthogonal_m3d_edram_v0.yaml
-    memory_region: orthogonal_m3d_slab
   m3d_subarray:
     type: tang_embedded_subarray
-    subarray:
-      n_rows: 512
-      n_cols: 512
+    subarray: {n_rows: 512, n_cols: 512}
     subarray_cluster:
       subarrays_x: 8
       subarrays_y: 8
@@ -72,13 +79,9 @@ architecture:
       row_selection_band_axis: x
       column_write_selection_band_axis: y
       provenance: MODELING_CHOICE
-    local_mux:
-      # Independent from the shared 2F column/write-selection band.
-      footprint_height_f: 4.0
-      provenance: MODELING_CHOICE
+    local_mux: {footprint_height_f: 4.0, provenance: MODELING_CHOICE}
     interconnect:
-      # Temporary electrical values are first-order MODELING_CHOICE inputs.
-      global_rwl:
+      global_rwl: &global_line
         metal_width_nm: 100.0
         metal_thickness_nm: 100.0
         capacitance_fF_per_um: 0.30
@@ -88,23 +91,11 @@ architecture:
         active_line_count: 1
         provenance: MODELING_CHOICE
       global_wwl:
-        metal_width_nm: 100.0
-        metal_thickness_nm: 100.0
-        capacitance_fF_per_um: 0.30
-        resistance_ohm_per_um: 0.10
-        voltage_V: 1.0
+        <<: *global_line
         activity_factor: 0.0
-        active_line_count: 1
-        provenance: MODELING_CHOICE
       global_wbl:
-        metal_width_nm: 100.0
-        metal_thickness_nm: 100.0
-        capacitance_fF_per_um: 0.30
-        resistance_ohm_per_um: 0.10
-        voltage_V: 1.0
+        <<: *global_line
         activity_factor: 0.0
-        active_line_count: 1
-        provenance: MODELING_CHOICE
     access:
       accessed_subarrays_per_access: 256
       accessed_clusters_per_access: 4
@@ -127,17 +118,11 @@ architecture:
   vertical:
     type: miv
     source: miv_topology
-    # MODELING_CHOICE: DreamRAM TSV-derived distributed C/length with actual
-    # M3D length. The local endpoint load is explicit and is not DreamRAM's
-    # conventional-HBM receiver load.
     electrical_model: dreamram_length_scaled_reference
     fixed_load_pF: 0.006
     fixed_load_provenance: MODELING_CHOICE
   base_route: {enabled: false, source: none}
-  interface:
-    type: contactless
-    source: constant
-    energy_pj_per_bit: 0.5
+  interface: {type: contactless, source: constant, energy_pj_per_bit: 0.5}
   logic_background_w: null
 
 workload:
@@ -145,8 +130,6 @@ workload:
   write_bandwidth_gbps: 0
   read_data: {p0: 0.5, p1: 0.5}
   refresh_data: {p0: 0.5, p1: 0.5}
-  # MIV row/column selection energy is shared by this many data accesses.
-  # This is not conventional 1T1C activated-row utilization.
   control_address_reuse: 64
 
 power:
@@ -159,3 +142,25 @@ power:
     refresh_safety_factor: 1.0
     refresh_interval_provenance: MODELING_CHOICE
   background: {enabled: false}
+
+thermal:
+  geometry_source: canonical_case_geometry
+  materials:
+    si_k_W_mK: 140.0
+    feol_k_W_mK: 7.9
+    m3d_bitcell_stack_k_W_mK: 0.85
+    beol_interconnect_k_W_mK: 0.85
+    daa_k_W_mK: 0.2
+  solve_status: NOT_RUN_BY_CONFIG_UNIFICATION
+
+provenance:
+  geometry:
+    cell_area_um2: PAPER_REPORTED
+    bitcell_layer_pitch_nm: DERIVED_FROM_PAPER_FIGURE
+    bitcell_layers: PAPER_SUPPORTED_MODELING_CHOICE
+    slab_and_pitch: INHERITED_ORTHOGONAL_MOSAIC_MODEL
+    slab_thickness_closure: DERIVED_FROM_GEOMETRY_CLOSURE
+  architecture:
+    subarray_cluster: MODELING_CHOICE
+    miv_electrical_model: DREAMRAM_TSV_LENGTH_SCALED_REFERENCE
+    feol_route: MODELING_CHOICE

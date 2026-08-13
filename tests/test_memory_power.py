@@ -6,7 +6,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from om3dthermal.power import calculate_memory_power, load_power_config
+from om3dthermal.power import (
+    calculate_memory_power,
+    load_case_config,
+    load_power_config,
+    resolve_case_geometry,
+    run_memory_power,
+)
 from om3dthermal.power.backends import DreamRAMBackend, OperationTableCellModel
 from om3dthermal.power.cell_model import (
     MissingCellReplacementError,
@@ -26,6 +32,7 @@ from om3dthermal.power.refresh import calculate_refresh_power
 
 ROOT = Path(__file__).parents[1]
 POWER_CONFIGS = ROOT / "configs" / "power"
+CASE_CONFIGS = ROOT / "configs" / "cases"
 
 
 def _with_row_utilization(config, value: float):
@@ -1268,3 +1275,102 @@ def test_refresh_does_not_change_m3d_read_transport_terms():
     assert result.E_feol_route_pj_bit == pytest.approx(
         0.16705631334524151, abs=0.0)
     assert result.E_interface_pj_bit == pytest.approx(0.5, abs=0.0)
+
+
+def test_canonical_cases_parse_and_preserve_nominal_power():
+    hbm_case = load_case_config(CASE_CONFIGS / "conventional_hbm3.yaml")
+    hbm_geometry = resolve_case_geometry(hbm_case)
+    hbm = calculate_memory_power(
+        hbm_case, project_root=ROOT, geometry=hbm_geometry)
+    assert hbm.E_access_total_pj_bit == 0.9782367130708566
+    assert hbm.P_refresh_W == 0.11395159240799647
+    assert hbm.diagnostics["geometry_source_config"] == (
+        "canonical_case:conventional_hbm3")
+    assert hbm_case.architecture.geometry_source is None
+    assert hbm_case.architecture.layers is None
+    assert hbm_case.provenance["analytical_stack_dies"] == 8
+    assert hbm_case.provenance["legacy_thermal_stack_dies"] == 12
+    assert hbm.diagnostics["dies_stacked"] == 8
+    assert hbm.diagnostics["geometry_feasible"] is True
+    assert hbm_case.provenance["memory_region_footprint"] == (
+        "DERIVED_FROM_DREAMRAM_DATE2026")
+    assert hbm_case.thermal["migration_status"] == "NOT_MIGRATED"
+
+    m3d_case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    m3d_geometry = resolve_case_geometry(m3d_case)
+    m3d = calculate_memory_power(
+        m3d_case, project_root=ROOT, geometry=m3d_geometry)
+    assert m3d.E_access_total_pj_bit == 0.8552605756733209
+    assert m3d.E_vertical_pj_bit == 0.002445862111816407
+    assert m3d.E_feol_route_pj_bit == 0.16705631334524151
+    assert m3d.E_interface_pj_bit == 0.5
+    assert m3d.P_refresh_W == 0.0003484694872064
+    assert m3d.diagnostics["geometry_source_config"] == (
+        "canonical_case:orthogonal_m3d_igzo")
+
+
+def test_canonical_m3d_has_single_geometry_and_operation_sources():
+    path = CASE_CONFIGS / "orthogonal_m3d_igzo.yaml"
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert "geometry_source" not in raw["architecture"]
+    assert "memory_region" not in raw["geometry"]
+    assert "total_pitch_um" not in raw["geometry"]["m3d_stack"]
+    assert "layers" not in raw["architecture"]
+    assert "stored_bits" not in raw["workload"]
+    assert "operations" not in raw["geometry"]
+    assert "power_models" not in raw["geometry"]
+    assert "bitcell_layers" not in raw["memory"]
+    assert "bitcell_layer_pitch_nm" not in raw["memory"]
+    assert set(raw["memory"]["cell_model"]["operations"]) == {
+        "read_0_pj_per_bit", "read_1_pj_per_bit",
+        "write_00_pj_per_bit", "write_01_pj_per_bit",
+        "write_10_pj_per_bit", "write_11_pj_per_bit",
+        "refresh_0_pj_per_bit", "refresh_1_pj_per_bit",
+    }
+
+
+def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
+    case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    geometry = resolve_case_geometry(case)
+    baseline = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    assert baseline.diagnostics["clusters_per_layer"] == 280
+    assert baseline.diagnostics["subarrays_per_layer"] == 17920
+    assert baseline.diagnostics["bits_per_layer"] == 4697620480
+    assert baseline.diagnostics["total_stored_bits"] == 37580963840
+    assert baseline.diagnostics["placed_width_um"] == pytest.approx(
+        21794.548876360117)
+    assert baseline.diagnostics["placed_height_um"] == pytest.approx(
+        4999.693110067114)
+
+    raw = case.model_dump(mode="json")
+    raw["geometry"]["m3d_stack"]["bitcell_layers"] = 16
+    raw["geometry"]["m3d_stack"]["si_substrate_um"] = 290.242
+    doubled_case = type(case).model_validate(raw)
+    doubled_geometry = resolve_case_geometry(doubled_case)
+    doubled = calculate_memory_power(
+        doubled_case, project_root=ROOT, geometry=doubled_geometry)
+    assert doubled.diagnostics["total_stored_bits"] == (
+        2 * baseline.diagnostics["total_stored_bits"])
+    assert doubled.diagnostics["miv_average_length_um"] != (
+        baseline.diagnostics["miv_average_length_um"])
+    assert doubled_case.memory.cell_model == case.memory.cell_model
+
+    raw = case.model_dump(mode="json")
+    raw["geometry"]["m3d_stack"]["bitcell_layer_pitch_nm"] = 300.0
+    raw["geometry"]["m3d_stack"]["si_substrate_um"] = 292.45
+    wider_pitch_case = type(case).model_validate(raw)
+    wider_geometry = resolve_case_geometry(wider_pitch_case)
+    wider = calculate_memory_power(
+        wider_pitch_case, project_root=ROOT, geometry=wider_geometry)
+    assert wider.diagnostics["miv_average_length_um"] != (
+        baseline.diagnostics["miv_average_length_um"])
+    assert wider.E_vertical_pj_bit != baseline.E_vertical_pj_bit
+
+
+def test_run_memory_power_accepts_one_canonical_case_path():
+    case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    geometry = resolve_case_geometry(case)
+    assert case.thermal["geometry_source"] == "canonical_case_geometry"
+    assert geometry.source == "canonical_case:orthogonal_m3d_igzo"
+    result = run_memory_power(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    assert result.E_access_total_pj_bit == 0.8552605756733209

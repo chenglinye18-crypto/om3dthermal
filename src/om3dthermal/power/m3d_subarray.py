@@ -265,7 +265,7 @@ def calculate_m3d_subarray(
         slab_x_um=geometry.slab_x_um,
         slab_y_um=geometry.slab_y_um,
         cell_area_um2=geometry.cell_area_um2,
-        cell_area_source="geometry_source.m3d_memory.cell_area_um2",
+        cell_area_source="resolved_geometry.cell_area_um2",
         F_um=F_um,
         cell_pitch_x_um=pitch_um,
         cell_pitch_y_um=pitch_um,

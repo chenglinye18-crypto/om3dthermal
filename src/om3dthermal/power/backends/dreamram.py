@@ -15,9 +15,9 @@ from typing import Iterator
 from ..cell_model import ONE_T_ONE_C_SPECIFIC, REUSABLE_STRUCTURE
 from ..config import MemoryPowerConfig, resolve_project_path
 from ..geometry import (
+    ResolvedGeometry,
     evaluate_geometry_fit,
-    load_m3d_geometry,
-    load_memory_region_size,
+    resolve_legacy_geometry,
 )
 from ..miv import build_miv_topology, calculate_length_scaled_miv_energy
 from ..m3d_subarray import M3DSubarrayResult
@@ -115,7 +115,13 @@ class DreamRAMBackend:
     def calculate(
             self, config: MemoryPowerConfig, *,
             m3d_subarray: M3DSubarrayResult | None = None,
+            geometry: ResolvedGeometry | None = None,
             ) -> BackendEnergyResult:
+        if geometry is None:
+            source = config.architecture.geometry_source
+            if source is None:
+                raise ValueError("DreamRAM backend requires resolved geometry")
+            geometry = resolve_legacy_geometry(self.project_root, source)
         dreamram_input = config.memory.dreamram
         if dreamram_input is None:
             raise ValueError("DreamRAM backend requires memory.dreamram")
@@ -267,12 +273,9 @@ class DreamRAMBackend:
             effective_rd_per_act = None
             access_reuse = config.workload.control_address_reuse
 
-        geometry_path, configured_x_mm, configured_y_mm = (
-            load_memory_region_size(
-                self.project_root, config.architecture.geometry_source))
         geometry_fit = evaluate_geometry_fit(
-            configured_x_mm=configured_x_mm,
-            configured_y_mm=configured_y_mm,
+            configured_x_mm=geometry.configured_x_mm,
+            configured_y_mm=geometry.configured_y_mm,
             required_x_mm=required_x_mm,
             required_y_mm=required_y_mm,
         )
@@ -283,8 +286,9 @@ class DreamRAMBackend:
                 raise ValueError(
                     "Orthogonal M3D requires resolved embedded-peripheral "
                     "subarray topology")
-            m3d_geometry = load_m3d_geometry(
-                self.project_root, config.architecture.geometry_source)
+            m3d_geometry = geometry.m3d
+            if m3d_geometry is None:
+                raise ValueError("M3D architecture requires resolved M3D geometry")
             vertical = config.architecture.vertical
             topology = build_miv_topology(
                 m3d_layers=m3d_geometry.layers,
@@ -454,8 +458,8 @@ class DreamRAMBackend:
             "technology_config": str(technology_path),
             "atom_size_bits": atom_size,
             "atoms_per_page": atoms_per_page,
-            "geometry_source_config": str(geometry_path),
-            "memory_region": config.architecture.geometry_source.memory_region,
+            "geometry_source_config": geometry.source,
+            "memory_region": geometry.memory_region,
             **geometry_fit.as_dict(),
             **miv_metadata,
             "unsupported_operations": ["write", "background"],
