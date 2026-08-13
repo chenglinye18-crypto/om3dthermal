@@ -170,6 +170,7 @@ class TransportInput(StrictModel):
     type: Literal["tsv", "miv", "none"]
     source: Literal["dreamram", "constant", "miv_topology", "none"]
     energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
+    electrical_model: Literal["tsv_equivalent_reference"] | None = None
     vertical_serialization_factor: int | Literal["unresolved"] | None = None
     capacitance_fF: float | Literal["unresolved"] | None = None
 
@@ -178,6 +179,13 @@ class TransportInput(StrictModel):
         if self.source == "miv_topology":
             if self.type != "miv":
                 raise ValueError("miv_topology source requires type: miv")
+            if self.electrical_model == "tsv_equivalent_reference":
+                if (self.vertical_serialization_factor is not None
+                        or self.capacitance_fF is not None):
+                    raise ValueError(
+                        "TSV-equivalent MIV parameters are resolved from "
+                        "DreamRAM and must not be duplicated in power config")
+                return self
             if self.vertical_serialization_factor is None:
                 raise ValueError(
                     "miv_topology requires vertical_serialization_factor")

@@ -19,7 +19,7 @@ from ..geometry import (
     load_m3d_geometry,
     load_memory_region_size,
 )
-from ..miv import build_miv_topology
+from ..miv import build_miv_topology, calculate_tsv_equivalent_miv_energy
 from ..result import BackendEnergyResult, EnergyDecomposition
 
 
@@ -181,6 +181,19 @@ class DreamRAMBackend:
             wire_lengths = dram.wire_lengths(tech)
             wire_counts = dram.wire_counts()
             row_bits, col_bits = dram.ch_cmd_bits()
+            tsv_equivalent = (
+                config.architecture.vertical.electrical_model
+                == "tsv_equivalent_reference")
+            if tsv_equivalent:
+                miv_serialization = int(dram.gbus_tsv_sd)
+                miv_capacitance_pF = float(tech.scaled_cap_tsv())
+            else:
+                miv_serialization = None
+                miv_capacitance_pF = None
+            data_pumps = int(dram.pumps_per_atom())
+            data_transition_factor = float(dram.dbi_transition_factor_max())
+            row_col_voltage_product = float(tech.vcore_int * tech.vdd)
+            data_voltage_product = float(tech.vddql_int * tech.vdd)
             command_energy, components = dram.per_cmd_energy(tech)
             atoms_per_page = int(dram.atoms_per_page())
             atom_size = int(dram.atom_size)
@@ -200,6 +213,7 @@ class DreamRAMBackend:
             required_y_mm=required_y_mm,
         )
         miv_metadata: dict[str, object] = {}
+        miv_access_energy: float | None = None
         if config.architecture.vertical.type == "miv":
             m3d_geometry = load_m3d_geometry(
                 self.project_root, config.architecture.geometry_source)
@@ -209,7 +223,9 @@ class DreamRAMBackend:
                 layer_pitch_um=m3d_geometry.layer_pitch_um,
                 data_width_before_vertical=int(wire_counts["gbus"]),
                 vertical_serialization_factor=(
-                    vertical.vertical_serialization_factor
+                    miv_serialization
+                    if tsv_equivalent
+                    else vertical.vertical_serialization_factor
                     if vertical.vertical_serialization_factor is not None
                     else "unresolved"),
                 row_miv_count=int(row_bits),
@@ -217,7 +233,9 @@ class DreamRAMBackend:
                 layer_access_probability=(
                     config.workload.layer_access_probability),
                 capacitance_fF=(
-                    vertical.capacitance_fF
+                    miv_capacitance_pF * 1e3
+                    if tsv_equivalent and miv_capacitance_pF is not None
+                    else vertical.capacitance_fF
                     if vertical.capacitance_fF is not None else "unresolved"),
             )
             miv_metadata = topology.as_dict()
@@ -227,6 +245,51 @@ class DreamRAMBackend:
                 "geometry_source.m3d_beol.bitcell_layer_pitch_nm")
             miv_metadata["dies_stacked"] = dies_stacked
             miv_metadata["m3d_layers_independent_of_dies_stacked"] = True
+            if tsv_equivalent:
+                if miv_capacitance_pF is None:
+                    raise RuntimeError("TSV-equivalent capacitance was not resolved")
+                miv_energy = calculate_tsv_equivalent_miv_energy(
+                    topology,
+                    capacitance_pF_per_segment=miv_capacitance_pF,
+                    row_voltage_product_V2=row_col_voltage_product,
+                    col_voltage_product_V2=row_col_voltage_product,
+                    data_voltage_product_V2=data_voltage_product,
+                    data_pumps=data_pumps,
+                    data_transition_factor=data_transition_factor,
+                    rd_per_act=n_read,
+                    atom_size_bits=atom_size,
+                )
+                miv_access_energy = miv_energy.miv_access_energy_pJ_per_bit
+                miv_metadata.update(miv_energy.as_dict())
+                miv_metadata.update({
+                    "miv_electrical_model": "TSV_EQUIVALENT_BASELINE",
+                    "miv_modeling_class": "MODELING_CHOICE",
+                    "miv_serialization_factor": miv_serialization,
+                    "miv_serialization_source": "DREAMRAM_TSV_EQUIVALENT",
+                    "miv_capacitance_per_segment_pF": miv_capacitance_pF,
+                    "miv_capacitance_per_segment": miv_capacitance_pF,
+                    "miv_capacitance_source": "DREAMRAM_TSV_EQUIVALENT",
+                    "miv_capacitance_physical_interpretation": (
+                        "effective_capacitance_per_vertical_segment"),
+                    "miv_segment_mapping": "one_m3d_layer_pitch_per_segment",
+                    "row_miv_voltage_source": "DREAMRAM_TSV_EQUIVALENT",
+                    "col_miv_voltage_source": "DREAMRAM_TSV_EQUIVALENT",
+                    "data_miv_voltage_source": "DREAMRAM_TSV_EQUIVALENT",
+                    "row_miv_voltage_mapping": "row-tsv_voltage_domain",
+                    "col_miv_voltage_mapping": "col-tsv_voltage_domain",
+                    "data_miv_voltage_mapping": "data-tsv_voltage_domain",
+                    "miv_geometry_source": "EXISTING_M3D_GEOMETRY",
+                    "miv_electrical_provenance": {
+                        "type": "TSV_EQUIVALENT_BASELINE",
+                        "classification": "MODELING_CHOICE",
+                        "serialization_source": "DREAMRAM_TSV_EQUIVALENT",
+                        "capacitance_source": "DREAMRAM_TSV_EQUIVALENT",
+                        "capacitance_interpretation": (
+                            "effective_capacitance_per_vertical_segment"),
+                        "voltage_source": "DREAMRAM_TSV_EQUIVALENT",
+                        "geometry_source": "EXISTING_M3D_GEOMETRY",
+                    },
+                })
 
         command_groups = {
             command: {group: 0.0 for group in _GROUP_COMPONENTS}
@@ -251,6 +314,13 @@ class DreamRAMBackend:
             ) / denominator
             for group in _GROUP_COMPONENTS
         }
+        if config.architecture.vertical.type == "miv":
+            if miv_access_energy is None:
+                access["vertical"] = 0.0
+            else:
+                access["vertical"] = miv_access_energy
+            access["base_route"] = 0.0
+            access["interface"] = 0.0
         internal_components = {
             component: (
                 _COMMAND_TERMS["pre"].get(component, 0.0)
@@ -264,9 +334,12 @@ class DreamRAMBackend:
         }
         decomposition = EnergyDecomposition(**access)
         reference = (
-            float(command_energy["pre"]) + float(command_energy["act"])
-            + n_read * float(command_energy["rd"])
-        ) / denominator
+            decomposition.total
+            if config.architecture.vertical.type == "miv"
+            else (
+                float(command_energy["pre"]) + float(command_energy["act"])
+                + n_read * float(command_energy["rd"])
+            ) / denominator)
         if abs(decomposition.total - reference) > 1e-12:
             raise RuntimeError("DreamRAM access-energy decomposition does not close")
         if abs(sum(internal_components.values())

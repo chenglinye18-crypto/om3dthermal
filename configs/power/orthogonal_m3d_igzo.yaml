@@ -59,8 +59,9 @@ architecture:
   vertical:
     type: miv
     source: miv_topology
-    vertical_serialization_factor: unresolved
-    capacitance_fF: unresolved
+    # MODELING_CHOICE / TSV_EQUIVALENT_BASELINE. Values are resolved from the
+    # pinned DreamRAM organization/technology, not duplicated here.
+    electrical_model: tsv_equivalent_reference
   base_route: {enabled: false, source: none}
   interface:
     type: contactless

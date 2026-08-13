@@ -5,11 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from om3dthermal.power import (
-    UnresolvedMIVEnergyError,
-    calculate_memory_power,
-    load_power_config,
-)
+from om3dthermal.power import calculate_memory_power, load_power_config
 from om3dthermal.power.backends import DreamRAMBackend, OperationTableCellModel
 from om3dthermal.power.cell_model import (
     MissingCellReplacementError,
@@ -440,22 +436,36 @@ def test_miv_adapter_tracks_existing_geometry_config(
         update={"config": geometry_path})
     architecture = config.architecture.model_copy(
         update={"geometry_source": geometry_source})
-    metadata = DreamRAMBackend(ROOT).calculate(
-        config.model_copy(update={"architecture": architecture})).metadata
+    modified_config = config.model_copy(update={"architecture": architecture})
+    metadata = DreamRAMBackend(ROOT).calculate(modified_config).metadata
+    baseline = DreamRAMBackend(ROOT).calculate(config).metadata
     assert metadata["m3d_layers"] == layers
     assert metadata["layer_pitch_um"] == pytest.approx(pitch_nm * 1e-3)
     assert metadata["miv_average_length_um"] == pytest.approx(
         expected_average_um)
     assert metadata["dies_stacked"] == 8
+    expected_segments = (layers + 1) / 2
+    assert metadata["miv_average_segments"] == pytest.approx(expected_segments)
+    if layers == 8:
+        # Physical pitch changes, but pF/segment energy does not.
+        assert metadata["miv_access_energy_pJ_per_bit"] == pytest.approx(
+            baseline["miv_access_energy_pJ_per_bit"], abs=0.0)
+    else:
+        assert metadata["miv_access_energy_pJ_per_bit"] == pytest.approx(
+            baseline["miv_access_energy_pJ_per_bit"]
+            * expected_segments / baseline["miv_average_segments"])
 
 
-def test_miv_count_is_derived_and_native_tsv_serialization_is_not_inherited():
+def test_miv_count_uses_dreamram_tsv_equivalent_serialization():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     metadata = DreamRAMBackend(ROOT).calculate(config).metadata
     assert metadata["data_width_before_vertical"] == 272
-    assert metadata["vertical_serialization_factor"] is None
-    assert metadata["vertical_serialization_status"] == "unresolved"
-    assert metadata["active_data_miv_count"] is None
+    assert metadata["vertical_serialization_factor"] == 4
+    assert metadata["vertical_serialization_status"] == "resolved"
+    assert metadata["miv_serialization_factor"] == 4
+    assert metadata["miv_serialization_source"] == (
+        "DREAMRAM_TSV_EQUIVALENT")
+    assert metadata["active_data_miv_count"] == 68
     assert metadata["row_miv_count"] == 23
     assert metadata["col_miv_count"] == 17
     resolved = build_miv_topology(
@@ -493,12 +503,40 @@ def test_m3d_path_excludes_hbm_vertical_base_dq_and_tsv_area():
     }
 
 
-def test_missing_miv_capacitance_returns_unresolved_and_fails_loudly():
+def test_tsv_equivalent_miv_energy_resolves_and_access_closes():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     metadata = DreamRAMBackend(ROOT).calculate(config).metadata
-    assert metadata["miv_capacitance_status"] == "unresolved"
-    assert metadata["miv_energy_status"] == "unresolved"
-    with pytest.raises(UnresolvedMIVEnergyError) as captured:
-        calculate_memory_power(config, project_root=ROOT)
-    assert captured.value.diagnostics["miv_energy_status"] == "unresolved"
-    assert "TSV capacitance is not used" in str(captured.value)
+    assert metadata["miv_electrical_model"] == "TSV_EQUIVALENT_BASELINE"
+    assert metadata["miv_modeling_class"] == "MODELING_CHOICE"
+    assert metadata["miv_capacitance_status"] == "resolved"
+    assert metadata["miv_energy_status"] == "resolved"
+    assert metadata["miv_capacitance_per_segment_pF"] == pytest.approx(0.78)
+    assert metadata["miv_capacitance_source"] == (
+        "DREAMRAM_TSV_EQUIVALENT")
+    assert metadata["miv_capacitance_physical_interpretation"] == (
+        "effective_capacitance_per_vertical_segment")
+    assert metadata["miv_segments_per_layer"] == tuple(range(1, 9))
+    assert metadata["miv_average_segments"] == pytest.approx(4.5)
+    assert metadata["row_miv_energy_pJ"] == pytest.approx(48.84165)
+    assert metadata["col_miv_energy_pJ"] == pytest.approx(36.10035)
+    assert metadata["data_miv_energy_pJ"] == pytest.approx(26.2548)
+    assert metadata["miv_total_energy_pJ"] == pytest.approx(111.1968)
+    assert metadata["row_miv_voltage_source"] == (
+        "DREAMRAM_TSV_EQUIVALENT")
+    assert metadata["col_miv_voltage_source"] == (
+        "DREAMRAM_TSV_EQUIVALENT")
+    assert metadata["data_miv_voltage_source"] == (
+        "DREAMRAM_TSV_EQUIVALENT")
+
+    result = calculate_memory_power(config, project_root=ROOT)
+    mat_local = result.diagnostics["replacement_components_pj_bit"][
+        "mat_local_operation"]
+    reusable = sum(result.diagnostics["native_components_pj_bit"].values())
+    assert mat_local == pytest.approx(0.1843)
+    assert reusable == pytest.approx(1.6002246445189394)
+    assert result.E_vertical_pj_bit == pytest.approx(0.24804639129638675)
+    assert result.E_base_route_pj_bit == 0.0
+    assert result.E_interface_pj_bit == pytest.approx(0.5)
+    assert result.E_access_total_pj_bit == pytest.approx(
+        mat_local + reusable + result.E_vertical_pj_bit
+        + result.E_interface_pj_bit)

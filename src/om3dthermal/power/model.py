@@ -44,7 +44,9 @@ def _resolve_transport(
                 "non-DreamRAM backend")
         return float(getattr(dreamram, label))
     if source == "miv_topology":
-        raise ValueError("MIV topology source requires unresolved-energy handling")
+        if dreamram is None:
+            raise ValueError("MIV topology requires DreamRAM structural energy")
+        return dreamram.vertical
     raise ValueError(f"unsupported architecture source {source!r}")
 
 
