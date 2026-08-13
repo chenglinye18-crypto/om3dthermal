@@ -46,6 +46,7 @@ class ResolvedGeometry:
     memory_region: str
     configured_x_mm: float
     configured_y_mm: float
+    memory_region_count: int = 1
     m3d: M3DGeometry | None = None
 
 
@@ -57,6 +58,7 @@ def resolve_case_geometry(case: CanonicalCaseConfig) -> ResolvedGeometry:
         assert geometry.orthogonal is not None
         x_mm = geometry.orthogonal.slab_plane_y_mm
         y_mm = geometry.orthogonal.slab_height_z_mm
+        region_count = geometry.orthogonal.slab_count
         if geometry.type == "orthogonal_m3d":
             assert geometry.m3d_stack is not None
             m3d = M3DGeometry(
@@ -75,11 +77,13 @@ def resolve_case_geometry(case: CanonicalCaseConfig) -> ResolvedGeometry:
         x_mm = geometry.memory_region.width_mm
         y_mm = geometry.memory_region.height_mm
         region = "hbm_dram_die"
+        region_count = 1
     return ResolvedGeometry(
         source=f"canonical_case:{case.name}",
         memory_region=region,
         configured_x_mm=x_mm,
         configured_y_mm=y_mm,
+        memory_region_count=region_count,
         m3d=m3d,
     )
 
@@ -90,11 +94,17 @@ def resolve_legacy_geometry(
     m3d = (
         load_m3d_geometry(project_root, source)
         if source.memory_region == "orthogonal_m3d_slab" else None)
+    region_count = 1
+    if source.memory_region == "orthogonal_memory_slab":
+        with path.open("r", encoding="utf-8") as stream:
+            raw = yaml.safe_load(stream)
+        region_count = int(raw["orthogonal_hbm"]["memory_die"]["count"])
     return ResolvedGeometry(
         source=str(path),
         memory_region=source.memory_region,
         configured_x_mm=x_mm,
         configured_y_mm=y_mm,
+        memory_region_count=region_count,
         m3d=m3d,
     )
 

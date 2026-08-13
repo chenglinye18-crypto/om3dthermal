@@ -22,6 +22,7 @@ from ..geometry import (
 from ..miv import build_miv_topology, calculate_length_scaled_miv_energy
 from ..m3d_subarray import M3DSubarrayResult
 from ..result import BackendEnergyResult, EnergyDecomposition
+from ..si_packing import pack_si_primitive
 
 
 DREAMRAM_BRANCH = "DATE2026"
@@ -169,6 +170,12 @@ class DreamRAMBackend:
             hbm_kwargs["brv_sa"] = memory["brvsa"]
             dram = hbm_module.Hbm(**hbm_kwargs)
             bank_x_um, bank_y_um, _ = dram.bank_dims(tech)
+            row_decoder_width_um, col_decoder_height_um = (
+                dram.decoder_dims(tech))
+            swd_width_um = dram.swd_width(tech)
+            blsa_height_um = dram.blsa_height(tech)
+            bank_select_decoder_width_um = 2 * row_decoder_width_um
+            bank_tile_width_um = bank_x_um + bank_select_decoder_width_um
             mat_x_um = (
                 dram.mat_cols * dram.isolation_cols_overhead * tech.pitch_bl)
             mat_y_um = (
@@ -273,12 +280,70 @@ class DreamRAMBackend:
             effective_rd_per_act = None
             access_reuse = config.workload.control_address_reuse
 
-        geometry_fit = evaluate_geometry_fit(
+        reference_geometry_fit = evaluate_geometry_fit(
             configured_x_mm=geometry.configured_x_mm,
             configured_y_mm=geometry.configured_y_mm,
             required_x_mm=required_x_mm,
             required_y_mm=required_y_mm,
         )
+        si_packing_metadata: dict[str, object] = {}
+        geometry_fit = reference_geometry_fit
+        if (m3d_subarray is None
+                and geometry.memory_region == "orthogonal_memory_slab"):
+            primitive_bits = int(
+                dram.subarrays * dram.mat_rows * dram.mats * dram.mat_cols)
+            packing = pack_si_primitive(
+                slab_width_um=geometry.configured_x_mm * 1e3,
+                slab_height_um=geometry.configured_y_mm * 1e3,
+                slab_count=geometry.memory_region_count,
+                primitive_type=(
+                    "DREAMRAM_BANK_TILE_WITH_DECODERS_SWD_BLSA"),
+                primitive_width_um=float(bank_tile_width_um),
+                primitive_height_um=float(bank_y_um),
+                primitive_bits=primitive_bits,
+            )
+            geometry_fit = evaluate_geometry_fit(
+                configured_x_mm=geometry.configured_x_mm,
+                configured_y_mm=geometry.configured_y_mm,
+                required_x_mm=packing.packed_width_um * 1e-3,
+                required_y_mm=packing.packed_height_um * 1e-3,
+            )
+            events_per_bank = int(
+                dram.subarrays * dram.mat_rows * independent_row_pages)
+            refresh_events_per_full_memory_cycle = (
+                events_per_bank * packing.primitives_per_slab
+                * packing.slab_count)
+            dreamram_total_stored_bits = packing.total_system_bits
+            if (refresh_events_per_full_memory_cycle * refresh_bits_per_event
+                    != dreamram_total_stored_bits):
+                raise RuntimeError(
+                    "packed Si refresh-event capacity does not close")
+            refresh_organization.update({
+                "capacity_basis": "INTEGER_PACKED_DREAMRAM_BANKS",
+                "packed_banks_per_slab": packing.primitives_per_slab,
+                "orthogonal_slab_count": packing.slab_count,
+                "refresh_events_per_packed_bank": events_per_bank,
+            })
+            si_packing_metadata = {
+                "capacity_model": "GEOMETRY_DRIVEN_INTEGER_BANK_PACKING",
+                **packing.as_dict(),
+                "dreamram_reference_required_x_mm": (
+                    reference_geometry_fit.required_x_mm),
+                "dreamram_reference_required_y_mm": (
+                    reference_geometry_fit.required_y_mm),
+                "dreamram_reference_x_utilization": (
+                    reference_geometry_fit.x_utilization),
+                "dreamram_reference_y_utilization": (
+                    reference_geometry_fit.y_utilization),
+                "dreamram_reference_geometry_feasible": (
+                    reference_geometry_fit.geometry_feasible),
+                "dreamram_reference_geometry_role": "REFERENCE_ONLY",
+                "packing_rotation_tested": True,
+                "packing_primitive_scope": (
+                    "BANK_TILE_INCLUDES_LOCAL_ROW_COLUMN_DECODERS_"
+                    "BANK_SELECT_DECODER_SWD_BLSA_OPEN_BITLINE_AND_"
+                    "ECC_FOOTPRINT"),
+            }
         miv_metadata: dict[str, object] = {}
         miv_access_energy: float | None = None
         if config.architecture.vertical.type == "miv":
@@ -461,6 +526,7 @@ class DreamRAMBackend:
             "geometry_source_config": geometry.source,
             "memory_region": geometry.memory_region,
             **geometry_fit.as_dict(),
+            **si_packing_metadata,
             **miv_metadata,
             "unsupported_operations": ["write", "background"],
         }
@@ -486,6 +552,20 @@ class DreamRAMBackend:
                 "mat_y_um": float(mat_y_um),
                 "bank_x_um": float(bank_x_um),
                 "bank_y_um": float(bank_y_um),
+                "dreamram_mat_core_bits": int(
+                    dram.mat_rows * dram.mat_cols),
+                "dreamram_mat_local_footprint_width_um": float(
+                    mat_x_um + swd_width_um),
+                "dreamram_mat_local_footprint_height_um": float(
+                    mat_y_um + blsa_height_um),
+                "dreamram_subarray_bits": int(
+                    dram.mats * dram.mat_rows * dram.mat_cols),
+                "dreamram_subarray_standalone_packing_geometry": (
+                    "NOT_EXPOSED_SHARED_OPEN_BITLINE_AND_DECODER_OVERHEAD"),
+                "dreamram_bank_select_decoder_width_um": float(
+                    bank_select_decoder_width_um),
+                "dreamram_bank_tile_width_um": float(bank_tile_width_um),
+                "dreamram_bank_tile_height_um": float(bank_y_um),
                 "wire_lengths_um": {
                     name: float(value) for name, value in wire_lengths.items()},
                 "E_PRE_pJ": float(command_energy["pre"]),

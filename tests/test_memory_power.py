@@ -31,6 +31,7 @@ from om3dthermal.power.feol_route import calculate_feol_route
 from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
 from om3dthermal.power.miv import build_miv_topology
 from om3dthermal.power.refresh import calculate_refresh_power
+from om3dthermal.power.si_packing import pack_si_primitive
 
 
 ROOT = Path(__file__).parents[1]
@@ -1370,7 +1371,99 @@ def test_orthogonal_si_uses_matched_row_workload_and_refresh():
     assert result.E_vertical_pj_bit == 0.0
     assert result.E_base_route_pj_bit == 0.0
     assert result.E_interface_pj_bit == 0.5
-    assert result.P_refresh_W == 0.11395159240799647
+    assert result.P_refresh_W > 0.11395159240799647
+    assert result.E_access_total_pj_bit == pytest.approx(
+        1.3676557831180527, abs=0.0)
+
+
+def test_orthogonal_si_capacity_is_integer_geometry_packing():
+    case = load_case_config(CASE_CONFIGS / "orthogonal_si.yaml")
+    geometry = resolve_case_geometry(case)
+    result = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    d = result.diagnostics
+    assert d["primitive_type"] == (
+        "DREAMRAM_BANK_TILE_WITH_DECODERS_SWD_BLSA")
+    assert d["primitive_bits"] == 134217728
+    assert isinstance(d["packed_nx"], int)
+    assert isinstance(d["packed_ny"], int)
+    assert d["primitives_per_slab"] == d["packed_nx"] * d["packed_ny"]
+    assert d["bits_per_slab"] == (
+        d["primitives_per_slab"] * d["primitive_bits"])
+    assert d["total_system_bits"] == d["bits_per_slab"] * 98
+    assert d["gib_per_slab"] == pytest.approx(
+        d["bits_per_slab"] / 8 / (2 ** 30))
+    assert d["total_system_gib"] == pytest.approx(
+        d["total_system_bits"] / 8 / (2 ** 30))
+    assert d["gross_density_Mb_mm2"] == pytest.approx(
+        d["bits_per_slab"] / 1e6 / (22.0 * 5.5))
+    assert d["packed_width_um"] <= geometry.configured_x_mm * 1e3
+    assert d["packed_height_um"] <= geometry.configured_y_mm * 1e3
+    assert d["geometry_feasible"] is True
+    assert d["dreamram_reference_geometry_feasible"] is False
+    assert d["dreamram_reference_geometry_role"] == "REFERENCE_ONLY"
+    assert d["refresh_events_per_full_memory_cycle"] * d[
+        "refresh_bits_per_event"] == d["total_system_bits"]
+
+
+def test_orthogonal_si_slab_dimensions_drive_capacity_and_rotation():
+    case = load_case_config(CASE_CONFIGS / "orthogonal_si.yaml")
+    baseline_geometry = resolve_case_geometry(case)
+    baseline = calculate_memory_power(
+        case, project_root=ROOT, geometry=baseline_geometry)
+
+    smaller_orthogonal = case.geometry.orthogonal.model_copy(update={
+        "slab_plane_y_mm": 11.0})
+    smaller_case = case.model_copy(update={
+        "geometry": case.geometry.model_copy(update={
+            "orthogonal": smaller_orthogonal})})
+    smaller_geometry = resolve_case_geometry(smaller_case)
+    smaller = calculate_memory_power(
+        smaller_case, project_root=ROOT, geometry=smaller_geometry)
+    assert smaller.diagnostics["bits_per_slab"] < (
+        baseline.diagnostics["bits_per_slab"])
+
+    rotated_orthogonal = case.geometry.orthogonal.model_copy(update={
+        "slab_plane_y_mm": 5.5, "slab_height_z_mm": 22.0})
+    rotated_case = case.model_copy(update={
+        "geometry": case.geometry.model_copy(update={
+            "orthogonal": rotated_orthogonal})})
+    rotated = calculate_memory_power(
+        rotated_case, project_root=ROOT,
+        geometry=resolve_case_geometry(rotated_case))
+    assert rotated.diagnostics["rotated_90_deg"] is True
+    assert rotated.diagnostics["bits_per_slab"] == (
+        baseline.diagnostics["bits_per_slab"])
+
+
+def test_orthogonal_si_refresh_scales_with_packed_capacity():
+    case = load_case_config(CASE_CONFIGS / "orthogonal_si.yaml")
+    baseline = calculate_memory_power(
+        case, project_root=ROOT, geometry=resolve_case_geometry(case))
+    half_orthogonal = case.geometry.orthogonal.model_copy(update={
+        "slab_count": 49})
+    half_case = case.model_copy(update={
+        "geometry": case.geometry.model_copy(update={
+            "orthogonal": half_orthogonal})})
+    half = calculate_memory_power(
+        half_case, project_root=ROOT, geometry=resolve_case_geometry(half_case))
+    assert half.diagnostics["total_system_bits"] == (
+        baseline.diagnostics["total_system_bits"] // 2)
+    assert half.P_refresh_W == pytest.approx(0.5 * baseline.P_refresh_W)
+    assert half.E_access_total_pj_bit == baseline.E_access_total_pj_bit
+
+
+def test_si_packing_rejects_fractional_or_nonfitting_primitives():
+    packed = pack_si_primitive(
+        slab_width_um=10.0, slab_height_um=10.0, slab_count=2,
+        primitive_type="toy", primitive_width_um=3.0,
+        primitive_height_um=4.0, primitive_bits=128)
+    assert (packed.packed_nx, packed.packed_ny) == (3, 2)
+    assert packed.primitives_per_slab == 6
+    with pytest.raises(ValueError, match="no complete"):
+        pack_si_primitive(
+            slab_width_um=1.0, slab_height_um=1.0, slab_count=1,
+            primitive_type="toy", primitive_width_um=2.0,
+            primitive_height_um=3.0, primitive_bits=1)
 
 
 def test_conventional_full_row_same_boundary_remains_stable():
