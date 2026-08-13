@@ -5,7 +5,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import fields, replace
 import importlib.util
-import math
 import os
 from pathlib import Path
 import subprocess
@@ -252,23 +251,21 @@ class DreamRAMBackend:
             if row_policy is None:
                 raise ValueError("DreamRAM 1T1C path requires row_policy")
             utilization = row_policy.activated_row_data_utilization
-            resolved_float = utilization * atoms_per_page
-            n_read = int(round(resolved_float))
-            if not math.isclose(
-                    resolved_float, n_read, rel_tol=0.0, abs_tol=1e-12):
+            minimum_utilization = 1.0 / atoms_per_page
+            effective_rd_per_act = utilization * atoms_per_page
+            if effective_rd_per_act < 1.0:
                 raise ValueError(
-                    "activated_row_data_utilization must resolve exactly to an "
-                    f"integer RD count at granularity 1/{atoms_per_page}; "
-                    f"got {resolved_float} RD commands")
-            if n_read < 1 or n_read > atoms_per_page:
-                raise ValueError(
-                    "resolved_rd_per_act must be between 1 and "
-                    f"atoms_per_page={atoms_per_page}")
+                    "activated_row_data_utilization must be at least "
+                    f"1/atoms_per_page={minimum_utilization} for "
+                    f"atoms_per_page={atoms_per_page}; got {utilization}")
+            access_reuse = effective_rd_per_act
         else:
             if config.workload.control_address_reuse is None:
                 raise ValueError("M3D requires workload.control_address_reuse")
             utilization = None
-            n_read = config.workload.control_address_reuse
+            minimum_utilization = None
+            effective_rd_per_act = None
+            access_reuse = config.workload.control_address_reuse
 
         geometry_path, configured_x_mm, configured_y_mm = (
             load_memory_region_size(
@@ -335,7 +332,8 @@ class DreamRAMBackend:
                     data_voltage_product_V2=data_voltage_product,
                     data_pumps=data_pumps,
                     data_transition_factor=data_transition_factor,
-                    control_address_reuse=n_read,
+                    control_address_reuse=(
+                        config.workload.control_address_reuse),
                     atom_size_bits=atom_size,
                 )
                 miv_access_energy = miv_energy.miv_access_energy_pJ_per_bit
@@ -404,12 +402,12 @@ class DreamRAMBackend:
                     f"DreamRAM {command} decomposition does not close: "
                     f"{reconstructed} != {command_energy[command]}")
 
-        denominator = n_read * atom_size
+        denominator = access_reuse * atom_size
         access = {
             group: (
                 command_groups["pre"][group]
                 + command_groups["act"][group]
-                + n_read * command_groups["rd"][group]
+                + access_reuse * command_groups["rd"][group]
             ) / denominator
             for group in _GROUP_COMPONENTS
         }
@@ -427,7 +425,7 @@ class DreamRAMBackend:
                 * float(components[component])
                 + _COMMAND_TERMS["act"].get(component, 0.0)
                 * float(components[component])
-                + n_read * _COMMAND_TERMS["rd"].get(component, 0.0)
+                + access_reuse * _COMMAND_TERMS["rd"].get(component, 0.0)
                 * float(components[component])
             ) / denominator
             for component in _GROUP_COMPONENTS["memory_internal"]
@@ -440,7 +438,7 @@ class DreamRAMBackend:
             if m3d_subarray is not None
             else (
                 float(command_energy["pre"]) + float(command_energy["act"])
-                + n_read * float(command_energy["rd"])
+                + access_reuse * float(command_energy["rd"])
             ) / denominator)
         if abs(decomposition.total - reference) > 1e-12:
             raise RuntimeError("DreamRAM access-energy decomposition does not close")
@@ -467,7 +465,11 @@ class DreamRAMBackend:
                 "activated_row_data_utilization": utilization,
                 "activated_row_data_utilization_percent": (
                     100.0 * utilization),
-                "resolved_rd_per_act": n_read,
+                "minimum_activated_row_data_utilization": (
+                    minimum_utilization),
+                "minimum_activated_row_data_utilization_percent": (
+                    100.0 * minimum_utilization),
+                "effective_rd_per_act": effective_rd_per_act,
                 "dies_stacked": dies_stacked,
                 "cell_pitch_mapping": geometry_mapping,
                 "pitch_bl_um": float(tech.pitch_bl),
@@ -513,7 +515,7 @@ class DreamRAMBackend:
             })
         else:
             metadata.update({
-                "control_address_reuse": n_read,
+                "control_address_reuse": access_reuse,
                 "control_address_reuse_definition": (
                     "data accesses sharing one row/column address-selection "
                     "operation for MIV control-energy amortization"),
