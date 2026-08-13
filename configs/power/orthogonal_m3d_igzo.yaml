@@ -23,8 +23,14 @@ memory:
       write_11_pj_per_bit: 0.00024
       refresh_0_pj_per_bit: 0.00090
       refresh_1_pj_per_bit: 0.37000
+    size_scaling:
+      model: common_rc_linear_nrow
+      reference_n_rows: 512
+      reference_n_cols: 512
+      provenance: MODELING_CHOICE
     operation_energy_provenance:
       source: IEDM2026_HaotongZhu_V5
+      classification: PAPER_REPORTED
       accounting_level: SPICE_EXTRACTED_MAT_LOCAL_OPERATION_ENERGY
       sensing_included: true
       distributed_rc_included: true
@@ -68,7 +74,6 @@ architecture:
     local_mux:
       # Independent from the shared 2F column/write-selection band.
       footprint_height_f: 4.0
-      energy_pj_per_selected_bit: 0.010
       provenance: MODELING_CHOICE
     interconnect:
       # Temporary electrical values are first-order MODELING_CHOICE inputs.
@@ -97,15 +102,6 @@ architecture:
         resistance_ohm_per_um: 0.10
         voltage_V: 1.0
         activity_factor: 0.0
-        active_line_count: 1
-        provenance: MODELING_CHOICE
-      local_rbl:
-        metal_width_nm: 100.0
-        metal_thickness_nm: 100.0
-        capacitance_fF_per_um: 0.30
-        resistance_ohm_per_um: 0.10
-        voltage_V: 1.0
-        activity_factor: 0.5
         active_line_count: 1
         provenance: MODELING_CHOICE
     access:

@@ -154,6 +154,36 @@ def _background_power(
     return count * device.background_value_W
 
 
+def _scaled_m3d_read_energy(
+        config: MemoryPowerConfig, device: DeviceOperationEnergies,
+        ) -> tuple[float, dict[str, object]]:
+    scaling = config.memory.cell_model.size_scaling
+    topology = config.architecture.m3d_subarray
+    probability = config.workload.read_data
+    if scaling is None or topology is None or probability is None:
+        raise ValueError(
+            "M3D operation energy requires size_scaling, topology, and read_data")
+    resolved_rows = topology.subarray.n_rows
+    ratio = resolved_rows / scaling.reference_n_rows
+    scaled_read_0 = device.read_0 * ratio
+    scaled_read_1 = device.read_1 - device.read_0 + scaled_read_0
+    weighted = probability.p0 * scaled_read_0 + probability.p1 * scaled_read_1
+    return weighted, {
+        "zhu_reference_n_rows": scaling.reference_n_rows,
+        "zhu_reference_n_cols": scaling.reference_n_cols,
+        "zhu_reference_read_0_pj_per_bit": device.read_0,
+        "zhu_reference_read_1_pj_per_bit": device.read_1,
+        "zhu_reference_energy_provenance": "PAPER_REPORTED",
+        "zhu_size_scaling_model": scaling.model,
+        "zhu_size_scaling_provenance": scaling.provenance,
+        "zhu_resolved_n_rows": resolved_rows,
+        "zhu_nrow_scale_ratio": ratio,
+        "zhu_scaled_read_0_pj_per_bit": scaled_read_0,
+        "zhu_scaled_read_1_pj_per_bit": scaled_read_1,
+        "zhu_scaled_weighted_read_pj_per_bit": weighted,
+    }
+
+
 def calculate_memory_power(
         config: MemoryPowerConfig, *, project_root: Path) -> MemoryPowerResult:
     m3d_subarray = None
@@ -167,6 +197,7 @@ def calculate_memory_power(
     device = (
         OperationTableCellModel().calculate(config)
         if config.memory.cell_model.type == "operation_table" else None)
+    zhu_scaling_diagnostics: dict[str, object] = {}
 
     if m3d_subarray is None:
         (memory_internal, dreamram_decomposition,
@@ -177,24 +208,17 @@ def calculate_memory_power(
             raise MissingCellReplacementError(
                 "M3D embedded-peripheral topology requires an operation-table "
                 "cell primitive")
-        probability = config.workload.read_data
-        if probability is None:
-            raise ValueError(
-                "M3D operation-table read requires workload.read_data")
-        mat_local = device.weighted_read(
-            p0=probability.p0, p1=probability.p1)
+        mat_local, zhu_scaling_diagnostics = _scaled_m3d_read_energy(
+            config, device)
         memory_internal = (
             mat_local
             + m3d_subarray.global_control_routing_energy_pj_per_bit
-            + m3d_subarray.local_read_routing_energy_pj_per_bit
         )
         native_components = {}
         replacement_components = {
-            "zhu_mat_local_operation": mat_local,
+            "zhu_scaled_local_operation": mat_local,
             "tang_global_control_routing": (
                 m3d_subarray.global_control_routing_energy_pj_per_bit),
-            "tang_local_read_routing": (
-                m3d_subarray.local_read_routing_energy_pj_per_bit),
         }
         if backend.read_default is None:
             raise ValueError("MIV reference backend did not provide energy")
@@ -267,6 +291,7 @@ def calculate_memory_power(
             **backend.metadata,
             **({} if m3d_subarray is None else m3d_subarray.as_dict()),
             **({} if feol_route_result is None else feol_route_result.as_dict()),
+            **({} if m3d_subarray is None else zhu_scaling_diagnostics),
             "cell_model": config.memory.cell_model.type,
             "operation_energy_provenance": (
                 None

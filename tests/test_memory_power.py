@@ -130,6 +130,7 @@ def test_igzo_table_i_operation_values_and_provenance_are_frozen():
     })
     assert provenance is not None
     assert provenance.source == "IEDM2026_HaotongZhu_V5"
+    assert provenance.classification == "PAPER_REPORTED"
     assert provenance.accounting_level == (
         "SPICE_EXTRACTED_MAT_LOCAL_OPERATION_ENERGY")
     assert provenance.sensing_included is True
@@ -210,8 +211,9 @@ def test_nrow_ncol_change_topology_and_routing():
     assert changed.subarray_height_um != pytest.approx(
         baseline.subarray_height_um)
     assert changed.cluster_width_um != pytest.approx(baseline.cluster_width_um)
-    assert changed.local_rbl_energy_pj_per_bit != pytest.approx(
-        baseline.local_rbl_energy_pj_per_bit)
+    assert changed.local_rbl_route_length_um != pytest.approx(
+        baseline.local_rbl_route_length_um)
+    assert changed.local_rbl_energy_pj_per_bit == 0.0
 
 
 def test_shared_bands_apply_once_per_cluster_and_mux_per_subarray():
@@ -614,10 +616,9 @@ def test_m3d_internal_uses_zhu_tang_and_no_dreamram_hierarchy():
     replacement = result.diagnostics["replacement_components_pj_bit"]
     assert result.E_memory_internal_pj_bit == pytest.approx(
         operation
-        + replacement["tang_global_control_routing"]
-        + replacement["tang_local_read_routing"], abs=1e-15)
+        + replacement["tang_global_control_routing"], abs=1e-15)
     assert result.diagnostics["native_components_pj_bit"] == {}
-    assert replacement["zhu_mat_local_operation"] == pytest.approx(operation)
+    assert replacement["zhu_scaled_local_operation"] == pytest.approx(operation)
     assert result.diagnostics["dreamram_hierarchy_included"] is False
     assert result.diagnostics["global_control_scope"] == "SUBARRAY_CLUSTER"
     assert result.diagnostics["dreamram_planar_organization_used"] is False
@@ -827,17 +828,15 @@ def test_length_scaled_miv_energy_resolves_and_access_closes():
 
     result = calculate_memory_power(config, project_root=ROOT)
     mat_local = result.diagnostics["replacement_components_pj_bit"][
-        "zhu_mat_local_operation"]
+        "zhu_scaled_local_operation"]
     routing = result.diagnostics["replacement_components_pj_bit"][
         "tang_global_control_routing"]
-    local = result.diagnostics["replacement_components_pj_bit"][
-        "tang_local_read_routing"]
     assert mat_local == pytest.approx(0.1843)
     assert result.diagnostics["native_components_pj_bit"] == {}
     assert result.E_base_route_pj_bit == 0.0
     assert result.E_interface_pj_bit == pytest.approx(0.5)
     assert result.E_access_total_pj_bit == pytest.approx(
-        mat_local + routing + local + result.E_vertical_pj_bit
+        mat_local + routing + result.E_vertical_pj_bit
         + result.E_feol_route_pj_bit + result.E_interface_pj_bit)
 
 
@@ -969,3 +968,96 @@ def test_feol_boundary_is_additive_and_frozen_terms_are_unchanged():
     assert conventional.E_feol_route_pj_bit == 0.0
     assert conventional.E_vertical_pj_bit == pytest.approx(0.22048568115234377)
     assert conventional.E_access_total_pj_bit == 0.9782367130708566
+
+
+def _with_m3d_subarray_size(config, *, n_rows=None, n_cols=None):
+    core = config.architecture.m3d_subarray.subarray
+    update = {}
+    if n_rows is not None:
+        update["n_rows"] = n_rows
+    if n_cols is not None:
+        update["n_cols"] = n_cols
+    resized_core = core.model_copy(update=update)
+    topology = config.architecture.m3d_subarray.model_copy(
+        update={"subarray": resized_core})
+    architecture = config.architecture.model_copy(
+        update={"m3d_subarray": topology})
+    return config.model_copy(update={"architecture": architecture})
+
+
+def test_zhu_nrow_scaling_preserves_reference_and_formula():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    results = {
+        rows: calculate_memory_power(
+            _with_m3d_subarray_size(config, n_rows=rows), project_root=ROOT)
+        for rows in (256, 512, 1024)
+    }
+    reference = results[512]
+    assert reference.diagnostics["zhu_reference_n_rows"] == 512
+    assert reference.diagnostics["zhu_reference_n_cols"] == 512
+    assert reference.diagnostics["zhu_reference_read_0_pj_per_bit"] == 0.00060
+    assert reference.diagnostics["zhu_reference_read_1_pj_per_bit"] == 0.36800
+    assert reference.diagnostics["zhu_reference_energy_provenance"] == (
+        "PAPER_REPORTED")
+    assert reference.diagnostics["zhu_size_scaling_model"] == (
+        "common_rc_linear_nrow")
+    assert reference.diagnostics["zhu_size_scaling_provenance"] == (
+        "MODELING_CHOICE")
+    assert reference.diagnostics["zhu_scaled_weighted_read_pj_per_bit"] == (
+        pytest.approx(0.1843, abs=0.0))
+    assert (
+        results[256].diagnostics["zhu_scaled_weighted_read_pj_per_bit"]
+        < reference.diagnostics["zhu_scaled_weighted_read_pj_per_bit"]
+        < results[1024].diagnostics["zhu_scaled_weighted_read_pj_per_bit"])
+    for rows, result in results.items():
+        ratio = rows / 512
+        scaled_read_0 = 0.00060 * ratio
+        scaled_read_1 = (0.36800 - 0.00060) + scaled_read_0
+        assert result.diagnostics["zhu_nrow_scale_ratio"] == pytest.approx(ratio)
+        assert result.diagnostics["zhu_scaled_read_0_pj_per_bit"] == (
+            pytest.approx(scaled_read_0))
+        assert result.diagnostics["zhu_scaled_read_1_pj_per_bit"] == (
+            pytest.approx(scaled_read_1))
+        assert result.diagnostics["zhu_scaled_weighted_read_pj_per_bit"] == (
+            pytest.approx(0.5 * scaled_read_0 + 0.5 * scaled_read_1))
+
+
+def test_zhu_v1_scaling_ignores_ncol_and_local_energy_is_zero():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    baseline = calculate_memory_power(config, project_root=ROOT)
+    wider = calculate_memory_power(
+        _with_m3d_subarray_size(config, n_cols=1024), project_root=ROOT)
+    assert wider.diagnostics["zhu_scaled_weighted_read_pj_per_bit"] == (
+        pytest.approx(
+            baseline.diagnostics["zhu_scaled_weighted_read_pj_per_bit"],
+            abs=0.0))
+    assert baseline.diagnostics["local_mux_footprint_height_um"] > 0.0
+    assert baseline.diagnostics["local_mux_geometry_modeled"] is True
+    assert baseline.diagnostics["local_mux_energy_modeled"] is False
+    assert baseline.diagnostics["local_mux_energy_status"] == (
+        "NOT_SEPARATELY_MODELED")
+    assert baseline.diagnostics["local_rbl_separate_energy_modeled"] is False
+    assert baseline.diagnostics["local_rbl_energy_pj_per_bit"] == 0.0
+    assert baseline.diagnostics["local_mux_energy_pj_per_bit"] == 0.0
+    assert baseline.diagnostics["local_read_routing_energy_pj_per_bit"] == 0.0
+    assert "tang_local_read_routing" not in (
+        baseline.diagnostics["replacement_components_pj_bit"])
+    assert baseline.E_memory_internal_pj_bit == pytest.approx(
+        baseline.diagnostics["zhu_scaled_weighted_read_pj_per_bit"]
+        + baseline.diagnostics["global_control_routing_energy_pj_per_bit"])
+
+
+def test_local_energy_removal_preserves_frozen_transports_and_geometry():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    result = calculate_memory_power(config, project_root=ROOT)
+    topology = _m3d_subarray(config)
+    assert result.diagnostics["cluster_width_um"] == pytest.approx(
+        topology.cluster_width_um, abs=0.0)
+    assert result.diagnostics["cluster_height_um"] == pytest.approx(
+        topology.cluster_height_um, abs=0.0)
+    assert result.diagnostics["global_control_routing_energy_pj_per_bit"] == (
+        pytest.approx(topology.global_control_routing_energy_pj_per_bit, abs=0.0))
+    assert result.E_vertical_pj_bit == pytest.approx(
+        0.002445862111816407, abs=0.0)
+    assert result.E_interface_pj_bit == pytest.approx(0.5, abs=0.0)
+    assert result.diagnostics["miv_fixed_load_pF"] == pytest.approx(0.006)

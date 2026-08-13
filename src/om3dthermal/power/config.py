@@ -56,6 +56,7 @@ class OperationTable(StrictModel):
 
 class OperationEnergyProvenance(StrictModel):
     source: Literal["IEDM2026_HaotongZhu_V5"]
+    classification: Literal["PAPER_REPORTED"]
     accounting_level: Literal["SPICE_EXTRACTED_MAT_LOCAL_OPERATION_ENERGY"]
     sensing_included: Literal[True]
     distributed_rc_included: Literal[True]
@@ -113,7 +114,6 @@ class RoutingElectricalInput(StrictModel):
 
 class LocalMuxInput(StrictModel):
     footprint_height_f: float = Field(ge=0.0)
-    energy_pj_per_selected_bit: float = Field(ge=0.0)
     provenance: Literal["MODELING_CHOICE"]
 
 
@@ -168,7 +168,6 @@ class M3DInterconnectInput(StrictModel):
     global_rwl: RoutingElectricalInput
     global_wwl: RoutingElectricalInput
     global_wbl: RoutingElectricalInput
-    local_rbl: RoutingElectricalInput
 
 
 class M3DAccessInput(StrictModel):
@@ -229,6 +228,13 @@ class CellReplacementInput(StrictModel):
         return self
 
 
+class OperationSizeScalingInput(StrictModel):
+    model: Literal["common_rc_linear_nrow"]
+    reference_n_rows: int = Field(gt=0)
+    reference_n_cols: int = Field(gt=0)
+    provenance: Literal["MODELING_CHOICE"]
+
+
 class CellModelInput(StrictModel):
     type: Literal[
         "dreamram_native", "component_replacement", "operation_table"
@@ -237,6 +243,7 @@ class CellModelInput(StrictModel):
     geometry: CellGeometryInput | None = None
     replacement: CellReplacementInput | None = None
     operations: OperationTable | None = None
+    size_scaling: OperationSizeScalingInput | None = None
     operation_energy_provenance: OperationEnergyProvenance | None = None
     background: BackgroundInput | None = None
     retention_s: float | None = Field(default=None, gt=0.0)
@@ -259,8 +266,6 @@ class CellModelInput(StrictModel):
                     "validated operation_table replacement must use "
                     "energy_source: operation_table")
         return self
-
-
 class MemoryInput(StrictModel):
     technology: str
     backend: Literal["dreamram"]

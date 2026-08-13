@@ -100,6 +100,10 @@ class M3DSubarrayResult:
     global_peripheral_provenance: str
     interconnect_electrical: dict[str, dict[str, object]]
     local_mux_provenance: str
+    local_mux_geometry_modeled: bool
+    local_mux_energy_modeled: bool
+    local_mux_energy_status: str
+    local_rbl_separate_energy_modeled: bool
     dreamram_hierarchy_included: bool
 
     def as_dict(self) -> dict[str, object]:
@@ -238,17 +242,16 @@ def calculate_m3d_subarray(
     wbl_raw = active_clusters * wbl_per_cluster
 
     local_rbl_length = core_height
-    local_rbl_raw = _line_energy_pJ(
-        spec.interconnect.local_rbl,
-        length_um=local_rbl_length,
-        instance_multiplier=access.accessed_subarrays_per_access,
-    )
-    mux_raw = spec.local_mux.energy_pj_per_selected_bit * delivered_bits
+    # Zhu's complete local-read primitive is the sole v1 local dynamic-energy
+    # boundary. Retain physical Local RBL/MUX geometry, but do not add another
+    # standalone local energy term.
+    local_rbl_raw = 0.0
+    mux_raw = 0.0
     rwl = rwl_raw / delivered_bits
     wwl = wwl_raw / delivered_bits
     wbl = wbl_raw / delivered_bits
-    local_rbl = local_rbl_raw / delivered_bits
-    mux = mux_raw / delivered_bits
+    local_rbl = 0.0
+    mux = 0.0
     global_energy = rwl + wwl + wbl
     local_energy = local_rbl + mux
     cluster_spacing_width = (cluster_count_x - 1) * cluster_gap_x
@@ -365,8 +368,11 @@ def calculate_m3d_subarray(
             "global_rwl": spec.interconnect.global_rwl.model_dump(),
             "global_wwl": spec.interconnect.global_wwl.model_dump(),
             "global_wbl": spec.interconnect.global_wbl.model_dump(),
-            "local_rbl": spec.interconnect.local_rbl.model_dump(),
         },
         local_mux_provenance=spec.local_mux.provenance,
+        local_mux_geometry_modeled=True,
+        local_mux_energy_modeled=False,
+        local_mux_energy_status="NOT_SEPARATELY_MODELED",
+        local_rbl_separate_energy_modeled=False,
         dreamram_hierarchy_included=False,
     )
