@@ -245,7 +245,7 @@ class DreamRAMBackend:
             )
             miv_metadata = topology.as_dict()
             miv_metadata["miv_planar_footprint_basis"] = (
-                "tang_embedded_peripheral_subarray")
+                "tang_subarray_cluster")
             miv_metadata["m3d_layers_source"] = (
                 "geometry_source.m3d_beol.bitcell_layers")
             miv_metadata["layer_pitch_source"] = (

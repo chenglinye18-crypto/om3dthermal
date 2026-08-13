@@ -132,7 +132,13 @@ class SubarrayGridInput(StrictModel):
 class SubarrayCoreInput(StrictModel):
     n_rows: int = Field(gt=0)
     n_cols: int = Field(gt=0)
+
+
+class SubarrayClusterInput(StrictModel):
+    subarrays_x: int = Field(gt=0)
+    subarrays_y: int = Field(gt=0)
     grid: SubarrayGridInput = Field(default_factory=SubarrayGridInput)
+    provenance: Literal["MODELING_CHOICE"]
 
 
 class GlobalPeripheralInput(StrictModel):
@@ -159,6 +165,7 @@ class M3DInterconnectInput(StrictModel):
 
 class M3DAccessInput(StrictModel):
     accessed_subarrays_per_access: int = Field(gt=0)
+    accessed_clusters_per_access: int = Field(gt=0)
     selected_bits_per_subarray: int = Field(gt=0)
     provenance: Literal["MODELING_CHOICE"]
 
@@ -166,6 +173,7 @@ class M3DAccessInput(StrictModel):
 class M3DSubarrayInput(StrictModel):
     type: Literal["tang_embedded_subarray"]
     subarray: SubarrayCoreInput
+    subarray_cluster: SubarrayClusterInput
     global_peripheral: GlobalPeripheralInput
     local_mux: LocalMuxInput
     interconnect: M3DInterconnectInput

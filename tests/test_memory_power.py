@@ -1,5 +1,6 @@
 """Targeted tests for the config-driven Memory Power v0 framework."""
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -139,39 +140,59 @@ def test_igzo_table_i_operation_values_and_provenance_are_frozen():
     assert replacement.component_energy_pj_per_bit == {}
 
 
-def test_m3d_auto_floorplan_closes_and_explicit_override_is_supported():
+def test_subarray_cluster_auto_floorplan_and_explicit_override():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     auto = _m3d_subarray(config)
-    assert auto.nx == int(auto.usable_width_um // auto.subarray_width_um)
-    assert auto.ny == int(auto.usable_height_um // auto.subarray_height_um)
-    assert auto.placed_width_um <= auto.usable_width_um
-    assert auto.placed_height_um <= auto.usable_height_um
-    assert auto.nx_source == "auto_floor"
-    assert auto.ny_source == "auto_floor"
+    assert auto.cluster_count_x == int(auto.slab_x_um // auto.cluster_width_um)
+    assert auto.cluster_count_y == int(
+        auto.slab_y_um // auto.cluster_height_um)
+    assert auto.placed_width_um <= auto.slab_x_um
+    assert auto.placed_height_um <= auto.slab_y_um
+    assert auto.cluster_grid_x_source == "auto_floor"
+    assert auto.cluster_grid_y_source == "auto_floor"
 
-    core = config.architecture.m3d_subarray.subarray
-    grid = core.grid.model_copy(
-        update={"nx": auto.nx - 1, "ny": auto.ny - 1})
-    explicit_core = core.model_copy(update={"grid": grid})
+    cluster = config.architecture.m3d_subarray.subarray_cluster
+    grid = cluster.grid.model_copy(update={
+        "nx": auto.cluster_count_x - 1,
+        "ny": auto.cluster_count_y - 1,
+    })
+    explicit_cluster = cluster.model_copy(update={"grid": grid})
     explicit_spec = config.architecture.m3d_subarray.model_copy(
-        update={"subarray": explicit_core})
+        update={"subarray_cluster": explicit_cluster})
     geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
     explicit = calculate_m3d_subarray(explicit_spec, geometry)
-    assert explicit.nx == auto.nx - 1
-    assert explicit.ny == auto.ny - 1
-    assert explicit.nx_source == "explicit_override"
-    assert explicit.ny_source == "explicit_override"
+    assert explicit.cluster_count_x == auto.cluster_count_x - 1
+    assert explicit.cluster_count_y == auto.cluster_count_y - 1
+    assert explicit.cluster_grid_x_source == "explicit_override"
+    assert explicit.cluster_grid_y_source == "explicit_override"
+
+    invalid_grid = cluster.grid.model_copy(
+        update={"nx": auto.cluster_count_x + 1})
+    invalid_cluster = cluster.model_copy(update={"grid": invalid_grid})
+    invalid_spec = config.architecture.m3d_subarray.model_copy(
+        update={"subarray_cluster": invalid_cluster})
+    with pytest.raises(ValueError, match="exceeds fit limit"):
+        calculate_m3d_subarray(invalid_spec, geometry)
 
 
 def test_m3d_subarray_schema_defaults_counts_to_auto():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    raw = config.architecture.m3d_subarray.subarray.grid.model_dump()
+    raw = config.architecture.m3d_subarray.subarray_cluster.grid.model_dump()
     raw.pop("nx")
     raw.pop("ny")
     validated = type(
-        config.architecture.m3d_subarray.subarray.grid).model_validate(raw)
+        config.architecture.m3d_subarray.subarray_cluster.grid).model_validate(raw)
     assert validated.nx == "auto"
     assert validated.ny == "auto"
+
+
+def test_subarray_cluster_config_rejects_illegal_dimensions():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    raw = config.model_dump()
+    raw["architecture"]["m3d_subarray"]["subarray_cluster"][
+        "subarrays_x"] = 0
+    with pytest.raises(ValueError, match="greater than 0"):
+        MemoryPowerConfig.model_validate(raw)
 
 
 def test_nrow_ncol_change_topology_and_routing():
@@ -187,36 +208,46 @@ def test_nrow_ncol_change_topology_and_routing():
         baseline.subarray_width_um)
     assert changed.subarray_height_um != pytest.approx(
         baseline.subarray_height_um)
-    assert (changed.nx, changed.ny) != (baseline.nx, baseline.ny)
+    assert changed.cluster_width_um != pytest.approx(baseline.cluster_width_um)
     assert changed.local_rbl_energy_pj_per_bit != pytest.approx(
         baseline.local_rbl_energy_pj_per_bit)
 
 
-def test_shared_bands_apply_once_and_mux_is_local_per_subarray():
+def test_shared_bands_apply_once_per_cluster_and_mux_per_subarray():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     topology = _m3d_subarray(config)
     assert topology.subarray_width_um == pytest.approx(topology.core_width_um)
     assert topology.subarray_height_um == pytest.approx(
         topology.core_height_um + topology.local_mux_footprint_height_um)
-    assert topology.usable_width_um == pytest.approx(
-        topology.slab_x_um - topology.shared_row_selection_band_um)
-    assert topology.usable_height_um == pytest.approx(
-        topology.slab_y_um
-        - topology.shared_column_write_selection_band_um)
-    assert topology.global_peripheral_instance_count == 1
+    assert topology.cluster_width_um == pytest.approx(
+        topology.cluster_array_width_um
+        + topology.shared_row_selection_band_um)
+    assert topology.cluster_height_um == pytest.approx(
+        topology.cluster_array_height_um
+        + topology.shared_column_write_selection_band_um)
+    assert topology.cluster_subarrays_x == 8
+    assert topology.cluster_subarrays_y == 8
+    assert topology.subarrays_per_cluster == 64
+    assert topology.global_rwl_route_length_um_per_cluster < 1000.0
+    assert topology.global_wwl_route_length_um_per_cluster < 1000.0
+    assert topology.global_wbl_route_length_um_per_cluster < 1000.0
+    assert topology.global_peripheral_instances_per_layer == (
+        topology.clusters_per_layer)
     assert topology.local_mux_instances_per_layer == (
         topology.subarrays_per_layer)
 
 
-def test_global_energy_not_multiplied_by_grid_and_local_energy_tracks_access():
+def test_global_energy_uses_active_clusters_and_local_energy_uses_subarrays():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     baseline = _m3d_subarray(config)
-    core = config.architecture.m3d_subarray.subarray
-    smaller_grid = core.grid.model_copy(
-        update={"nx": baseline.nx - 1, "ny": baseline.ny})
-    smaller_core = core.model_copy(update={"grid": smaller_grid})
+    cluster = config.architecture.m3d_subarray.subarray_cluster
+    smaller_grid = cluster.grid.model_copy(update={
+        "nx": baseline.cluster_count_x - 1,
+        "ny": baseline.cluster_count_y,
+    })
+    smaller_cluster = cluster.model_copy(update={"grid": smaller_grid})
     smaller_spec = config.architecture.m3d_subarray.model_copy(
-        update={"subarray": smaller_core})
+        update={"subarray_cluster": smaller_cluster})
     geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
     smaller = calculate_m3d_subarray(smaller_spec, geometry)
     # Grid affects physical shared-route length, but energy is not multiplied
@@ -226,14 +257,19 @@ def test_global_energy_not_multiplied_by_grid_and_local_energy_tracks_access():
         * smaller.interconnect_electrical["global_rwl"]["activity_factor"]
         * smaller.interconnect_electrical["global_rwl"][
             "capacitance_fF_per_um"]
-        * smaller.global_rwl_route_length_um
+        * smaller.global_rwl_route_length_um_per_cluster
         * smaller.interconnect_electrical["global_rwl"]["voltage_V"] ** 2
-        * 1e-3)
-    assert smaller.global_rwl_raw_energy_pJ_per_access == pytest.approx(
-        expected_raw)
+        * 1e-3
+        * smaller.accessed_clusters_per_access)
+    assert smaller.global_rwl_raw_energy_pJ_per_access == pytest.approx(expected_raw)
+    assert smaller.global_control_routing_energy_pj_per_bit == pytest.approx(
+        baseline.global_control_routing_energy_pj_per_bit)
 
     doubled_access = config.architecture.m3d_subarray.access.model_copy(
-        update={"accessed_subarrays_per_access": 512})
+        update={
+            "accessed_subarrays_per_access": 512,
+            "accessed_clusters_per_access": 8,
+        })
     access_spec = config.architecture.m3d_subarray.model_copy(
         update={"access": doubled_access})
     doubled = calculate_m3d_subarray(access_spec, geometry)
@@ -242,7 +278,58 @@ def test_global_energy_not_multiplied_by_grid_and_local_energy_tracks_access():
     assert doubled.local_mux_raw_energy_pJ_per_access == pytest.approx(
         2 * baseline.local_mux_raw_energy_pJ_per_access)
     assert doubled.global_rwl_raw_energy_pJ_per_access == pytest.approx(
-        baseline.global_rwl_raw_energy_pJ_per_access)
+        2 * baseline.global_rwl_raw_energy_pJ_per_access)
+
+    five_clusters = config.architecture.m3d_subarray.access.model_copy(
+        update={"accessed_clusters_per_access": 5})
+    five_spec = config.architecture.m3d_subarray.model_copy(
+        update={"access": five_clusters})
+    five = calculate_m3d_subarray(five_spec, geometry)
+    assert five.global_rwl_raw_energy_pJ_per_access == pytest.approx(
+        1.25 * baseline.global_rwl_raw_energy_pJ_per_access)
+
+
+def test_cluster_geometry_controls_global_route_not_slab_size():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
+    baseline = _m3d_subarray(config)
+    cluster = config.architecture.m3d_subarray.subarray_cluster.model_copy(
+        update={"subarrays_x": 4, "subarrays_y": 4})
+    access = config.architecture.m3d_subarray.access.model_copy(
+        update={"accessed_clusters_per_access": 16})
+    changed_spec = config.architecture.m3d_subarray.model_copy(
+        update={"subarray_cluster": cluster, "access": access})
+    changed = calculate_m3d_subarray(changed_spec, geometry)
+    assert changed.global_rwl_route_length_um_per_cluster == pytest.approx(
+        0.5 * baseline.global_rwl_route_length_um_per_cluster)
+    assert changed.global_wbl_route_length_um_per_cluster == pytest.approx(
+        0.5 * baseline.global_wbl_route_length_um_per_cluster)
+    assert changed.global_control_routing_energy_pj_per_bit != pytest.approx(
+        baseline.global_control_routing_energy_pj_per_bit)
+
+    larger_slab = replace(geometry, slab_x_um=30000.0, slab_y_um=7000.0)
+    larger = calculate_m3d_subarray(
+        config.architecture.m3d_subarray, larger_slab)
+    assert larger.clusters_per_layer > baseline.clusters_per_layer
+    assert larger.global_rwl_route_length_um_per_cluster == pytest.approx(
+        baseline.global_rwl_route_length_um_per_cluster)
+    assert larger.global_wbl_route_length_um_per_cluster == pytest.approx(
+        baseline.global_wbl_route_length_um_per_cluster)
+    assert larger.global_control_routing_energy_pj_per_bit == pytest.approx(
+        baseline.global_control_routing_energy_pj_per_bit)
+
+
+def test_impossible_cluster_access_fails_loudly():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
+    access = config.architecture.m3d_subarray.access.model_copy(update={
+        "accessed_clusters_per_access": 4,
+        "accessed_subarrays_per_access": 257,
+    })
+    spec = config.architecture.m3d_subarray.model_copy(
+        update={"access": access})
+    with pytest.raises(ValueError, match="capacity of accessed clusters"):
+        calculate_m3d_subarray(spec, geometry)
 
 
 def test_existing_geometry_sources_are_resolved_for_all_power_configs():
@@ -433,6 +520,7 @@ def test_m3d_internal_uses_zhu_tang_and_no_dreamram_hierarchy():
     assert result.diagnostics["native_components_pj_bit"] == {}
     assert replacement["zhu_mat_local_operation"] == pytest.approx(operation)
     assert result.diagnostics["dreamram_hierarchy_included"] is False
+    assert result.diagnostics["global_control_scope"] == "SUBARRAY_CLUSTER"
     assert result.diagnostics["dreamram_planar_organization_used"] is False
     assert result.diagnostics["dreamram_internal_components_used"] is False
     assert not ({"mat_x_um", "bank_x_um", "wire_lengths_um"}
@@ -547,7 +635,7 @@ def test_miv_count_uses_dreamram_tsv_equivalent_serialization():
     assert metadata["miv_serialization_source"] == (
         "DREAMRAM_TSV_EQUIVALENT")
     assert metadata["active_data_miv_count"] == 64
-    assert metadata["row_miv_count"] == 16
+    assert metadata["row_miv_count"] == 15
     assert metadata["col_miv_count"] == 18
     resolved = build_miv_topology(
         m3d_layers=8,
@@ -576,7 +664,7 @@ def test_m3d_path_excludes_hbm_vertical_base_dq_and_tsv_area():
     assert metadata["dq_included"] is False
     assert metadata["miv_dedicated_koz_area_modeled"] is False
     assert metadata["miv_planar_footprint_basis"] == (
-        "tang_embedded_peripheral_subarray")
+        "tang_subarray_cluster")
     assert set(metadata["excluded_hbm_components"]) == {
         "row-tsv", "col-tsv", "tsv",
         "row-base", "col-base", "base",

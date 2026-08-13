@@ -48,7 +48,11 @@ architecture:
     subarray:
       n_rows: 512
       n_cols: 512
+    subarray_cluster:
+      subarrays_x: 8
+      subarrays_y: 8
       grid: {nx: auto, ny: auto}
+      provenance: MODELING_CHOICE
     global_peripheral:
       row_selection_band_f: 4.0
       column_write_selection_band_f: 2.0
@@ -100,6 +104,7 @@ architecture:
         provenance: MODELING_CHOICE
     access:
       accessed_subarrays_per_access: 256
+      accessed_clusters_per_access: 4
       selected_bits_per_subarray: 1
       provenance: MODELING_CHOICE
     topology_provenance: MODELING_CHOICE
