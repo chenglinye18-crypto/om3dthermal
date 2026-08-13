@@ -12,8 +12,12 @@ from om3dthermal.power.cell_model import (
     ONE_T_ONE_C_SPECIFIC,
     REUSABLE_STRUCTURE,
 )
-from om3dthermal.power.config import MemoryPowerConfig, RowPolicy, TransportInput
-from om3dthermal.power.geometry import evaluate_geometry_fit
+from om3dthermal.power.config import MemoryPowerConfig, RowPolicy
+from om3dthermal.power.geometry import (
+    evaluate_geometry_fit,
+    load_m3d_geometry,
+)
+from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
 from om3dthermal.power.miv import build_miv_topology
 
 
@@ -41,10 +45,16 @@ def _with_component_replacement(
     return MemoryPowerConfig.model_validate(raw)
 
 
-def _without_miv(config):
-    architecture = config.architecture.model_copy(update={
-        "vertical": TransportInput(type="none", source="none")})
-    return config.model_copy(update={"architecture": architecture})
+def _m3d_subarray(config):
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
+    assert config.architecture.m3d_subarray is not None
+    return calculate_m3d_subarray(
+        config.architecture.m3d_subarray, geometry)
+
+
+def _m3d_backend(config):
+    return DreamRAMBackend(ROOT).calculate(
+        config, m3d_subarray=_m3d_subarray(config))
 
 
 @pytest.fixture(scope="module")
@@ -62,37 +72,20 @@ def test_all_four_configs_parse():
         load_power_config(POWER_CONFIGS / name)
 
 
-def test_igzo_cell_geometry_parses_and_closes():
+def test_igzo_cell_geometry_comes_only_from_thermal_geometry_source():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    geometry = config.memory.cell_model.geometry
-    assert geometry is not None
+    assert config.memory.cell_model.geometry is None
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
     assert geometry.cell_area_um2 == pytest.approx(0.023)
-    assert geometry.pitch_x_um == pytest.approx(0.15166)
-    assert geometry.pitch_y_um == pytest.approx(0.15166)
-    assert geometry.aspect_ratio == pytest.approx(1.0)
-    assert geometry.pitch_x_um * geometry.pitch_y_um == pytest.approx(
-        geometry.cell_area_um2, rel=1e-4)
-    assert geometry.pitch_x_um / geometry.pitch_y_um == pytest.approx(
-        geometry.aspect_ratio, rel=1e-9)
-    assert geometry.provenance.model_dump() == {
-        "cell_area_um2": "PAPER_REPORTED",
-        "pitch_x_um": "DERIVED_FROM_REFERENCE",
-        "pitch_y_um": "DERIVED_FROM_REFERENCE",
-        "aspect_ratio": "MODELING_CHOICE",
-    }
-
-
-@pytest.mark.parametrize("mutation, message", [
-    ({"pitch_x_um": 0.0}, "greater than 0"),
-    ({"pitch_x_um": 0.2}, "cell geometry area does not close"),
-    ({"aspect_ratio": 2.0}, "cell geometry aspect ratio does not close"),
-])
-def test_invalid_igzo_cell_geometry_fails_loudly(mutation, message):
-    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    raw = config.model_dump()
-    raw["memory"]["cell_model"]["geometry"].update(mutation)
-    with pytest.raises(ValueError, match=message):
-        MemoryPowerConfig.model_validate(raw)
+    topology = _m3d_subarray(config)
+    expected_F = 0.5 * 0.023 ** 0.5
+    assert topology.F_um == pytest.approx(expected_F)
+    assert topology.cell_pitch_x_um == pytest.approx(2 * expected_F)
+    assert topology.cell_pitch_y_um == pytest.approx(2 * expected_F)
+    assert topology.shared_row_selection_band_um == pytest.approx(
+        4 * expected_F)
+    assert topology.shared_column_write_selection_band_um == pytest.approx(
+        2 * expected_F)
 
 
 def test_igzo_geometry_does_not_change_operation_energy_or_hold():
@@ -142,35 +135,114 @@ def test_igzo_table_i_operation_values_and_provenance_are_frozen():
     assert replacement is not None
     assert replacement.mapping_status == "validated"
     assert replacement.energy_source == "operation_table"
-    assert replacement.components == ("bl-act", "bl-pre")
+    assert replacement.components == ()
     assert replacement.component_energy_pj_per_bit == {}
 
 
-def test_igzo_pitch_maps_to_independent_dreamram_tech():
+def test_m3d_auto_floorplan_closes_and_explicit_override_is_supported():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    result = DreamRAMBackend(ROOT).calculate(config)
-    metadata = result.metadata
-    assert metadata["cell_pitch_mapping"] == "pitch_x_to_bl__pitch_y_to_wl"
-    assert metadata["pitch_bl_um"] == pytest.approx(0.15166)
-    assert metadata["pitch_wl_um"] == pytest.approx(0.15166)
-    assert metadata["pitch_ldl_um"] == pytest.approx(
-        metadata["pitch_wl_um"] * metadata["pitch_ldl_to_wl_min"])
-    assert metadata["pitch_mdl_um"] == pytest.approx(
-        metadata["pitch_bl_um"] * metadata["pitch_mdl_to_bl_min"])
+    auto = _m3d_subarray(config)
+    assert auto.nx == int(auto.usable_width_um // auto.subarray_width_um)
+    assert auto.ny == int(auto.usable_height_um // auto.subarray_height_um)
+    assert auto.placed_width_um <= auto.usable_width_um
+    assert auto.placed_height_um <= auto.usable_height_um
+    assert auto.nx_source == "auto_floor"
+    assert auto.ny_source == "auto_floor"
+
+    core = config.architecture.m3d_subarray.subarray
+    grid = core.grid.model_copy(
+        update={"nx": auto.nx - 1, "ny": auto.ny - 1})
+    explicit_core = core.model_copy(update={"grid": grid})
+    explicit_spec = config.architecture.m3d_subarray.model_copy(
+        update={"subarray": explicit_core})
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
+    explicit = calculate_m3d_subarray(explicit_spec, geometry)
+    assert explicit.nx == auto.nx - 1
+    assert explicit.ny == auto.ny - 1
+    assert explicit.nx_source == "explicit_override"
+    assert explicit.ny_source == "explicit_override"
 
 
-def test_igzo_pitch_changes_mat_bank_and_reusable_energy(conventional):
-    native = DreamRAMBackend(ROOT).calculate(conventional)
-    igzo = DreamRAMBackend(ROOT).calculate(
-        load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml"))
-    for dimension in ("mat_x_um", "mat_y_um", "bank_x_um", "bank_y_um"):
-        assert igzo.metadata[dimension] != pytest.approx(native.metadata[dimension])
-    changed = {
-        name for name in ("lwl", "ldl", "mdl")
-        if igzo.native_internal_components[name]
-        != pytest.approx(native.native_internal_components[name])
-    }
-    assert changed
+def test_m3d_subarray_schema_defaults_counts_to_auto():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    raw = config.architecture.m3d_subarray.subarray.grid.model_dump()
+    raw.pop("nx")
+    raw.pop("ny")
+    validated = type(
+        config.architecture.m3d_subarray.subarray.grid).model_validate(raw)
+    assert validated.nx == "auto"
+    assert validated.ny == "auto"
+
+
+def test_nrow_ncol_change_topology_and_routing():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    baseline = _m3d_subarray(config)
+    core = config.architecture.m3d_subarray.subarray.model_copy(
+        update={"n_rows": 256, "n_cols": 256})
+    spec = config.architecture.m3d_subarray.model_copy(
+        update={"subarray": core})
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
+    changed = calculate_m3d_subarray(spec, geometry)
+    assert changed.subarray_width_um != pytest.approx(
+        baseline.subarray_width_um)
+    assert changed.subarray_height_um != pytest.approx(
+        baseline.subarray_height_um)
+    assert (changed.nx, changed.ny) != (baseline.nx, baseline.ny)
+    assert changed.local_rbl_energy_pj_per_bit != pytest.approx(
+        baseline.local_rbl_energy_pj_per_bit)
+
+
+def test_shared_bands_apply_once_and_mux_is_local_per_subarray():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    topology = _m3d_subarray(config)
+    assert topology.subarray_width_um == pytest.approx(topology.core_width_um)
+    assert topology.subarray_height_um == pytest.approx(
+        topology.core_height_um + topology.local_mux_footprint_height_um)
+    assert topology.usable_width_um == pytest.approx(
+        topology.slab_x_um - topology.shared_row_selection_band_um)
+    assert topology.usable_height_um == pytest.approx(
+        topology.slab_y_um
+        - topology.shared_column_write_selection_band_um)
+    assert topology.global_peripheral_instance_count == 1
+    assert topology.local_mux_instances_per_layer == (
+        topology.subarrays_per_layer)
+
+
+def test_global_energy_not_multiplied_by_grid_and_local_energy_tracks_access():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    baseline = _m3d_subarray(config)
+    core = config.architecture.m3d_subarray.subarray
+    smaller_grid = core.grid.model_copy(
+        update={"nx": baseline.nx - 1, "ny": baseline.ny})
+    smaller_core = core.model_copy(update={"grid": smaller_grid})
+    smaller_spec = config.architecture.m3d_subarray.model_copy(
+        update={"subarray": smaller_core})
+    geometry = load_m3d_geometry(ROOT, config.architecture.geometry_source)
+    smaller = calculate_m3d_subarray(smaller_spec, geometry)
+    # Grid affects physical shared-route length, but energy is not multiplied
+    # by total instantiated subarray count.
+    expected_raw = (
+        smaller.interconnect_electrical["global_rwl"]["active_line_count"]
+        * smaller.interconnect_electrical["global_rwl"]["activity_factor"]
+        * smaller.interconnect_electrical["global_rwl"][
+            "capacitance_fF_per_um"]
+        * smaller.global_rwl_route_length_um
+        * smaller.interconnect_electrical["global_rwl"]["voltage_V"] ** 2
+        * 1e-3)
+    assert smaller.global_rwl_raw_energy_pJ_per_access == pytest.approx(
+        expected_raw)
+
+    doubled_access = config.architecture.m3d_subarray.access.model_copy(
+        update={"accessed_subarrays_per_access": 512})
+    access_spec = config.architecture.m3d_subarray.model_copy(
+        update={"access": doubled_access})
+    doubled = calculate_m3d_subarray(access_spec, geometry)
+    assert doubled.local_rbl_raw_energy_pJ_per_access == pytest.approx(
+        2 * baseline.local_rbl_raw_energy_pJ_per_access)
+    assert doubled.local_mux_raw_energy_pJ_per_access == pytest.approx(
+        2 * baseline.local_mux_raw_energy_pJ_per_access)
+    assert doubled.global_rwl_raw_energy_pJ_per_access == pytest.approx(
+        baseline.global_rwl_raw_energy_pJ_per_access)
 
 
 def test_existing_geometry_sources_are_resolved_for_all_power_configs():
@@ -182,8 +254,11 @@ def test_existing_geometry_sources_are_resolved_for_all_power_configs():
             22.0, 5.5, "orthogonal_m3d_slab"),
     }
     for name, (configured_x, configured_y, region) in expected.items():
-        backend = DreamRAMBackend(ROOT).calculate(
-            load_power_config(POWER_CONFIGS / name))
+        config = load_power_config(POWER_CONFIGS / name)
+        backend = (
+            _m3d_backend(config)
+            if config.architecture.m3d_subarray is not None
+            else DreamRAMBackend(ROOT).calculate(config))
         assert backend.metadata["configured_x_mm"] == pytest.approx(configured_x)
         assert backend.metadata["configured_y_mm"] == pytest.approx(configured_y)
         assert backend.metadata["memory_region"] == region
@@ -212,7 +287,7 @@ def test_geometry_fit_checks_each_axis(configured_x, configured_y, expected):
 
 def test_dreamram_hbm3_full_row_regression(conventional):
     result = calculate_memory_power(conventional, project_root=ROOT)
-    assert result.E_access_total_pj_bit == pytest.approx(0.9782367131)
+    assert result.E_access_total_pj_bit == 0.9782367130708566
     assert result.P_access_W == pytest.approx(
         39200 * result.E_access_total_pj_bit * 1e-3)
     assert result.P_logic_background_W is None
@@ -267,8 +342,9 @@ def test_orthogonal_si_keeps_same_dreamram_internal_energy(conventional):
 
 def test_igzo_then_si_has_no_shared_tech_contamination(conventional):
     before = calculate_memory_power(conventional, project_root=ROOT)
-    DreamRAMBackend(ROOT).calculate(
-        load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml"))
+    calculate_memory_power(
+        load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml"),
+        project_root=ROOT)
     after = calculate_memory_power(conventional, project_root=ROOT)
     assert after.E_access_total_pj_bit == pytest.approx(
         before.E_access_total_pj_bit, abs=0.0)
@@ -345,22 +421,27 @@ def test_operation_table_is_device_energy_not_complete_memory_energy():
     assert device.background_value_W == pytest.approx(4.26e-15)
 
 
-def test_igzo_operation_primitive_replaces_native_block_without_double_count():
+def test_m3d_internal_uses_zhu_tang_and_no_dreamram_hierarchy():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    backend = DreamRAMBackend(ROOT).calculate(config)
-    result = calculate_memory_power(_without_miv(config), project_root=ROOT)
+    result = calculate_memory_power(config, project_root=ROOT)
     operation = 0.5 * 0.00060 + 0.5 * 0.36800
-    reusable = sum(
-        backend.native_internal_components[name]
-        for name in REUSABLE_STRUCTURE)
+    replacement = result.diagnostics["replacement_components_pj_bit"]
     assert result.E_memory_internal_pj_bit == pytest.approx(
-        reusable + operation, abs=1e-15)
-    assert set(result.diagnostics["native_components_pj_bit"]) == (
-        REUSABLE_STRUCTURE)
-    assert result.diagnostics["replacement_components_pj_bit"] == {
-        "mat_local_operation": pytest.approx(operation)}
-    assert not ({"bl-act", "bl-pre"}
-                & set(result.diagnostics["native_components_pj_bit"]))
+        operation
+        + replacement["tang_global_control_routing"]
+        + replacement["tang_local_read_routing"], abs=1e-15)
+    assert result.diagnostics["native_components_pj_bit"] == {}
+    assert replacement["zhu_mat_local_operation"] == pytest.approx(operation)
+    assert result.diagnostics["dreamram_hierarchy_included"] is False
+    assert result.diagnostics["dreamram_planar_organization_used"] is False
+    assert result.diagnostics["dreamram_internal_components_used"] is False
+    assert not ({"mat_x_um", "bank_x_um", "wire_lengths_um"}
+                & set(result.diagnostics))
+    excluded = set(result.diagnostics["dreamram_internal_components_excluded"])
+    assert excluded == {
+        "row", "mwl", "lwl", "bl-act", "bl-pre", "col", "csl",
+        "ldl", "mdl", "bgbus+gbus",
+    }
     assert "current_sense_energy" not in result.diagnostics
     assert "CSA_energy" not in result.diagnostics
     assert "RBL_energy" not in result.diagnostics
@@ -368,7 +449,7 @@ def test_igzo_operation_primitive_replaces_native_block_without_double_count():
 
 def test_m3d_topology_uses_geometry_layers_and_uniform_access():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    metadata = DreamRAMBackend(ROOT).calculate(config).metadata
+    metadata = _m3d_backend(config).metadata
     assert config.architecture.layers is None
     assert metadata["m3d_layers"] == 8
     assert metadata["layer_pitch_um"] == pytest.approx(0.288)
@@ -437,8 +518,8 @@ def test_miv_adapter_tracks_existing_geometry_config(
     architecture = config.architecture.model_copy(
         update={"geometry_source": geometry_source})
     modified_config = config.model_copy(update={"architecture": architecture})
-    metadata = DreamRAMBackend(ROOT).calculate(modified_config).metadata
-    baseline = DreamRAMBackend(ROOT).calculate(config).metadata
+    metadata = _m3d_backend(modified_config).metadata
+    baseline = _m3d_backend(config).metadata
     assert metadata["m3d_layers"] == layers
     assert metadata["layer_pitch_um"] == pytest.approx(pitch_nm * 1e-3)
     assert metadata["miv_average_length_um"] == pytest.approx(
@@ -458,16 +539,16 @@ def test_miv_adapter_tracks_existing_geometry_config(
 
 def test_miv_count_uses_dreamram_tsv_equivalent_serialization():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    metadata = DreamRAMBackend(ROOT).calculate(config).metadata
-    assert metadata["data_width_before_vertical"] == 272
+    metadata = _m3d_backend(config).metadata
+    assert metadata["data_width_before_vertical"] == 256
     assert metadata["vertical_serialization_factor"] == 4
     assert metadata["vertical_serialization_status"] == "resolved"
     assert metadata["miv_serialization_factor"] == 4
     assert metadata["miv_serialization_source"] == (
         "DREAMRAM_TSV_EQUIVALENT")
-    assert metadata["active_data_miv_count"] == 68
-    assert metadata["row_miv_count"] == 23
-    assert metadata["col_miv_count"] == 17
+    assert metadata["active_data_miv_count"] == 64
+    assert metadata["row_miv_count"] == 16
+    assert metadata["col_miv_count"] == 18
     resolved = build_miv_topology(
         m3d_layers=8,
         layer_pitch_um=0.288,
@@ -476,14 +557,14 @@ def test_miv_count_uses_dreamram_tsv_equivalent_serialization():
         row_miv_count=metadata["row_miv_count"],
         col_miv_count=metadata["col_miv_count"],
     )
-    assert resolved.active_data_miv_count == 55
+    assert resolved.active_data_miv_count == 52
     assert resolved.active_data_miv_count == (
         metadata["data_width_before_vertical"] + 5 - 1) // 5
 
 
 def test_m3d_path_excludes_hbm_vertical_base_dq_and_tsv_area():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    metadata = DreamRAMBackend(ROOT).calculate(config).metadata
+    metadata = _m3d_backend(config).metadata
     assert metadata["vertical_interconnect_type"] == "MIV"
     assert metadata["miv_connection_model"] == (
         "per_layer_local_selection_to_shared_vertical")
@@ -495,7 +576,7 @@ def test_m3d_path_excludes_hbm_vertical_base_dq_and_tsv_area():
     assert metadata["dq_included"] is False
     assert metadata["miv_dedicated_koz_area_modeled"] is False
     assert metadata["miv_planar_footprint_basis"] == (
-        "bankdie_without_tsv_koz_bands")
+        "tang_embedded_peripheral_subarray")
     assert set(metadata["excluded_hbm_components"]) == {
         "row-tsv", "col-tsv", "tsv",
         "row-base", "col-base", "base",
@@ -505,7 +586,7 @@ def test_m3d_path_excludes_hbm_vertical_base_dq_and_tsv_area():
 
 def test_tsv_equivalent_miv_energy_resolves_and_access_closes():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    metadata = DreamRAMBackend(ROOT).calculate(config).metadata
+    metadata = _m3d_backend(config).metadata
     assert metadata["miv_electrical_model"] == "TSV_EQUIVALENT_BASELINE"
     assert metadata["miv_modeling_class"] == "MODELING_CHOICE"
     assert metadata["miv_capacitance_status"] == "resolved"
@@ -517,10 +598,6 @@ def test_tsv_equivalent_miv_energy_resolves_and_access_closes():
         "effective_capacitance_per_vertical_segment")
     assert metadata["miv_segments_per_layer"] == tuple(range(1, 9))
     assert metadata["miv_average_segments"] == pytest.approx(4.5)
-    assert metadata["row_miv_energy_pJ"] == pytest.approx(48.84165)
-    assert metadata["col_miv_energy_pJ"] == pytest.approx(36.10035)
-    assert metadata["data_miv_energy_pJ"] == pytest.approx(26.2548)
-    assert metadata["miv_total_energy_pJ"] == pytest.approx(111.1968)
     assert metadata["row_miv_voltage_source"] == (
         "DREAMRAM_TSV_EQUIVALENT")
     assert metadata["col_miv_voltage_source"] == (
@@ -530,13 +607,15 @@ def test_tsv_equivalent_miv_energy_resolves_and_access_closes():
 
     result = calculate_memory_power(config, project_root=ROOT)
     mat_local = result.diagnostics["replacement_components_pj_bit"][
-        "mat_local_operation"]
-    reusable = sum(result.diagnostics["native_components_pj_bit"].values())
+        "zhu_mat_local_operation"]
+    routing = result.diagnostics["replacement_components_pj_bit"][
+        "tang_global_control_routing"]
+    local = result.diagnostics["replacement_components_pj_bit"][
+        "tang_local_read_routing"]
     assert mat_local == pytest.approx(0.1843)
-    assert reusable == pytest.approx(1.6002246445189394)
-    assert result.E_vertical_pj_bit == pytest.approx(0.24804639129638675)
+    assert result.diagnostics["native_components_pj_bit"] == {}
     assert result.E_base_route_pj_bit == 0.0
     assert result.E_interface_pj_bit == pytest.approx(0.5)
     assert result.E_access_total_pj_bit == pytest.approx(
-        mat_local + reusable + result.E_vertical_pj_bit
+        mat_local + routing + local + result.E_vertical_pj_bit
         + result.E_interface_pj_bit)

@@ -20,6 +20,7 @@ from ..geometry import (
     load_memory_region_size,
 )
 from ..miv import build_miv_topology, calculate_tsv_equivalent_miv_energy
+from ..m3d_subarray import M3DSubarrayResult
 from ..result import BackendEnergyResult, EnergyDecomposition
 
 
@@ -111,7 +112,10 @@ class DreamRAMBackend:
     def __init__(self, project_root: Path):
         self.project_root = project_root
 
-    def calculate(self, config: MemoryPowerConfig) -> BackendEnergyResult:
+    def calculate(
+            self, config: MemoryPowerConfig, *,
+            m3d_subarray: M3DSubarrayResult | None = None,
+            ) -> BackendEnergyResult:
         dreamram_input = config.memory.dreamram
         if dreamram_input is None:
             raise ValueError("DreamRAM backend requires memory.dreamram")
@@ -168,13 +172,9 @@ class DreamRAMBackend:
                 dram.mat_rows * dram.isolation_rows_overhead * tech.pitch_wl)
             stack_dims = dram.calc_stack_dims(tech)
             dies_stacked = int(stack_dims[0])
-            if config.architecture.vertical.type == "miv":
-                # M3D is a single-die topology. Exclude HBM TSV/KOZ bands from
-                # its planar footprint constraint; dies_stacked is diagnostic
-                # only and never enters the MIV length calculation.
-                required_x_um, required_y_um = dram.bankdie_dims(tech)
-                required_x_mm = float(required_x_um) * 1e-3
-                required_y_mm = float(required_y_um) * 1e-3
+            if m3d_subarray is not None:
+                required_x_mm = m3d_subarray.placed_width_um * 1e-3
+                required_y_mm = m3d_subarray.placed_height_um * 1e-3
             else:
                 required_x_mm = float(stack_dims[1]) * 1e-3
                 required_y_mm = float(sum(stack_dims[2:])) * 1e-3
@@ -215,21 +215,26 @@ class DreamRAMBackend:
         miv_metadata: dict[str, object] = {}
         miv_access_energy: float | None = None
         if config.architecture.vertical.type == "miv":
+            if m3d_subarray is None:
+                raise ValueError(
+                    "Orthogonal M3D requires resolved embedded-peripheral "
+                    "subarray topology")
             m3d_geometry = load_m3d_geometry(
                 self.project_root, config.architecture.geometry_source)
             vertical = config.architecture.vertical
             topology = build_miv_topology(
                 m3d_layers=m3d_geometry.layers,
                 layer_pitch_um=m3d_geometry.layer_pitch_um,
-                data_width_before_vertical=int(wire_counts["gbus"]),
+                data_width_before_vertical=(
+                    m3d_subarray.data_width_before_vertical),
                 vertical_serialization_factor=(
                     miv_serialization
                     if tsv_equivalent
                     else vertical.vertical_serialization_factor
                     if vertical.vertical_serialization_factor is not None
                     else "unresolved"),
-                row_miv_count=int(row_bits),
-                col_miv_count=int(col_bits),
+                row_miv_count=m3d_subarray.row_address_bits,
+                col_miv_count=m3d_subarray.column_address_bits,
                 layer_access_probability=(
                     config.workload.layer_access_probability),
                 capacitance_fF=(
@@ -239,6 +244,8 @@ class DreamRAMBackend:
                     if vertical.capacitance_fF is not None else "unresolved"),
             )
             miv_metadata = topology.as_dict()
+            miv_metadata["miv_planar_footprint_basis"] = (
+                "tang_embedded_peripheral_subarray")
             miv_metadata["m3d_layers_source"] = (
                 "geometry_source.m3d_beol.bitcell_layers")
             miv_metadata["layer_pitch_source"] = (
@@ -314,11 +321,12 @@ class DreamRAMBackend:
             ) / denominator
             for group in _GROUP_COMPONENTS
         }
-        if config.architecture.vertical.type == "miv":
+        if m3d_subarray is not None:
             if miv_access_energy is None:
                 access["vertical"] = 0.0
             else:
                 access["vertical"] = miv_access_energy
+            access["memory_internal"] = 0.0
             access["base_route"] = 0.0
             access["interface"] = 0.0
         internal_components = {
@@ -333,9 +341,11 @@ class DreamRAMBackend:
             for component in _GROUP_COMPONENTS["memory_internal"]
         }
         decomposition = EnergyDecomposition(**access)
+        if m3d_subarray is not None:
+            internal_components = {}
         reference = (
             decomposition.total
-            if config.architecture.vertical.type == "miv"
+            if m3d_subarray is not None
             else (
                 float(command_energy["pre"]) + float(command_energy["act"])
                 + n_read * float(command_energy["rd"])
@@ -347,23 +357,23 @@ class DreamRAMBackend:
             raise RuntimeError(
                 "DreamRAM internal component partition does not close")
 
-        return BackendEnergyResult(
-            technology=config.memory.technology,
-            backend="dreamram",
-            read_default=decomposition,
-            native_internal_components=internal_components,
-            metadata={
-                "branch": DREAMRAM_BRANCH,
-                "commit": DREAMRAM_COMMIT,
-                "memory_config": str(memory_path),
-                "technology_config": str(technology_path),
-                "rd_per_act": n_read,
-                "atom_size_bits": atom_size,
-                "atoms_per_page": atoms_per_page,
+        metadata = {
+            "branch": DREAMRAM_BRANCH,
+            "commit": DREAMRAM_COMMIT,
+            "memory_config": str(memory_path),
+            "technology_config": str(technology_path),
+            "rd_per_act": n_read,
+            "atom_size_bits": atom_size,
+            "atoms_per_page": atoms_per_page,
+            "geometry_source_config": str(geometry_path),
+            "memory_region": config.architecture.geometry_source.memory_region,
+            **geometry_fit.as_dict(),
+            **miv_metadata,
+            "unsupported_operations": ["write", "refresh", "background"],
+        }
+        if m3d_subarray is None:
+            metadata.update({
                 "dies_stacked": dies_stacked,
-                "geometry_source_config": str(geometry_path),
-                "memory_region": config.architecture.geometry_source.memory_region,
-                **geometry_fit.as_dict(),
                 "cell_pitch_mapping": geometry_mapping,
                 "pitch_bl_um": float(tech.pitch_bl),
                 "pitch_wl_um": float(tech.pitch_wl),
@@ -377,7 +387,6 @@ class DreamRAMBackend:
                 "bank_y_um": float(bank_y_um),
                 "wire_lengths_um": {
                     name: float(value) for name, value in wire_lengths.items()},
-                **miv_metadata,
                 "E_PRE_pJ": float(command_energy["pre"]),
                 "E_ACT_pJ": float(command_energy["act"]),
                 "E_RD_pJ": float(command_energy["rd"]),
@@ -385,7 +394,18 @@ class DreamRAMBackend:
                     "1T1C_SPECIFIC": sorted(ONE_T_ONE_C_SPECIFIC),
                     "REUSABLE_STRUCTURE": sorted(REUSABLE_STRUCTURE),
                 },
-                "unsupported_operations": [
-                    "write", "refresh", "background"],
-            },
+            })
+        else:
+            metadata.update({
+                "dreamram_role": "miv_electrical_reference_only",
+                "dreamram_planar_organization_used": False,
+                "dreamram_internal_components_used": False,
+            })
+
+        return BackendEnergyResult(
+            technology=config.memory.technology,
+            backend="dreamram",
+            read_default=decomposition,
+            native_internal_components=internal_components,
+            metadata=metadata,
         )

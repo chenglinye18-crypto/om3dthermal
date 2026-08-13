@@ -100,6 +100,79 @@ class CellGeometryInput(StrictModel):
         return self
 
 
+class RoutingElectricalInput(StrictModel):
+    metal_width_nm: float = Field(gt=0.0)
+    metal_thickness_nm: float = Field(gt=0.0)
+    capacitance_fF_per_um: float = Field(gt=0.0)
+    resistance_ohm_per_um: float = Field(gt=0.0)
+    voltage_V: float = Field(gt=0.0)
+    activity_factor: float = Field(ge=0.0, le=1.0)
+    active_line_count: int = Field(gt=0)
+    provenance: Literal["MODELING_CHOICE"]
+
+
+class LocalMuxInput(StrictModel):
+    footprint_height_f: float = Field(ge=0.0)
+    energy_pj_per_selected_bit: float = Field(ge=0.0)
+    provenance: Literal["MODELING_CHOICE"]
+
+
+class SubarrayGridInput(StrictModel):
+    nx: int | Literal["auto"] = "auto"
+    ny: int | Literal["auto"] = "auto"
+
+    @field_validator("nx", "ny")
+    @classmethod
+    def positive_override(cls, value: int | str) -> int | str:
+        if value != "auto" and value <= 0:
+            raise ValueError("explicit subarray count must be positive")
+        return value
+
+
+class SubarrayCoreInput(StrictModel):
+    n_rows: int = Field(gt=0)
+    n_cols: int = Field(gt=0)
+    grid: SubarrayGridInput = Field(default_factory=SubarrayGridInput)
+
+
+class GlobalPeripheralInput(StrictModel):
+    row_selection_band_f: float = Field(ge=0.0)
+    column_write_selection_band_f: float = Field(ge=0.0)
+    row_selection_band_axis: Literal["x", "y"]
+    column_write_selection_band_axis: Literal["x", "y"]
+    provenance: Literal["MODELING_CHOICE"]
+
+    @model_validator(mode="after")
+    def distinct_axes(self) -> "GlobalPeripheralInput":
+        if (self.row_selection_band_axis
+                == self.column_write_selection_band_axis):
+            raise ValueError("shared global peripheral bands require distinct axes")
+        return self
+
+
+class M3DInterconnectInput(StrictModel):
+    global_rwl: RoutingElectricalInput
+    global_wwl: RoutingElectricalInput
+    global_wbl: RoutingElectricalInput
+    local_rbl: RoutingElectricalInput
+
+
+class M3DAccessInput(StrictModel):
+    accessed_subarrays_per_access: int = Field(gt=0)
+    selected_bits_per_subarray: int = Field(gt=0)
+    provenance: Literal["MODELING_CHOICE"]
+
+
+class M3DSubarrayInput(StrictModel):
+    type: Literal["tang_embedded_subarray"]
+    subarray: SubarrayCoreInput
+    global_peripheral: GlobalPeripheralInput
+    local_mux: LocalMuxInput
+    interconnect: M3DInterconnectInput
+    access: M3DAccessInput
+    topology_provenance: Literal["MODELING_CHOICE"]
+
+
 class CellReplacementInput(StrictModel):
     mapping_status: Literal["validated", "unresolved"]
     components: tuple[str, ...]
@@ -232,10 +305,18 @@ class ArchitectureInput(StrictModel):
     layers: int | None = Field(default=None, gt=0)
     dies: int | None = Field(default=None, gt=0)
     geometry_source: GeometrySourceInput
+    m3d_subarray: M3DSubarrayInput | None = None
     vertical: TransportInput
     base_route: BaseRouteInput
     interface: InterfaceInput
     logic_background_w: float | None = Field(default=None, ge=0.0)
+
+    @model_validator(mode="after")
+    def m3d_topology_required(self) -> "ArchitectureInput":
+        if self.vertical.type == "miv" and self.m3d_subarray is None:
+            raise ValueError(
+                "MIV architecture requires architecture.m3d_subarray")
+        return self
 
 
 class RowPolicy(StrictModel):

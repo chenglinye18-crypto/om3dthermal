@@ -31,6 +31,9 @@ class GeometryFit:
 class M3DGeometry:
     layers: int
     layer_pitch_um: float
+    slab_x_um: float
+    slab_y_um: float
+    cell_area_um2: float
 
 
 def _length_mm(value: Any) -> float:
@@ -81,14 +84,24 @@ def load_m3d_geometry(
         layers = int(raw["m3d_beol"]["bitcell_layers"])
         memory_layers = int(raw["m3d_memory"]["layers"])
         pitch_um = float(raw["m3d_beol"]["bitcell_layer_pitch_nm"]) * 1e-3
+        slab_x_um = float(raw["orthogonal"]["slab_plane_y_mm"]) * 1e3
+        slab_y_um = float(raw["orthogonal"]["slab_height_z_mm"]) * 1e3
+        cell_area_um2 = float(raw["m3d_memory"]["cell_area_um2"])
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"cannot resolve M3D layer geometry from {path}") from exc
-    if layers <= 0 or pitch_um <= 0.0:
-        raise ValueError("M3D layers and layer pitch must be positive")
+    if (layers <= 0 or pitch_um <= 0.0 or slab_x_um <= 0.0
+            or slab_y_um <= 0.0 or cell_area_um2 <= 0.0):
+        raise ValueError("M3D geometry values must be positive")
     if memory_layers != layers:
         raise ValueError(
             "m3d_memory.layers must equal m3d_beol.bitcell_layers")
-    return M3DGeometry(layers=layers, layer_pitch_um=pitch_um)
+    return M3DGeometry(
+        layers=layers,
+        layer_pitch_um=pitch_um,
+        slab_x_um=slab_x_um,
+        slab_y_um=slab_y_um,
+        cell_area_um2=cell_area_um2,
+    )
 
 
 def evaluate_geometry_fit(

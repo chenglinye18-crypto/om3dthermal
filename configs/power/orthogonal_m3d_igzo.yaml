@@ -7,24 +7,11 @@ memory:
   cell_model:
     type: operation_table
     source: IEDM2026_HaotongZhu_V5
-    geometry:
-      # 0.023 um^2 is the paper-reported physical/raw bitcell footprint.
-      # It is distinct from the 30 Mb/mm^2/layer architecture-level density.
-      # Adapter mapping: physical X -> DreamRAM BL pitch, Y -> WL pitch.
-      cell_area_um2: 0.023
-      pitch_x_um: 0.15166
-      pitch_y_um: 0.15166
-      aspect_ratio: 1.0
-      provenance:
-        cell_area_um2: PAPER_REPORTED
-        pitch_x_um: DERIVED_FROM_REFERENCE
-        pitch_y_um: DERIVED_FROM_REFERENCE
-        aspect_ratio: MODELING_CHOICE
     replacement:
-      # Replace this audited 1T1C cell/BL/sensing block with one reported
-      # MAT-local operation primitive; do not split it or add CSA/RBL terms.
+      # Schema carrier for the indivisible Zhu primitive. The Tang-style M3D
+      # path does not instantiate or replace any DreamRAM internal component.
       mapping_status: validated
-      components: [bl-act, bl-pre]
+      components: []
       energy_source: operation_table
       component_energy_pj_per_bit: {}
     operations:
@@ -43,9 +30,9 @@ memory:
       distributed_rc_included: true
       accounting_note: >-
         Full-row SPICE includes distributed WWL/WBL/RWL/RBL RC. The current
-        implementation keeps the audited bl-act/bl-pre replacement boundary;
-        overlap with retained DreamRAM row/WL routing is not independently
-        separable from the reported table.
+        Tang-style embedded-peripheral M3D path treats this as an indivisible
+        local-operation primitive and excludes all DreamRAM HBM internal
+        routing components.
     background:
       type: per_row
       value_w: 4.26e-15
@@ -56,6 +43,66 @@ architecture:
   geometry_source:
     config: configs/orthogonal_m3d_edram_v0.yaml
     memory_region: orthogonal_m3d_slab
+  m3d_subarray:
+    type: tang_embedded_subarray
+    subarray:
+      n_rows: 512
+      n_cols: 512
+      grid: {nx: auto, ny: auto}
+    global_peripheral:
+      row_selection_band_f: 4.0
+      column_write_selection_band_f: 2.0
+      row_selection_band_axis: x
+      column_write_selection_band_axis: y
+      provenance: MODELING_CHOICE
+    local_mux:
+      # Independent from the shared 2F column/write-selection band.
+      footprint_height_f: 4.0
+      energy_pj_per_selected_bit: 0.010
+      provenance: MODELING_CHOICE
+    interconnect:
+      # Temporary electrical values are first-order MODELING_CHOICE inputs.
+      global_rwl:
+        metal_width_nm: 100.0
+        metal_thickness_nm: 100.0
+        capacitance_fF_per_um: 0.30
+        resistance_ohm_per_um: 0.10
+        voltage_V: 1.0
+        activity_factor: 0.5
+        active_line_count: 1
+        provenance: MODELING_CHOICE
+      global_wwl:
+        metal_width_nm: 100.0
+        metal_thickness_nm: 100.0
+        capacitance_fF_per_um: 0.30
+        resistance_ohm_per_um: 0.10
+        voltage_V: 1.0
+        activity_factor: 0.0
+        active_line_count: 1
+        provenance: MODELING_CHOICE
+      global_wbl:
+        metal_width_nm: 100.0
+        metal_thickness_nm: 100.0
+        capacitance_fF_per_um: 0.30
+        resistance_ohm_per_um: 0.10
+        voltage_V: 1.0
+        activity_factor: 0.0
+        active_line_count: 1
+        provenance: MODELING_CHOICE
+      local_rbl:
+        metal_width_nm: 100.0
+        metal_thickness_nm: 100.0
+        capacitance_fF_per_um: 0.30
+        resistance_ohm_per_um: 0.10
+        voltage_V: 1.0
+        activity_factor: 0.5
+        active_line_count: 1
+        provenance: MODELING_CHOICE
+    access:
+      accessed_subarrays_per_access: 256
+      selected_bits_per_subarray: 1
+      provenance: MODELING_CHOICE
+    topology_provenance: MODELING_CHOICE
   vertical:
     type: miv
     source: miv_topology

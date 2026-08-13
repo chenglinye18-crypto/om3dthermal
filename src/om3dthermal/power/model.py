@@ -12,6 +12,8 @@ from .cell_model import (
     apply_operation_primitive_replacement,
 )
 from .config import MemoryPowerConfig, find_project_root, load_power_config
+from .geometry import load_m3d_geometry
+from .m3d_subarray import calculate_m3d_subarray
 from .result import BackendEnergyResult, EnergyDecomposition, MemoryPowerResult
 
 
@@ -153,14 +155,54 @@ def _background_power(
 
 def calculate_memory_power(
         config: MemoryPowerConfig, *, project_root: Path) -> MemoryPowerResult:
-    backend = DreamRAMBackend(project_root).calculate(config)
+    m3d_subarray = None
+    if config.architecture.m3d_subarray is not None:
+        m3d_geometry = load_m3d_geometry(
+            project_root, config.architecture.geometry_source)
+        m3d_subarray = calculate_m3d_subarray(
+            config.architecture.m3d_subarray, m3d_geometry)
+    backend = DreamRAMBackend(project_root).calculate(
+        config, m3d_subarray=m3d_subarray)
     device = (
         OperationTableCellModel().calculate(config)
         if config.memory.cell_model.type == "operation_table" else None)
 
-    (memory_internal, dreamram_decomposition,
-     native_components, replacement_components) = _memory_read_energy(
-         backend, config, device)
+    if m3d_subarray is None:
+        (memory_internal, dreamram_decomposition,
+         native_components, replacement_components) = _memory_read_energy(
+             backend, config, device)
+    else:
+        if device is None:
+            raise MissingCellReplacementError(
+                "M3D embedded-peripheral topology requires an operation-table "
+                "cell primitive")
+        probability = config.workload.read_data
+        if probability is None:
+            raise ValueError(
+                "M3D operation-table read requires workload.read_data")
+        mat_local = device.weighted_read(
+            p0=probability.p0, p1=probability.p1)
+        memory_internal = (
+            mat_local
+            + m3d_subarray.global_control_routing_energy_pj_per_bit
+            + m3d_subarray.local_read_routing_energy_pj_per_bit
+        )
+        native_components = {}
+        replacement_components = {
+            "zhu_mat_local_operation": mat_local,
+            "tang_global_control_routing": (
+                m3d_subarray.global_control_routing_energy_pj_per_bit),
+            "tang_local_read_routing": (
+                m3d_subarray.local_read_routing_energy_pj_per_bit),
+        }
+        if backend.read_default is None:
+            raise ValueError("MIV reference backend did not provide energy")
+        dreamram_decomposition = EnergyDecomposition(
+            memory_internal=memory_internal,
+            vertical=backend.read_default.vertical,
+            base_route=0.0,
+            interface=0.0,
+        )
     if config.architecture.vertical.source == "miv_topology":
         if backend.metadata.get("miv_energy_status") != "resolved":
             raise UnresolvedMIVEnergyError(dict(backend.metadata))
@@ -211,6 +253,7 @@ def calculate_memory_power(
         P_total_W=total_W,
         diagnostics={
             **backend.metadata,
+            **({} if m3d_subarray is None else m3d_subarray.as_dict()),
             "cell_model": config.memory.cell_model.type,
             "operation_energy_provenance": (
                 None
@@ -219,6 +262,12 @@ def calculate_memory_power(
             ),
             "native_components_pj_bit": native_components,
             "replacement_components_pj_bit": replacement_components,
+            "dreamram_internal_components_excluded": (
+                [] if m3d_subarray is None else [
+                    "row", "mwl", "lwl", "bl-act", "bl-pre", "col",
+                    "csl", "ldl", "mdl", "bgbus+gbus",
+                ]
+            ),
         },
     )
 
