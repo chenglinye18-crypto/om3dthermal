@@ -17,7 +17,8 @@ from om3dthermal.thermal import (
 )
 
 
-CONFIG = Path(__file__).parents[1] / "configs" / "orthogonal_m3d_edram_v0.yaml"
+CONFIG = (Path(__file__).parents[1] / "configs" / "legacy"
+          / "orthogonal_m3d_edram_v0.yaml")
 
 
 @pytest.fixture(scope="module")

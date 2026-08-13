@@ -6,16 +6,18 @@ memory:
     technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
 
 architecture:
-  name: conventional_hbm3_logic_removed
+  name: orthogonal_si
   layers: 8
   geometry_source:
-    config: configs/exp_conv_2x2_nobase_g414_m128.yaml
-    memory_region: hbm_dram_die
-  vertical: {type: tsv, source: dreamram}
+    config: configs/legacy/exp_orth_mosaic98_g414_m156p8_uniform.yaml
+    memory_region: orthogonal_memory_slab
+  vertical: {type: none, source: none}
   base_route: {enabled: false, source: none}
-  # MODELING_CHOICE: retain the existing HBM DQ interface after base removal.
-  interface: {type: hbm_dq, source: dreamram}
-  logic_background_w: 0
+  interface:
+    type: contactless
+    source: constant
+    energy_pj_per_bit: 0.5
+  logic_background_w: null
 
 workload:
   read_bandwidth_gbps: 39200

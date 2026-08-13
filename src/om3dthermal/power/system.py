@@ -1,0 +1,195 @@
+"""Case-level system-power resolution and coarse thermal source mapping."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+from .config import CanonicalCaseConfig, find_project_root, load_case_config
+from .geometry import ResolvedGeometry, resolve_case_geometry
+from .model import calculate_memory_power
+from .result import MemoryPowerResult
+
+
+@dataclass(frozen=True)
+class ResolvedSystemPower:
+    case_name: str
+    architecture_type: str
+    gpu_power_W: float
+    memory_power_model: str
+    memory_power_status: str
+    read_bandwidth_gbps: float
+    memory_access_energy_pJ_per_bit: float | None
+    memory_access_power_W: float | None
+    refresh_power_W: float | None
+    resolved_total_memory_power_W: float | None
+    memory_result: MemoryPowerResult | None
+    diagnostics: dict[str, Any]
+
+    def as_dict(self, *, display_na: bool = False) -> dict[str, Any]:
+        data = asdict(self)
+        if display_na:
+            return {key: ("N/A" if value is None else value)
+                    for key, value in data.items()}
+        return data
+
+
+@dataclass(frozen=True)
+class ThermalPowerTarget:
+    name: str
+    target_region: str
+    power_W: float
+    mapping_provenance: str
+
+
+@dataclass(frozen=True)
+class ResolvedThermalPowerMapping:
+    case_name: str
+    sources: tuple[ThermalPowerTarget, ...]
+    total_mapped_power_W: float
+    unresolved: bool
+
+
+def resolve_system_power(
+        case: CanonicalCaseConfig, *, project_root: Path,
+        geometry: ResolvedGeometry) -> ResolvedSystemPower:
+    """Resolve GPU and memory power from one canonical case."""
+    assert case.power.gpu is not None
+    assert case.power.memory is not None
+    mode = case.power.memory
+    if mode.model == "unresolved":
+        return ResolvedSystemPower(
+            case_name=case.name,
+            architecture_type=case.geometry.type,
+            gpu_power_W=case.power.gpu.power_W,
+            memory_power_model=mode.model,
+            memory_power_status=mode.status,
+            read_bandwidth_gbps=case.workload.read_bandwidth_gbps,
+            memory_access_energy_pJ_per_bit=None,
+            memory_access_power_W=None,
+            refresh_power_W=None,
+            resolved_total_memory_power_W=None,
+            memory_result=None,
+            diagnostics={"memory_power_reason": "NO_VALIDATED_M3D_SI_PRIMITIVE"},
+        )
+    if mode.model == "reference_fixed":
+        return ResolvedSystemPower(
+            case_name=case.name,
+            architecture_type=case.geometry.type,
+            gpu_power_W=case.power.gpu.power_W,
+            memory_power_model=mode.model,
+            memory_power_status=mode.status,
+            read_bandwidth_gbps=case.workload.read_bandwidth_gbps,
+            memory_access_energy_pJ_per_bit=None,
+            memory_access_power_W=None,
+            refresh_power_W=None,
+            resolved_total_memory_power_W=mode.total_power_W,
+            memory_result=None,
+            diagnostics={
+                "reference_source": mode.source,
+                "reference_provenance": mode.provenance,
+                "accounting_level": mode.accounting_level,
+            },
+        )
+
+    memory = calculate_memory_power(
+        case, project_root=project_root, geometry=geometry)
+    total = (
+        memory.P_access_W + float(memory.P_refresh_W or 0.0)
+        + float(memory.P_memory_background_W or 0.0)
+        + float(memory.P_logic_background_W or 0.0))
+    diagnostics = {
+        "case_name": case.name,
+        "architecture_type": case.geometry.type,
+        "gpu_power_W": case.power.gpu.power_W,
+        "memory_power_model": mode.model,
+        "memory_power_status": mode.status,
+        "resolved_total_memory_power_W": total,
+        **memory.diagnostics,
+    }
+    return ResolvedSystemPower(
+        case_name=case.name,
+        architecture_type=case.geometry.type,
+        gpu_power_W=case.power.gpu.power_W,
+        memory_power_model=mode.model,
+        memory_power_status=mode.status,
+        read_bandwidth_gbps=case.workload.read_bandwidth_gbps,
+        memory_access_energy_pJ_per_bit=memory.E_access_total_pj_bit,
+        memory_access_power_W=memory.P_access_W,
+        refresh_power_W=memory.P_refresh_W,
+        resolved_total_memory_power_W=total,
+        memory_result=memory,
+        diagnostics=diagnostics,
+    )
+
+
+def map_system_power_to_thermal(
+        case: CanonicalCaseConfig,
+        system: ResolvedSystemPower) -> ResolvedThermalPowerMapping:
+    """Map resolved totals to existing coarse thermal carrier regions."""
+    gpu = ThermalPowerTarget(
+        name="gpu", target_region="GPU_FEOL",
+        power_W=system.gpu_power_W,
+        mapping_provenance="EXISTING_UNIFORM_ACTIVE_REGION_MODEL")
+    if system.resolved_total_memory_power_W is None:
+        return ResolvedThermalPowerMapping(
+            case_name=case.name, sources=(gpu,),
+            total_mapped_power_W=gpu.power_W, unresolved=True)
+
+    if case.geometry.type == "dreamram_hbm":
+        group_count = int(case.geometry.layout["visible_group_count"])
+        each = system.resolved_total_memory_power_W / group_count
+        memory_sources = tuple(
+            ThermalPowerTarget(
+                name=f"memory_group_{index}",
+                target_region=f"DRAM_BEOL_GROUP_{index}", power_W=each,
+                mapping_provenance=(
+                    "MODELING_CHOICE_COARSE_DRAM_AND_TSV_TO_DRAM_BEOL"))
+            for index in range(group_count))
+    elif case.geometry.type == "orthogonal_si":
+        memory_sources = (ThermalPowerTarget(
+            name="orthogonal_si_memory", target_region="ORTHOGONAL_DRAM_BEOL",
+            power_W=system.resolved_total_memory_power_W,
+            mapping_provenance="MODELING_CHOICE_COARSE_ACTIVE_BEOL"),)
+    else:
+        assert system.memory_result is not None or (
+            system.memory_power_model == "reference_fixed")
+        if system.memory_result is None:
+            memory_sources = (ThermalPowerTarget(
+                name="m3d_reference_memory", target_region="M3D_BITCELL_STACK",
+                power_W=system.resolved_total_memory_power_W,
+                mapping_provenance="REFERENCE_FIXED_COARSE_BITCELL_MAPPING"),)
+        else:
+            result = system.memory_result
+            bandwidth = case.workload.read_bandwidth_gbps * 1e-3
+            active = (
+                bandwidth * (result.E_memory_internal_pj_bit
+                             + result.E_vertical_pj_bit
+                             + result.E_interface_pj_bit)
+                + float(result.P_refresh_W or 0.0))
+            feol = bandwidth * result.E_feol_route_pj_bit
+            memory_sources = (
+                ThermalPowerTarget(
+                    name="m3d_memory_active", target_region="M3D_BITCELL_STACK",
+                    power_W=active,
+                    mapping_provenance=(
+                        "MODELING_CHOICE_COARSE_MIV_INTERFACE_TO_ACTIVE_STACK")),
+                ThermalPowerTarget(
+                    name="m3d_feol_route", target_region="M3D_FEOL",
+                    power_W=feol,
+                    mapping_provenance="PHYSICAL_FEOL_ROUTE_REGION"),
+            )
+    sources = (gpu, *memory_sources)
+    return ResolvedThermalPowerMapping(
+        case_name=case.name, sources=sources,
+        total_mapped_power_W=sum(source.power_W for source in sources),
+        unresolved=False)
+
+
+def run_case_system_power(path: str | Path) -> ResolvedSystemPower:
+    case_path = Path(path).resolve()
+    case = load_case_config(case_path)
+    geometry = resolve_case_geometry(case)
+    return resolve_system_power(
+        case, project_root=find_project_root(case_path), geometry=geometry)

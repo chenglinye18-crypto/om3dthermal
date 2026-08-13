@@ -268,7 +268,7 @@ class CellModelInput(StrictModel):
         return self
 class MemoryInput(StrictModel):
     technology: str
-    backend: Literal["dreamram"]
+    backend: Literal["dreamram", "unresolved"]
     dreamram: DreamRAMInput | None = None
     cell_model: CellModelInput = Field(default_factory=CellModelInput)
 
@@ -276,6 +276,8 @@ class MemoryInput(StrictModel):
     def backend_inputs(self) -> "MemoryInput":
         if self.backend == "dreamram" and self.dreamram is None:
             raise ValueError("dreamram backend requires memory.dreamram")
+        if self.backend == "unresolved" and self.dreamram is not None:
+            raise ValueError("unresolved memory must not select DreamRAM")
         return self
 
 
@@ -440,9 +442,45 @@ class EnableInput(StrictModel):
     enabled: bool
 
 
+class GPUCasePowerInput(StrictModel):
+    model: Literal["fixed"]
+    power_W: float = Field(ge=0.0)
+
+
+class MemoryCasePowerInput(StrictModel):
+    model: Literal["analytical", "reference_fixed", "unresolved"]
+    status: Literal["VALIDATED", "NOT_ANALYTICAL", "NOT_VALIDATED"]
+    total_power_W: float | None = Field(default=None, ge=0.0)
+    source: str | None = None
+    provenance: str | None = None
+    accounting_level: str | None = None
+
+    @model_validator(mode="after")
+    def mode_fields(self) -> "MemoryCasePowerInput":
+        if self.model == "analytical":
+            if self.status != "VALIDATED" or self.total_power_W is not None:
+                raise ValueError(
+                    "analytical memory power must be VALIDATED and derived")
+        elif self.model == "reference_fixed":
+            if (self.status != "NOT_ANALYTICAL"
+                    or self.total_power_W is None
+                    or self.source is None
+                    or self.provenance is None
+                    or self.accounting_level is None):
+                raise ValueError(
+                    "reference_fixed requires total, source, provenance, "
+                    "accounting level, and NOT_ANALYTICAL status")
+        elif self.status != "NOT_VALIDATED" or self.total_power_W is not None:
+            raise ValueError(
+                "unresolved memory power must be NOT_VALIDATED with no total")
+        return self
+
+
 class PowerInput(StrictModel):
     refresh: RefreshInput
     background: EnableInput
+    gpu: GPUCasePowerInput | None = None
+    memory: MemoryCasePowerInput | None = None
 
 
 class MemoryPowerConfig(StrictModel):
@@ -486,6 +524,12 @@ class CaseOrthogonalGeometryInput(StrictModel):
     thickness_direction: Literal["global_x"]
 
 
+class CaseOrthogonalSiStackGeometryInput(StrictModel):
+    si_substrate_um: float = Field(gt=0.0)
+    beol_um: float = Field(gt=0.0)
+    daa_um: float = Field(gt=0.0)
+
+
 class CaseM3DStackGeometryInput(StrictModel):
     si_substrate_um: float = Field(gt=0.0)
     feol_um: float = Field(gt=0.0)
@@ -497,20 +541,25 @@ class CaseM3DStackGeometryInput(StrictModel):
 
 
 class CaseGeometryInput(StrictModel):
-    type: Literal["dreamram_hbm", "orthogonal_m3d"]
+    type: Literal["dreamram_hbm", "orthogonal_si", "orthogonal_m3d"]
     memory_region: CaseMemoryRegionInput | None = None
     orthogonal: CaseOrthogonalGeometryInput | None = None
     m3d_stack: CaseM3DStackGeometryInput | None = None
+    orthogonal_si_stack: CaseOrthogonalSiStackGeometryInput | None = None
+    layout: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def type_fields(self) -> "CaseGeometryInput":
+        if self.type in {"orthogonal_si", "orthogonal_m3d"}:
+            if self.orthogonal is None:
+                raise ValueError("orthogonal geometry requires orthogonal slab")
+            if self.memory_region is not None:
+                raise ValueError(
+                    "orthogonal memory region is derived from slab geometry")
         if self.type == "orthogonal_m3d":
             if self.orthogonal is None or self.m3d_stack is None:
                 raise ValueError(
                     "orthogonal_m3d geometry requires orthogonal and m3d_stack")
-            if self.memory_region is not None:
-                raise ValueError(
-                    "M3D memory region is derived from orthogonal slab geometry")
             bitcell_um = (
                 self.m3d_stack.bitcell_layers
                 * self.m3d_stack.bitcell_layer_pitch_nm * 1e-3)
@@ -524,10 +573,25 @@ class CaseGeometryInput(StrictModel):
                 raise ValueError(
                     f"M3D slab thickness does not close: {resolved} um != "
                     f"slab pitch {self.orthogonal.slab_pitch_x_um} um")
+            if self.orthogonal_si_stack is not None:
+                raise ValueError("M3D geometry must not contain Si slab stack")
+        elif self.type == "orthogonal_si":
+            if self.orthogonal_si_stack is None or self.m3d_stack is not None:
+                raise ValueError(
+                    "orthogonal_si requires only orthogonal_si_stack")
+            resolved = (
+                self.orthogonal_si_stack.si_substrate_um
+                + self.orthogonal_si_stack.beol_um
+                + self.orthogonal_si_stack.daa_um)
+            if not math.isclose(
+                    resolved, self.orthogonal.slab_pitch_x_um,
+                    rel_tol=0.0, abs_tol=1e-9):
+                raise ValueError("orthogonal Si slab thickness does not close")
         else:
             if self.memory_region is None:
                 raise ValueError("dreamram_hbm requires a memory region")
-            if self.orthogonal is not None or self.m3d_stack is not None:
+            if (self.orthogonal is not None or self.m3d_stack is not None
+                    or self.orthogonal_si_stack is not None):
                 raise ValueError("dreamram_hbm must not duplicate an M3D stack")
         return self
 
@@ -546,6 +610,16 @@ class CanonicalCaseConfig(MemoryPowerConfig):
         is_m3d = self.architecture.m3d_subarray is not None
         if is_m3d != (self.geometry.type == "orthogonal_m3d"):
             raise ValueError("architecture and canonical geometry type disagree")
+        if self.power.gpu is None or self.power.memory is None:
+            raise ValueError("canonical case requires GPU and memory power modes")
+        if self.power.gpu.power_W != 300.0:
+            raise ValueError("active canonical research cases require GPU=300 W")
+        if (self.power.memory.model == "analytical"
+                and self.memory.backend != "dreamram"):
+            raise ValueError("analytical memory power requires DreamRAM backend")
+        if (self.power.memory.model == "unresolved"
+                and self.memory.backend != "unresolved"):
+            raise ValueError("unresolved power requires unresolved memory backend")
         return self
 
 

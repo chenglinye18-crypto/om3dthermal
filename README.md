@@ -20,10 +20,10 @@ Python 3.10+ is required:
 ```bash
 python -m pip install -e ".[test]"
 python -m pytest
-python -m om3dthermal.cli build configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_iedm2025
-python -m om3dthermal.cli discretize configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_mesh
-python -m om3dthermal.cli conductance configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_conductance
-python -m om3dthermal.cli solve-steady configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --method pcg
+python -m om3dthermal.cli build configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_iedm2025
+python -m om3dthermal.cli discretize configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_mesh
+python -m om3dthermal.cli conductance configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_conductance
+python -m om3dthermal.cli solve-steady configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --method pcg
 ```
 
 The `build` command writes (under the directory given by `--out`, which
@@ -83,7 +83,7 @@ them in SI metres from the stack templates.
 
 ## IEDM 2025 HBM-on-GPU benchmark configuration
 
-The shipped `configs/exp_conv_2x2_g414_m160.yaml` is a paper-anchored benchmark for
+The archived `configs/legacy/exp_conv_2x2_g414_m160.yaml` is a paper-anchored benchmark for
 3D HBM-on-GPU integration. It is sourced from:
 
 > Yukai Chen, Melina Lofrano, Diksha Moolchandani, Herman Oprins, Geert Van
@@ -103,7 +103,7 @@ them.
 
 ### Configuration format
 
-The shipped `configs/exp_conv_2x2_g414_m160.yaml` is a **compact** form
+The archived `configs/legacy/exp_conv_2x2_g414_m160.yaml` is a **compact** form
 (≈87 lines) optimised for hand-editing. The top-level blocks are
 `materials`, `geometry`, `stacks`, `mesh`, `boundary`, `power`,
 `solver`. Paper citations and per-parameter modelling notes are
@@ -538,7 +538,7 @@ at parse time.
 
 ### Output
 
-`om3dthermal.cli conductance configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_conductance`
+`om3dthermal.cli conductance configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_conductance`
 writes (under git-ignored `runs/`):
 
 - the three discretisation CSVs and the mesh summary (re-emitted for
@@ -688,7 +688,7 @@ the shipped HBM benchmark's `relative_power_imbalance` is below
 
 ### HBM benchmark (paper-parameter-aligned uniform-power baseline)
 
-`om3dthermal.cli solve-steady configs/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --method pcg --rtol 1e-8 --max-iterations 2000`
+`om3dthermal.cli solve-steady configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --method pcg --rtol 1e-8 --max-iterations 2000`
 
 | Quantity | Value |
 |----------|-------|

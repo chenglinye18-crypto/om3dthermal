@@ -1,7 +1,7 @@
 # ref_iedm25_conv_2x2_g414_m160
 
 This document records the origin and modelling status of every parameter
-used by `configs/exp_conv_2x2_g414_m160.yaml`. The compact YAML itself only
+used by `configs/legacy/exp_conv_2x2_g414_m160.yaml`. The compact YAML itself only
 declares the numerical values the simulation uses; everything that
 explains *why* a value was chosen (paper citation, figure caption,
 modelling assumption) lives here.

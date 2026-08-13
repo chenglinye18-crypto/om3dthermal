@@ -48,7 +48,7 @@ memory:
 architecture:
   name: orthogonal_m3d_igzo
   geometry_source:
-    config: configs/orthogonal_m3d_edram_v0.yaml
+    config: configs/legacy/orthogonal_m3d_edram_v0.yaml
     memory_region: orthogonal_m3d_slab
   m3d_subarray:
     type: tang_embedded_subarray

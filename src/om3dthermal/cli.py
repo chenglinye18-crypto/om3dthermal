@@ -36,7 +36,7 @@ from .mesh_convergence import (
     write_mesh_convergence_csv,
     write_mesh_convergence_json,
 )
-from .power import run_memory_power
+from .power import run_case_system_power, run_memory_power
 from .sensitivity import (
     build_inset_sweep_cases,
     build_k_sweep_cases,
@@ -652,7 +652,10 @@ def main(argv: list[str] | None = None) -> int:
             f"[sweep-mesh] wrote {result['case_count']} cases to "
             f"{result['rows_path']} and {result['json_path']}")
     elif args.command == "power":
-        result = run_memory_power(args.config)
+        if args.config.parent.name == "cases":
+            result = run_case_system_power(args.config)
+        else:
+            result = run_memory_power(args.config)
         print(json.dumps(result.as_dict(display_na=True), indent=2))
     return 0
 

@@ -6,12 +6,12 @@ its 1.6 W/die uniform-BEOL model.
 
 | Case ID | Architecture | Config | Run | GPU | Memory | Total | Tmax |
 |---|---|---|---|---:|---:|---:|---:|
-| `exp_conv_2x2_g414_m160` | Conventional 2x2 | `configs/exp_conv_2x2_g414_m160.yaml` | `runs/exp_conv_2x2_g414_m160` | 414 W | 160 W | 574 W | 122.9715 degC |
-| `exp_conv_2x2_g300_m160` | Conventional 2x2 | `configs/exp_conv_2x2_g300_m160.yaml` | `runs/exp_conv_2x2_g300_m160` | 300 W | 160 W | 460 W | 102.3078 degC |
-| `exp_conv_2x1_g414_m160` | Conventional 2x1 | `configs/exp_conv_2x1_g414_m160.yaml` | `runs/exp_conv_2x1_g414_m160` | 414 W | 160 W | 574 W | 120.4741 degC |
-| `exp_conv_2x1_g300_m160` | Conventional 2x1 | `configs/exp_conv_2x1_g300_m160.yaml` | `runs/exp_conv_2x1_g300_m160` | 300 W | 160 W | 460 W | 100.4761 degC |
-| `exp_orth_mosaic98_g414_m156p8_uniform` | Orthogonal MOSAIC | `configs/exp_orth_mosaic98_g414_m156p8_uniform.yaml` | `runs/exp_orth_mosaic98_g414_m156p8_uniform` | 414 W | 156.8 W | 570.8 W | 122.6727 degC |
-| `exp_orth_mosaic98_g300_m156p8_uniform` | Orthogonal MOSAIC | `configs/exp_orth_mosaic98_g300_m156p8_uniform.yaml` | `runs/exp_orth_mosaic98_g300_m156p8_uniform` | 300 W | 156.8 W | 456.8 W | 99.1471 degC |
+| `exp_conv_2x2_g414_m160` | Conventional 2x2 | `configs/legacy/exp_conv_2x2_g414_m160.yaml` | `runs/exp_conv_2x2_g414_m160` | 414 W | 160 W | 574 W | 122.9715 degC |
+| `exp_conv_2x2_g300_m160` | Conventional 2x2 | `configs/legacy/exp_conv_2x2_g300_m160.yaml` | `runs/exp_conv_2x2_g300_m160` | 300 W | 160 W | 460 W | 102.3078 degC |
+| `exp_conv_2x1_g414_m160` | Conventional 2x1 | `configs/legacy/exp_conv_2x1_g414_m160.yaml` | `runs/exp_conv_2x1_g414_m160` | 414 W | 160 W | 574 W | 120.4741 degC |
+| `exp_conv_2x1_g300_m160` | Conventional 2x1 | `configs/legacy/exp_conv_2x1_g300_m160.yaml` | `runs/exp_conv_2x1_g300_m160` | 300 W | 160 W | 460 W | 100.4761 degC |
+| `exp_orth_mosaic98_g414_m156p8_uniform` | Orthogonal MOSAIC | `configs/legacy/exp_orth_mosaic98_g414_m156p8_uniform.yaml` | `runs/exp_orth_mosaic98_g414_m156p8_uniform` | 414 W | 156.8 W | 570.8 W | 122.6727 degC |
+| `exp_orth_mosaic98_g300_m156p8_uniform` | Orthogonal MOSAIC | `configs/legacy/exp_orth_mosaic98_g300_m156p8_uniform.yaml` | `runs/exp_orth_mosaic98_g300_m156p8_uniform` | 300 W | 156.8 W | 456.8 W | 99.1471 degC |
 
 The result-first paper page is
 [`thermal_results_overview.md`](thermal_results_overview.md).

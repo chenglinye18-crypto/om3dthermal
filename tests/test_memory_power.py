@@ -10,7 +10,10 @@ from om3dthermal.power import (
     calculate_memory_power,
     load_case_config,
     load_power_config,
+    map_system_power_to_thermal,
     resolve_case_geometry,
+    resolve_system_power,
+    run_case_system_power,
     run_memory_power,
 )
 from om3dthermal.power.backends import DreamRAMBackend, OperationTableCellModel
@@ -31,7 +34,7 @@ from om3dthermal.power.refresh import calculate_refresh_power
 
 
 ROOT = Path(__file__).parents[1]
-POWER_CONFIGS = ROOT / "configs" / "power"
+POWER_CONFIGS = ROOT / "configs" / "legacy" / "power"
 CASE_CONFIGS = ROOT / "configs" / "cases"
 
 
@@ -753,7 +756,7 @@ def test_miv_length_changes_with_layers_and_pitch_not_dies_stacked():
 )
 def test_miv_adapter_tracks_existing_geometry_config(
         tmp_path, layers, pitch_nm, expected_average_um):
-    source_path = ROOT / "configs" / "orthogonal_m3d_edram_v0.yaml"
+    source_path = ROOT / "configs" / "legacy" / "orthogonal_m3d_edram_v0.yaml"
     raw_geometry = yaml.safe_load(source_path.read_text(encoding="utf-8"))
     stack_um = layers * pitch_nm * 1e-3
     raw_geometry["m3d_beol"].update({
@@ -1277,24 +1280,23 @@ def test_refresh_does_not_change_m3d_read_transport_terms():
     assert result.E_interface_pj_bit == pytest.approx(0.5, abs=0.0)
 
 
-def test_canonical_cases_parse_and_preserve_nominal_power():
-    hbm_case = load_case_config(CASE_CONFIGS / "conventional_hbm3.yaml")
+def test_active_cases_parse_and_resolve_system_power():
+    hbm_case = load_case_config(
+        CASE_CONFIGS / "conventional_hbm_2x1_nologic.yaml")
     hbm_geometry = resolve_case_geometry(hbm_case)
-    hbm = calculate_memory_power(
+    hbm_system = resolve_system_power(
         hbm_case, project_root=ROOT, geometry=hbm_geometry)
-    assert hbm.E_access_total_pj_bit == 0.9782367130708566
+    assert hbm_system.gpu_power_W == 300.0
+    assert hbm_system.memory_result is not None
+    hbm = hbm_system.memory_result
+    assert hbm.diagnostics["activated_row_data_utilization"] == 0.10
+    assert hbm.diagnostics["effective_rd_per_act"] == 6.4
     assert hbm.P_refresh_W == 0.11395159240799647
-    assert hbm.diagnostics["geometry_source_config"] == (
-        "canonical_case:conventional_hbm3")
+    assert hbm.E_base_route_pj_bit == 0.0
+    assert hbm.E_vertical_pj_bit > 0.0
     assert hbm_case.architecture.geometry_source is None
-    assert hbm_case.architecture.layers is None
-    assert hbm_case.provenance["analytical_stack_dies"] == 8
-    assert hbm_case.provenance["legacy_thermal_stack_dies"] == 12
     assert hbm.diagnostics["dies_stacked"] == 8
     assert hbm.diagnostics["geometry_feasible"] is True
-    assert hbm_case.provenance["memory_region_footprint"] == (
-        "DERIVED_FROM_DREAMRAM_DATE2026")
-    assert hbm_case.thermal["migration_status"] == "NOT_MIGRATED"
 
     m3d_case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
     m3d_geometry = resolve_case_geometry(m3d_case)
@@ -1307,6 +1309,85 @@ def test_canonical_cases_parse_and_preserve_nominal_power():
     assert m3d.P_refresh_W == 0.0003484694872064
     assert m3d.diagnostics["geometry_source_config"] == (
         "canonical_case:orthogonal_m3d_igzo")
+
+
+def test_active_case_surface_is_minimal_and_single_file():
+    expected = {
+        "conventional_hbm_2x1_nologic.yaml",
+        "orthogonal_si.yaml",
+        "orthogonal_m3d_igzo.yaml",
+        "orthogonal_m3d_si.yaml",
+    }
+    assert {path.name for path in CASE_CONFIGS.glob("*.yaml")} == expected
+    forbidden = {
+        "hbm_each", "memory_total_W", "son23split", "son23_dram_only"}
+    for path in CASE_CONFIGS.glob("*.yaml"):
+        raw_text = path.read_text(encoding="utf-8")
+        raw = yaml.safe_load(raw_text)
+        case = load_case_config(path)
+        assert case.power.gpu.power_W == 300.0
+        assert case.architecture.geometry_source is None
+        assert not any(token in raw_text for token in forbidden)
+        assert "gpu" not in raw.get("thermal", {})
+
+
+def test_active_case_system_mapping_uses_resolved_power():
+    for name in (
+        "conventional_hbm_2x1_nologic.yaml",
+        "orthogonal_si.yaml",
+        "orthogonal_m3d_igzo.yaml",
+    ):
+        case = load_case_config(CASE_CONFIGS / name)
+        geometry = resolve_case_geometry(case)
+        system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+        mapping = map_system_power_to_thermal(case, system)
+        assert mapping.unresolved is False
+        assert mapping.total_mapped_power_W == pytest.approx(
+            300.0 + system.resolved_total_memory_power_W)
+
+
+def test_m3d_si_unresolved_is_na_not_zero():
+    path = CASE_CONFIGS / "orthogonal_m3d_si.yaml"
+    case = load_case_config(path)
+    geometry = resolve_case_geometry(case)
+    system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+    mapping = map_system_power_to_thermal(case, system)
+    assert system.memory_power_status == "NOT_VALIDATED"
+    assert system.memory_access_energy_pJ_per_bit is None
+    assert system.memory_access_power_W is None
+    assert system.resolved_total_memory_power_W is None
+    assert system.as_dict(display_na=True)["resolved_total_memory_power_W"] == "N/A"
+    assert mapping.unresolved is True
+    assert mapping.total_mapped_power_W == 300.0
+
+
+def test_orthogonal_si_uses_matched_row_workload_and_refresh():
+    case = load_case_config(CASE_CONFIGS / "orthogonal_si.yaml")
+    geometry = resolve_case_geometry(case)
+    result = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    assert result.diagnostics["activated_row_data_utilization"] == 0.10
+    assert result.diagnostics["effective_rd_per_act"] == 6.4
+    assert result.E_vertical_pj_bit == 0.0
+    assert result.E_base_route_pj_bit == 0.0
+    assert result.E_interface_pj_bit == 0.5
+    assert result.P_refresh_W == 0.11395159240799647
+
+
+def test_conventional_full_row_same_boundary_remains_stable():
+    case = load_case_config(
+        CASE_CONFIGS / "conventional_hbm_2x1_nologic.yaml")
+    full = _with_row_utilization(case, 1.0)
+    geometry = resolve_case_geometry(full)
+    result = calculate_memory_power(full, project_root=ROOT, geometry=geometry)
+    legacy = calculate_memory_power(
+        load_power_config(POWER_CONFIGS / "hbm3_si_logic_remove.yaml"),
+        project_root=ROOT)
+    assert result.diagnostics["effective_rd_per_act"] == 64.0
+    assert result.E_base_route_pj_bit == 0.0
+    assert result.E_access_total_pj_bit == legacy.E_access_total_pj_bit
+    # Refresh is deliberately enabled in the active case; the old split
+    # logic-removed power input predated refresh accounting.
+    assert result.P_refresh_W == 0.11395159240799647
 
 
 def test_canonical_m3d_has_single_geometry_and_operation_sources():

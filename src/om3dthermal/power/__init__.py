@@ -17,6 +17,13 @@ from .model import (
     run_memory_power,
 )
 from .result import EnergyDecomposition, MemoryPowerResult
+from .system import (
+    ResolvedSystemPower,
+    ResolvedThermalPowerMapping,
+    map_system_power_to_thermal,
+    run_case_system_power,
+    resolve_system_power,
+)
 
 __all__ = [
     "EnergyDecomposition",
@@ -32,4 +39,9 @@ __all__ = [
     "load_case_config",
     "resolve_case_geometry",
     "run_memory_power",
+    "ResolvedSystemPower",
+    "ResolvedThermalPowerMapping",
+    "resolve_system_power",
+    "map_system_power_to_thermal",
+    "run_case_system_power",
 ]

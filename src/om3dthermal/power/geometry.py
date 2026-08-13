@@ -53,20 +53,23 @@ def resolve_case_geometry(case: CanonicalCaseConfig) -> ResolvedGeometry:
     """Resolve canonical geometry without opening another YAML file."""
     geometry = case.geometry
     m3d = None
-    if geometry.type == "orthogonal_m3d":
-        assert geometry.m3d_stack is not None
+    if geometry.type in {"orthogonal_si", "orthogonal_m3d"}:
         assert geometry.orthogonal is not None
         x_mm = geometry.orthogonal.slab_plane_y_mm
         y_mm = geometry.orthogonal.slab_height_z_mm
-        m3d = M3DGeometry(
-            layers=geometry.m3d_stack.bitcell_layers,
-            layer_pitch_um=(
-                geometry.m3d_stack.bitcell_layer_pitch_nm * 1e-3),
-            slab_x_um=x_mm * 1e3,
-            slab_y_um=y_mm * 1e3,
-            cell_area_um2=geometry.m3d_stack.cell_area_um2,
-        )
-        region = "orthogonal_m3d_slab"
+        if geometry.type == "orthogonal_m3d":
+            assert geometry.m3d_stack is not None
+            m3d = M3DGeometry(
+                layers=geometry.m3d_stack.bitcell_layers,
+                layer_pitch_um=(
+                    geometry.m3d_stack.bitcell_layer_pitch_nm * 1e-3),
+                slab_x_um=x_mm * 1e3,
+                slab_y_um=y_mm * 1e3,
+                cell_area_um2=geometry.m3d_stack.cell_area_um2,
+            )
+            region = "orthogonal_m3d_slab"
+        else:
+            region = "orthogonal_memory_slab"
     else:
         assert geometry.memory_region is not None
         x_mm = geometry.memory_region.width_mm
