@@ -28,9 +28,10 @@ ROOT = Path(__file__).parents[1]
 POWER_CONFIGS = ROOT / "configs" / "power"
 
 
-def _with_rd_per_act(config, value: int):
+def _with_row_utilization(config, value: float):
     workload = config.workload.model_copy(
-        update={"row_policy": RowPolicy(rd_per_act=value)})
+        update={"row_policy": RowPolicy(
+            activated_row_data_utilization=value)})
     return config.model_copy(update={"workload": workload})
 
 
@@ -481,13 +482,16 @@ def test_dreamram_hbm3_full_row_regression(conventional):
         39200 * result.E_access_total_pj_bit * 1e-3)
     assert result.P_logic_background_W is None
     assert result.P_total_W is None
-    assert result.diagnostics["rd_per_act"] == 64
+    assert result.diagnostics["activated_row_data_utilization"] == 1.0
+    assert result.diagnostics[
+        "activated_row_data_utilization_percent"] == 100.0
+    assert result.diagnostics["resolved_rd_per_act"] == 64
     assert result.diagnostics["atoms_per_page"] == 64
 
 
 def test_dreamram_hbm3_closed_row_regression(conventional):
     result = calculate_memory_power(
-        _with_rd_per_act(conventional, 1), project_root=ROOT)
+        _with_row_utilization(conventional, 1 / 64), project_root=ROOT)
     assert result.E_access_total_pj_bit == pytest.approx(3.0133613062)
 
 
@@ -509,10 +513,52 @@ def test_internal_component_partition_closes(conventional):
         result.E_memory_internal_pj_bit, abs=1e-15)
 
 
-def test_rd_per_act_cannot_exceed_atoms_per_page(conventional):
-    with pytest.raises(ValueError, match="exceeds atoms_per_page=64"):
+@pytest.mark.parametrize(
+    "utilization, expected_rd",
+    [
+        (1 / 64, 1), (2 / 64, 2), (4 / 64, 4), (8 / 64, 8),
+        (16 / 64, 16), (32 / 64, 32), (64 / 64, 64),
+    ],
+)
+def test_activated_row_utilization_resolves_integer_rd_count(
+        conventional, utilization, expected_rd):
+    result = calculate_memory_power(
+        _with_row_utilization(conventional, utilization), project_root=ROOT)
+    assert result.diagnostics["activated_row_data_utilization"] == utilization
+    assert result.diagnostics["resolved_rd_per_act"] == expected_rd
+    expected_energy = (
+        result.diagnostics["E_PRE_pJ"] + result.diagnostics["E_ACT_pJ"]
+        + expected_rd * result.diagnostics["E_RD_pJ"]
+    ) / (expected_rd * result.diagnostics["atom_size_bits"])
+    assert result.E_access_total_pj_bit == pytest.approx(expected_energy)
+
+
+@pytest.mark.parametrize("utilization", [0.0, -0.1, 1.01])
+def test_activated_row_utilization_range_fails(utilization):
+    with pytest.raises(ValueError):
+        RowPolicy(activated_row_data_utilization=utilization)
+
+
+def test_non_integral_activated_row_utilization_fails(conventional):
+    with pytest.raises(ValueError, match="integer RD count.*granularity 1/64"):
         calculate_memory_power(
-            _with_rd_per_act(conventional, 65), project_root=ROOT)
+            _with_row_utilization(conventional, 0.3), project_root=ROOT)
+
+
+def test_m3d_uses_control_address_reuse_not_hbm_row_policy():
+    config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
+    assert config.workload.row_policy is None
+    assert config.workload.control_address_reuse == 64
+    result = calculate_memory_power(config, project_root=ROOT)
+    assert result.diagnostics["control_address_reuse"] == 64
+    assert "activated_row_data_utilization" not in result.diagnostics
+    assert "resolved_rd_per_act" not in result.diagnostics
+    assert result.E_access_total_pj_bit == pytest.approx(
+        0.8552605756733209, abs=0.0)
+    assert result.E_vertical_pj_bit == pytest.approx(
+        0.002445862111816407, abs=0.0)
+    assert result.P_refresh_W == pytest.approx(
+        0.0003484694872064, abs=0.0)
 
 
 def test_orthogonal_si_keeps_same_dreamram_internal_energy(conventional):

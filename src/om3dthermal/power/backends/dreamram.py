@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import fields, replace
 import importlib.util
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -119,9 +120,6 @@ class DreamRAMBackend:
         dreamram_input = config.memory.dreamram
         if dreamram_input is None:
             raise ValueError("DreamRAM backend requires memory.dreamram")
-        if config.workload.row_policy is None:
-            raise ValueError("DreamRAM backend requires workload.row_policy.rd_per_act")
-
         repo = self.project_root / "third_party" / "DreamRAM"
         _verify_pin(repo)
         memory_path = resolve_project_path(
@@ -249,10 +247,28 @@ class DreamRAMBackend:
                 "independent_row_pages": independent_row_pages,
             }
 
-        n_read = config.workload.row_policy.rd_per_act
-        if n_read > atoms_per_page:
-            raise ValueError(
-                f"rd_per_act={n_read} exceeds atoms_per_page={atoms_per_page}")
+        if m3d_subarray is None:
+            row_policy = config.workload.row_policy
+            if row_policy is None:
+                raise ValueError("DreamRAM 1T1C path requires row_policy")
+            utilization = row_policy.activated_row_data_utilization
+            resolved_float = utilization * atoms_per_page
+            n_read = int(round(resolved_float))
+            if not math.isclose(
+                    resolved_float, n_read, rel_tol=0.0, abs_tol=1e-12):
+                raise ValueError(
+                    "activated_row_data_utilization must resolve exactly to an "
+                    f"integer RD count at granularity 1/{atoms_per_page}; "
+                    f"got {resolved_float} RD commands")
+            if n_read < 1 or n_read > atoms_per_page:
+                raise ValueError(
+                    "resolved_rd_per_act must be between 1 and "
+                    f"atoms_per_page={atoms_per_page}")
+        else:
+            if config.workload.control_address_reuse is None:
+                raise ValueError("M3D requires workload.control_address_reuse")
+            utilization = None
+            n_read = config.workload.control_address_reuse
 
         geometry_path, configured_x_mm, configured_y_mm = (
             load_memory_region_size(
@@ -319,7 +335,7 @@ class DreamRAMBackend:
                     data_voltage_product_V2=data_voltage_product,
                     data_pumps=data_pumps,
                     data_transition_factor=data_transition_factor,
-                    rd_per_act=n_read,
+                    control_address_reuse=n_read,
                     atom_size_bits=atom_size,
                 )
                 miv_access_energy = miv_energy.miv_access_energy_pJ_per_bit
@@ -438,7 +454,6 @@ class DreamRAMBackend:
             "commit": DREAMRAM_COMMIT,
             "memory_config": str(memory_path),
             "technology_config": str(technology_path),
-            "rd_per_act": n_read,
             "atom_size_bits": atom_size,
             "atoms_per_page": atoms_per_page,
             "geometry_source_config": str(geometry_path),
@@ -449,6 +464,10 @@ class DreamRAMBackend:
         }
         if m3d_subarray is None:
             metadata.update({
+                "activated_row_data_utilization": utilization,
+                "activated_row_data_utilization_percent": (
+                    100.0 * utilization),
+                "resolved_rd_per_act": n_read,
                 "dies_stacked": dies_stacked,
                 "cell_pitch_mapping": geometry_mapping,
                 "pitch_bl_um": float(tech.pitch_bl),
@@ -494,6 +513,10 @@ class DreamRAMBackend:
             })
         else:
             metadata.update({
+                "control_address_reuse": n_read,
+                "control_address_reuse_definition": (
+                    "data accesses sharing one row/column address-selection "
+                    "operation for MIV control-energy amortization"),
                 "dreamram_role": "miv_electrical_reference_only",
                 "dreamram_planar_organization_used": False,
                 "dreamram_internal_components_used": False,

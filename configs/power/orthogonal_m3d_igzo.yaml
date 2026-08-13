@@ -144,7 +144,9 @@ workload:
   write_bandwidth_gbps: 0
   read_data: {p0: 0.5, p1: 0.5}
   refresh_data: {p0: 0.5, p1: 0.5}
-  row_policy: {rd_per_act: 64}
+  # MIV row/column selection energy is shared by this many data accesses.
+  # This is not conventional 1T1C activated-row utilization.
+  control_address_reuse: 64
 
 power:
   refresh:

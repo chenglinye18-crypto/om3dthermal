@@ -155,14 +155,15 @@ def calculate_length_scaled_miv_energy(
         fixed_load_pF: float,
         row_voltage_product_V2: float, col_voltage_product_V2: float,
         data_voltage_product_V2: float, data_pumps: int,
-        data_transition_factor: float, rd_per_act: int, atom_size_bits: int,
+        data_transition_factor: float, control_address_reuse: int,
+        atom_size_bits: int,
         ) -> MIVEnergy:
-    """Use physical MIV length with a distributed-C reference and one load."""
+    """Resolve MIV energy with explicit address/control-selection reuse."""
     if topology.active_data_miv_count is None:
         raise ValueError("MIV serialization must be resolved before energy")
     if vertical_capacitance_pF_per_um <= 0.0 or fixed_load_pF <= 0.0:
         raise ValueError("MIV distributed capacitance and fixed load must be positive")
-    if data_pumps <= 0 or rd_per_act <= 0 or atom_size_bits <= 0:
+    if data_pumps <= 0 or control_address_reuse <= 0 or atom_size_bits <= 0:
         raise ValueError("MIV access accounting counts must be positive")
     distributed = tuple(
         vertical_capacitance_pF_per_um * length
@@ -186,10 +187,10 @@ def calculate_length_scaled_miv_energy(
         topology.active_data_miv_count * data_pumps / 2
         * average_effective * data_voltage_product_V2
         * data_transition_factor)
-    denominator = rd_per_act * atom_size_bits
+    denominator = control_address_reuse * atom_size_bits
     row_access = 1.5 * row / denominator
-    col_access = rd_per_act * col / denominator
-    data_access = rd_per_act * data / denominator
+    col_access = control_address_reuse * col / denominator
+    data_access = control_address_reuse * data / denominator
     return MIVEnergy(
         miv_distributed_capacitance_per_layer_pF=distributed,
         miv_effective_capacitance_per_layer_pF=effective,

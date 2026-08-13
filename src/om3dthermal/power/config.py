@@ -371,7 +371,7 @@ class ArchitectureInput(StrictModel):
 
 
 class RowPolicy(StrictModel):
-    rd_per_act: int = Field(gt=0)
+    activated_row_data_utilization: float = Field(gt=0.0, le=1.0)
 
 
 class WorkloadInput(StrictModel):
@@ -381,6 +381,7 @@ class WorkloadInput(StrictModel):
     write_transition: WriteProbability | None = None
     refresh_data: BinaryProbability | None = None
     row_policy: RowPolicy | None = None
+    control_address_reuse: int | None = Field(default=None, gt=0)
     stored_bits: float | None = Field(default=None, gt=0.0)
     active_rows: int | None = Field(default=None, ge=0)
     layer_access_probability: tuple[float, ...] | None = None
@@ -449,6 +450,25 @@ class MemoryPowerConfig(StrictModel):
     architecture: ArchitectureInput
     workload: WorkloadInput
     power: PowerInput
+
+    @model_validator(mode="after")
+    def workload_semantics(self) -> "MemoryPowerConfig":
+        is_m3d = self.architecture.m3d_subarray is not None
+        if is_m3d:
+            if self.workload.row_policy is not None:
+                raise ValueError(
+                    "Orthogonal-M3D must not use conventional HBM row_policy")
+            if self.workload.control_address_reuse is None:
+                raise ValueError(
+                    "Orthogonal-M3D requires workload.control_address_reuse")
+        else:
+            if self.workload.row_policy is None:
+                raise ValueError(
+                    "1T1C DreamRAM paths require workload.row_policy")
+            if self.workload.control_address_reuse is not None:
+                raise ValueError(
+                    "control_address_reuse is specific to Orthogonal-M3D")
+        return self
 
 
 def load_power_config(path: str | Path) -> MemoryPowerConfig:

@@ -22,7 +22,7 @@ architecture:
 workload:
   read_bandwidth_gbps: 39200
   write_bandwidth_gbps: 0
-  row_policy: {rd_per_act: 64}
+  row_policy: {activated_row_data_utilization: 1.0}
 
 power:
   refresh: {enabled: false}
