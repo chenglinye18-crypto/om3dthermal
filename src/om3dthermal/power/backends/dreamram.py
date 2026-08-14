@@ -289,13 +289,21 @@ class DreamRAMBackend:
         si_packing_metadata: dict[str, object] = {}
         geometry_fit = reference_geometry_fit
         if (m3d_subarray is None
-                and geometry.memory_region == "orthogonal_memory_slab"):
+                and geometry.memory_region in {
+                    "orthogonal_memory_slab", "hbm_dram_die"}
+                and (geometry.memory_region == "orthogonal_memory_slab"
+                     or geometry.memory_dies_per_region > 1)):
             primitive_bits = int(
                 dram.subarrays * dram.mat_rows * dram.mats * dram.mat_cols)
+            physical_die_count = (
+                geometry.memory_region_count
+                if geometry.memory_region == "orthogonal_memory_slab"
+                else (geometry.memory_region_count
+                      * geometry.memory_dies_per_region))
             packing = pack_si_primitive(
                 slab_width_um=geometry.configured_x_mm * 1e3,
                 slab_height_um=geometry.configured_y_mm * 1e3,
-                slab_count=geometry.memory_region_count,
+                slab_count=physical_die_count,
                 primitive_type=(
                     "DREAMRAM_BANK_TILE_WITH_DECODERS_SWD_BLSA"),
                 primitive_width_um=float(bank_tile_width_um),
@@ -320,10 +328,20 @@ class DreamRAMBackend:
                     "packed Si refresh-event capacity does not close")
             refresh_organization.update({
                 "capacity_basis": "INTEGER_PACKED_DREAMRAM_BANKS",
-                "packed_banks_per_slab": packing.primitives_per_slab,
-                "orthogonal_slab_count": packing.slab_count,
+                "packed_banks_per_memory_die": packing.primitives_per_slab,
+                "physical_memory_die_count": packing.slab_count,
                 "refresh_events_per_packed_bank": events_per_bank,
             })
+            if geometry.memory_region == "orthogonal_memory_slab":
+                refresh_organization.update({
+                    "packed_banks_per_slab": packing.primitives_per_slab,
+                    "orthogonal_slab_count": packing.slab_count,
+                })
+            else:
+                refresh_organization.update({
+                    "physical_stack_count": geometry.memory_region_count,
+                    "dram_dies_per_stack": geometry.memory_dies_per_region,
+                })
             si_packing_metadata = {
                 "capacity_model": "GEOMETRY_DRIVEN_INTEGER_BANK_PACKING",
                 **packing.as_dict(),
@@ -344,15 +362,19 @@ class DreamRAMBackend:
                     "BANK_SELECT_DECODER_SWD_BLSA_OPEN_BITLINE_AND_"
                     "ECC_FOOTPRINT"),
             }
-        elif (m3d_subarray is None
-              and geometry.memory_region == "hbm_dram_die"
-              and geometry.memory_region_count > 1):
-            refresh_events_per_full_memory_cycle *= geometry.memory_region_count
-            dreamram_total_stored_bits *= geometry.memory_region_count
-            refresh_organization.update({
-                "capacity_basis": "DREAMRAM_STACK_CAPACITY_TIMES_SYSTEM_STACKS",
-                "physical_stack_equivalents": geometry.memory_region_count,
-            })
+            if geometry.memory_region == "hbm_dram_die":
+                bits_per_die = packing.bits_per_slab
+                bits_per_stack = bits_per_die * geometry.memory_dies_per_region
+                si_packing_metadata.update({
+                    "physical_stack_count": geometry.memory_region_count,
+                    "dram_dies_per_stack": geometry.memory_dies_per_region,
+                    "physical_memory_die_count": physical_die_count,
+                    "packed_banks_per_die": packing.primitives_per_slab,
+                    "bits_per_die": bits_per_die,
+                    "bits_per_stack": bits_per_stack,
+                    "gib_per_die": bits_per_die / 8 / (2 ** 30),
+                    "gib_per_stack": bits_per_stack / 8 / (2 ** 30),
+                })
         miv_metadata: dict[str, object] = {}
         miv_access_energy: float | None = None
         if config.architecture.vertical.type == "miv":

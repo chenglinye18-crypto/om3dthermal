@@ -69,9 +69,8 @@ def _resolved_capacity(
     if geometry.memory_region == "hbm_dram_die":
         instances = geometry.memory_region_count
         total_bits = int(d["total_stored_bits"])
-        bits_per_instance = total_bits // instances
-        dies = int(d["dies_stacked"])
-        bits_per_plane = bits_per_instance // dies
+        bits_per_instance = int(d["bits_per_stack"])
+        bits_per_plane = int(d["bits_per_die"])
         plane_area = geometry.configured_x_mm * geometry.configured_y_mm
         layout = case.geometry.layout
         footprint_area = (
@@ -166,8 +165,7 @@ def compile_case_thermal(
         stack = case.thermal["stack"]
         repeated = stack["repeated_dram"]
         top = stack["top_dram"]
-        assert system.memory_result is not None
-        dram_die_count = int(system.memory_result.diagnostics["dies_stacked"])
+        dram_die_count = int(layout["dram_dies_per_stack"])
         repeated_dram_count = dram_die_count - 1
         group_names = ["hbm_left", "hbm_right"]
         centers = layout["group_centers_mm"]
@@ -271,8 +269,8 @@ def compile_case_thermal(
                 component=f"memory_column:{group}", material="DRAM_BEOL")
         elif case.geometry.type == "orthogonal_si":
             selector = PowerSelector(material="MOSAIC_BEOL")
-        elif target.target_region == "M3D_FEOL":
-            selector = PowerSelector(tags={"role": "feol"})
+        elif target.target_region == "M3D_BEOL_INTERCONNECT":
+            selector = PowerSelector(tags={"role": "beol_interconnect"})
         else:
             selector = PowerSelector(tags={"role": "m3d_bitcell_stack"})
         sources.append(PowerSourceConfig(
@@ -362,8 +360,15 @@ def run_architecture_comparison(
         rows.append(row)
         run_dir = output_dir / case.name
         run_dir.mkdir(exist_ok=True)
+        run_summary = asdict(row)
+        run_summary["thermal_power_by_source_W"] = dict(
+            pipeline.power.power_by_source)
+        run_summary["thermal_memory_target_regions"] = {
+            source.name: source.target_region
+            for source in mapping.sources if source.name != "gpu"
+        }
         (run_dir / "thermal_summary.json").write_text(
-            json.dumps(asdict(row), indent=2), encoding="utf-8")
+            json.dumps(run_summary, indent=2), encoding="utf-8")
 
     write_comparison_summary(rows, output_dir)
     return rows

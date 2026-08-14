@@ -47,6 +47,7 @@ class ResolvedGeometry:
     configured_x_mm: float
     configured_y_mm: float
     memory_region_count: int = 1
+    memory_dies_per_region: int = 1
     m3d: M3DGeometry | None = None
 
 
@@ -79,12 +80,18 @@ def resolve_case_geometry(case: CanonicalCaseConfig) -> ResolvedGeometry:
         region = "hbm_dram_die"
         region_count = int(
             geometry.layout.get("total_physical_stack_equivalents", 1))
+        dies_per_region = int(geometry.layout.get("dram_dies_per_stack", 1))
+        if dies_per_region <= 0:
+            raise ValueError("geometry.layout.dram_dies_per_stack must be positive")
+    if geometry.type in {"orthogonal_si", "orthogonal_m3d"}:
+        dies_per_region = 1
     return ResolvedGeometry(
         source=f"canonical_case:{case.name}",
         memory_region=region,
         configured_x_mm=x_mm,
         configured_y_mm=y_mm,
         memory_region_count=region_count,
+        memory_dies_per_region=dies_per_region,
         m3d=m3d,
     )
 

@@ -7,8 +7,9 @@ geometry:
     arrangement: 2x1_hbm
     visible_group_count: 2
     visible_group_footprint_mm: [11.0, 22.0]
-    physical_stack_equivalents_per_group: 2
-    total_physical_stack_equivalents: 4
+    physical_stack_equivalents_per_group: 1
+    total_physical_stack_equivalents: 2
+    dram_dies_per_stack: 12
     group_centers_mm: [[-9.5, 0.0], [9.5, 0.0]]
     merged_axis: y
     internal_y_mold_seam: absent
@@ -51,7 +52,7 @@ thermal:
   stack:
     gpu_hbm_ubump_um: 40.0
     base_logic_die: removed
-    dram_die_count_source: resolved_dreamram_organization
+    dram_die_count_source: canonical_geometry_layout
     repeated_dram: {hybrid_bonding_um: 2.0, beol_um: 3.0, si_um: 41.0}
     top_dram: {hybrid_bonding_um: 2.0, beol_um: 3.0, si_um: 169.0}
     hbm_top_to_tim: direct
@@ -84,8 +85,12 @@ thermal:
 
 provenance:
   geometry_starting_reference: configs/legacy/exp_conv_2x1_nobase_g300_m128.yaml
-  two_by_one_semantics: TWO_VISIBLE_Y_MERGED_GROUPS_FOUR_STACK_EQUIVALENTS
-  stack_organization: DREAMRAM_HBM3_8HI_ANALYTICAL
+  two_by_one_semantics: TWO_VISIBLE_11X22_STACKS_TWO_PHYSICAL_STACKS
+  physical_stack_organization: CANONICAL_12HI_GEOMETRY
+  access_energy_organization: DREAMRAM_HBM3_REFERENCE_ANALYTICAL
+  capacity_model: GEOMETRY_DRIVEN_INTEGER_BANK_PACKING
+  paper_capacity_sanity_reference_GB: 144.0
+  paper_capacity_sanity_role: REFERENCE_ONLY_NOT_A_FITTING_TARGET
   thermal_die_layer_thicknesses: INHERITED_CURRENT_NOBASE_STACK
   legacy_12hi_geometry_status: ARCHIVED_SEPARATE_REFERENCE_NOT_SILENTLY_MERGED
   analytical_power_scope: WHOLE_CASE_AT_CONFIGURED_AGGREGATE_BANDWIDTH

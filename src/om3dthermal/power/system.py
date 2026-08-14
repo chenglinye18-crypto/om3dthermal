@@ -161,24 +161,30 @@ def map_system_power_to_thermal(
                 power_W=system.resolved_total_memory_power_W,
                 mapping_provenance="REFERENCE_FIXED_COARSE_BITCELL_MAPPING"),)
         else:
-            result = system.memory_result
-            bandwidth = case.workload.read_bandwidth_gbps * 1e-3
-            active = (
-                bandwidth * (result.E_memory_internal_pj_bit
-                             + result.E_vertical_pj_bit
-                             + result.E_interface_pj_bit)
-                + float(result.P_refresh_W or 0.0))
-            feol = bandwidth * result.E_feol_route_pj_bit
+            stack = case.geometry.m3d_stack
+            if stack is None:
+                raise ValueError("orthogonal M3D mapping requires m3d_stack")
+            bitcell_um = (
+                stack.bitcell_layers * stack.bitcell_layer_pitch_nm * 1e-3)
+            interconnect_um = stack.beol_interconnect_um
+            beol_um = bitcell_um + interconnect_um
+            bitcell_power = (
+                system.resolved_total_memory_power_W * bitcell_um / beol_um)
+            interconnect_power = (
+                system.resolved_total_memory_power_W - bitcell_power)
             memory_sources = (
                 ThermalPowerTarget(
-                    name="m3d_memory_active", target_region="M3D_BITCELL_STACK",
-                    power_W=active,
+                    name="m3d_memory_beol_bitcell",
+                    target_region="M3D_BITCELL_STACK",
+                    power_W=bitcell_power,
                     mapping_provenance=(
-                        "MODELING_CHOICE_COARSE_MIV_INTERFACE_TO_ACTIVE_STACK")),
+                        "MODELING_CHOICE_UNIFORM_VOLUME_COMPLETE_M3D_BEOL")),
                 ThermalPowerTarget(
-                    name="m3d_feol_route", target_region="M3D_FEOL",
-                    power_W=feol,
-                    mapping_provenance="PHYSICAL_FEOL_ROUTE_REGION"),
+                    name="m3d_memory_beol_interconnect",
+                    target_region="M3D_BEOL_INTERCONNECT",
+                    power_W=interconnect_power,
+                    mapping_provenance=(
+                        "MODELING_CHOICE_UNIFORM_VOLUME_COMPLETE_M3D_BEOL")),
             )
     sources = (gpu, *memory_sources)
     return ResolvedThermalPowerMapping(

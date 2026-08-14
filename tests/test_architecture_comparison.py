@@ -36,10 +36,13 @@ def test_system_scope_capacity_and_refresh_close():
     conventional = _resolved(NAMES[0])
     orth_si = _resolved(NAMES[1])
     m3d = _resolved(NAMES[2])
-    assert _resolved_capacity(*conventional)["system_capacity_GiB"] == 64.0
+    capacity = _resolved_capacity(*conventional)
+    assert capacity["system_capacity_GiB"] == 114.75
+    assert capacity["capacity_per_instance_GiB"] == 57.375
     assert _resolved_capacity(*orth_si)["system_capacity_GiB"] == 234.28125
     assert _resolved_capacity(*m3d)["system_capacity_GiB"] == 428.75
-    assert conventional[2].refresh_power_W == 4 * 0.11395159240799647
+    assert conventional[2].refresh_power_W == pytest.approx(
+        0.8172465768010997)
     assert orth_si[2].refresh_power_W == pytest.approx(1.6685450943022453)
     assert m3d[2].refresh_power_W == 98 * 0.0003484694872064
 
@@ -66,6 +69,47 @@ def test_resolved_to_thermal_source_closure_and_same_case_compile():
         assert sum(source.total_power for source in
                    thermal.thermal_power_sources.sources) == pytest.approx(expected)
         assert thermal.metadata["case_id"] == case.name
+
+
+def test_conventional_physical_geometry_drives_capacity_and_thermal_stack():
+    case, geometry, system = _resolved(NAMES[0])
+    diagnostics = system.diagnostics
+    assert geometry.memory_region_count == 2
+    assert geometry.memory_dies_per_region == 12
+    assert (geometry.configured_x_mm, geometry.configured_y_mm) == (10.8, 21.8)
+    assert case.geometry.layout["visible_group_footprint_mm"] == [11.0, 22.0]
+    assert diagnostics["packed_banks_per_die"] == 306
+    assert diagnostics["rotated_90_deg"] is True
+    assert diagnostics["bits_per_stack"] == diagnostics["bits_per_die"] * 12
+    assert diagnostics["total_stored_bits"] == diagnostics["bits_per_stack"] * 2
+    thermal = compile_case_thermal(case, system)
+    hbm = thermal.stack_templates["hbm_12hi"].model_dump()
+    repeated = next(item for item in hbm["items"] if item["kind"] == "repeat")
+    assert repeated["count"] == 11
+
+
+def test_unified_memory_mapping_targets_complete_beol_only():
+    for name in NAMES:
+        case, _, system = _resolved(name)
+        mapping = map_system_power_to_thermal(case, system)
+        memory = [source for source in mapping.sources if source.name != "gpu"]
+        assert sum(source.power_W for source in memory) == pytest.approx(
+            system.resolved_total_memory_power_W)
+        assert all(source.power_W > 0.0 for source in memory)
+        assert all(source.target_region != "M3D_FEOL" for source in memory)
+        thermal = compile_case_thermal(case, system)
+        selectors = [source.selector for source in
+                     thermal.thermal_power_sources.sources
+                     if source.name != "gpu"]
+        assert all(selector.material != "M3D_FEOL" for selector in selectors)
+        assert all(selector.tags.get("role") != "feol" for selector in selectors)
+
+    case, _, system = _resolved(NAMES[2])
+    memory = map_system_power_to_thermal(case, system).sources[1:]
+    assert {source.target_region for source in memory} == {
+        "M3D_BITCELL_STACK", "M3D_BEOL_INTERCONNECT"}
+    bitcell, interconnect = memory
+    assert bitcell.power_W / interconnect.power_W == pytest.approx(2.304 / 3.0)
 
 
 def test_density_denominators_are_geometry_derived():
