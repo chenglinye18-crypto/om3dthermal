@@ -279,6 +279,42 @@ def calculate_memory_power(
     logic_W = config.architecture.logic_background_w
     total_W = None if logic_W is None else (
         access_W + refresh_W + background_W + logic_W)
+    electrical_access_comparison: dict[str, object] = {}
+    reference_components = backend.metadata.get(
+        "electrical_components_reference_pJ_per_bit")
+    if isinstance(reference_components, dict):
+        reference_decomposition = EnergyDecomposition(**reference_components)
+        reference_vertical = _resolve_transport(
+            "vertical", config.architecture.vertical.source,
+            config.architecture.vertical.energy_pj_per_bit,
+            reference_decomposition)
+        reference_base = _resolve_transport(
+            "base_route", config.architecture.base_route.source,
+            config.architecture.base_route.energy_pj_per_bit,
+            reference_decomposition)
+        reference_interface = _resolve_transport(
+            "interface", config.architecture.interface.source,
+            config.architecture.interface.energy_pj_per_bit,
+            reference_decomposition)
+        reference_total = (
+            reference_decomposition.memory_internal + reference_vertical
+            + reference_base + reference_interface)
+        electrical_access_comparison = {
+            "architecture_access_reference_pJ_per_bit": {
+                "memory_internal": reference_decomposition.memory_internal,
+                "vertical": reference_vertical,
+                "base_route": reference_base,
+                "interface": reference_interface,
+                "total": reference_total,
+            },
+            "architecture_access_resolved_pJ_per_bit": {
+                "memory_internal": memory_internal,
+                "vertical": vertical,
+                "base_route": base_route,
+                "interface": interface,
+                "total": read_total,
+            },
+        }
 
     return MemoryPowerResult(
         technology=backend.technology,
@@ -305,6 +341,7 @@ def calculate_memory_power(
             **({} if feol_route_result is None else feol_route_result.as_dict()),
             **({} if m3d_subarray is None else zhu_scaling_diagnostics),
             **refresh_result.diagnostics,
+            **electrical_access_comparison,
             "cell_model": config.memory.cell_model.type,
             "operation_energy_provenance": (
                 None

@@ -519,6 +519,87 @@ class DreamRAMBackend:
             access["memory_internal"] = 0.0
             access["base_route"] = 0.0
             access["interface"] = 0.0
+        native_access = dict(access)
+        native_reference = (
+            sum(access.values())
+            if m3d_subarray is not None
+            else (
+                float(command_energy["pre"]) + float(command_energy["act"])
+                + access_reuse * float(command_energy["rd"])
+            ) / denominator)
+        if abs(sum(access.values()) - native_reference) > 1e-12:
+            raise RuntimeError(
+                "DreamRAM native access-energy decomposition does not close")
+
+        electrical_stack_metadata: dict[str, object] = {}
+        if (m3d_subarray is None
+                and geometry.memory_region == "hbm_dram_die"
+                and geometry.memory_dies_per_region > 1):
+            # DreamRAM derives dies_stacked from ranks/channels/ch_per_die.
+            # Mutating those fields to force 12Hi would also change logical
+            # address widths and channel organization.  Preserve that native
+            # organization and replace only its average crossed-layer count.
+            physical_dies = geometry.memory_dies_per_region
+            reference_average_layers = float(
+                wire_lengths["tsv-n-layers-avg"])
+            resolved_average_layers = physical_dies / 2.0
+            vertical_scale = resolved_average_layers / reference_average_layers
+            vertical_components_reference = {
+                component: (
+                    _COMMAND_TERMS["pre"].get(component, 0.0)
+                    * float(components[component])
+                    + _COMMAND_TERMS["act"].get(component, 0.0)
+                    * float(components[component])
+                    + access_reuse
+                    * _COMMAND_TERMS["rd"].get(component, 0.0)
+                    * float(components[component])
+                ) / denominator
+                for component in _GROUP_COMPONENTS["vertical"]
+            }
+            if abs(sum(vertical_components_reference.values())
+                   - access["vertical"]) > 1e-12:
+                raise RuntimeError(
+                    "DreamRAM native TSV component decomposition does not close")
+            vertical_components_resolved = {
+                component: energy * vertical_scale
+                for component, energy in vertical_components_reference.items()
+            }
+            access["vertical"] = sum(vertical_components_resolved.values())
+            capacitance_per_layer_pF = float(tech.scaled_cap_tsv())
+            electrical_stack_metadata = {
+                "electrical_stack_height_model": (
+                    "DREAMRAM_AVERAGE_CROSSED_LAYER_SCALING"),
+                "electrical_stack_height_provenance": (
+                    "DERIVED_FROM_REFERENCE"),
+                "electrical_reference_stack_die_count": dies_stacked,
+                "electrical_resolved_stack_die_count": physical_dies,
+                "reference_average_tsv_layers_crossed": (
+                    reference_average_layers),
+                "resolved_average_tsv_layers_crossed": (
+                    resolved_average_layers),
+                "tsv_vertical_energy_scale": vertical_scale,
+                "tsv_layer_height_um": float(tech.tsv_height),
+                "reference_average_tsv_length_um": (
+                    reference_average_layers * float(tech.tsv_height)),
+                "resolved_average_tsv_length_um": (
+                    resolved_average_layers * float(tech.tsv_height)),
+                "tsv_capacitance_per_crossed_layer_pF": (
+                    capacitance_per_layer_pF),
+                "reference_average_tsv_capacitance_pF": (
+                    reference_average_layers * capacitance_per_layer_pF),
+                "resolved_average_tsv_capacitance_pF": (
+                    resolved_average_layers * capacitance_per_layer_pF),
+                "tsv_data_serialization_factor": int(dram.gbus_tsv_sd),
+                "active_data_tsv_count_per_command": int(wire_counts["tsv"]),
+                "row_address_tsv_count_per_command": int(row_bits),
+                "column_address_tsv_count_per_command": int(col_bits),
+                "vertical_components_reference_pJ_per_bit": (
+                    vertical_components_reference),
+                "vertical_components_resolved_pJ_per_bit": (
+                    vertical_components_resolved),
+                "electrical_components_reference_pJ_per_bit": native_access,
+                "electrical_components_resolved_pJ_per_bit": dict(access),
+            }
         internal_components = {
             component: (
                 _COMMAND_TERMS["pre"].get(component, 0.0)
@@ -534,12 +615,8 @@ class DreamRAMBackend:
         if m3d_subarray is not None:
             internal_components = {}
         reference = (
-            decomposition.total
-            if m3d_subarray is not None
-            else (
-                float(command_energy["pre"]) + float(command_energy["act"])
-                + access_reuse * float(command_energy["rd"])
-            ) / denominator)
+            decomposition.total if m3d_subarray is not None
+            else native_reference + access["vertical"] - native_access["vertical"])
         if abs(decomposition.total - reference) > 1e-12:
             raise RuntimeError("DreamRAM access-energy decomposition does not close")
         if abs(sum(internal_components.values())
@@ -559,6 +636,7 @@ class DreamRAMBackend:
             **geometry_fit.as_dict(),
             **si_packing_metadata,
             **miv_metadata,
+            **electrical_stack_metadata,
             "unsupported_operations": ["write", "background"],
         }
         if m3d_subarray is None:

@@ -88,6 +88,8 @@ provenance:
   two_by_one_semantics: TWO_VISIBLE_11X22_STACKS_TWO_PHYSICAL_STACKS
   physical_stack_organization: CANONICAL_12HI_GEOMETRY
   access_energy_organization: DREAMRAM_HBM3_REFERENCE_ANALYTICAL
+  electrical_stack_height_model: DREAMRAM_AVERAGE_CROSSED_LAYER_SCALING
+  electrical_stack_height_provenance: DERIVED_FROM_REFERENCE
   capacity_model: GEOMETRY_DRIVEN_INTEGER_BANK_PACKING
   paper_capacity_sanity_reference_GB: 144.0
   paper_capacity_sanity_role: REFERENCE_ONLY_NOT_A_FITTING_TARGET

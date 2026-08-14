@@ -1301,6 +1301,13 @@ def test_active_cases_parse_and_resolve_system_power():
     assert hbm.diagnostics["physical_stack_count"] == 2
     assert hbm.diagnostics["dram_dies_per_stack"] == 12
     assert hbm.diagnostics["packed_banks_per_die"] == 306
+    assert hbm.E_memory_internal_pj_bit == pytest.approx(
+        0.8676557831180526, abs=0.0)
+    assert hbm.E_vertical_pj_bit == pytest.approx(
+        0.38438756103515626, abs=0.0)
+    assert hbm.E_interface_pj_bit == pytest.approx(0.0350625, abs=0.0)
+    assert hbm.E_access_total_pj_bit == pytest.approx(
+        1.2871058441532088, abs=0.0)
     assert hbm.diagnostics["geometry_feasible"] is True
 
     m3d_case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
@@ -1481,10 +1488,56 @@ def test_conventional_full_row_same_boundary_remains_stable():
         project_root=ROOT)
     assert result.diagnostics["effective_rd_per_act"] == 64.0
     assert result.E_base_route_pj_bit == 0.0
-    assert result.E_access_total_pj_bit == legacy.E_access_total_pj_bit
+    assert result.E_memory_internal_pj_bit == legacy.E_memory_internal_pj_bit
+    assert result.E_interface_pj_bit == legacy.E_interface_pj_bit
+    assert result.E_vertical_pj_bit == pytest.approx(
+        1.5 * legacy.E_vertical_pj_bit)
+    assert result.E_access_total_pj_bit == pytest.approx(
+        result.E_memory_internal_pj_bit + result.E_vertical_pj_bit
+        + result.E_interface_pj_bit)
     # Refresh is deliberately enabled in the active case; the old split
     # logic-removed power input predated refresh accounting.
     assert result.P_refresh_W == pytest.approx(0.8172465768010997)
+
+
+def test_conventional_12hi_scales_only_dreamram_vertical_path():
+    case = load_case_config(
+        CASE_CONFIGS / "conventional_hbm_2x1_nologic.yaml")
+    geometry_12hi = resolve_case_geometry(case)
+    geometry_8hi = replace(geometry_12hi, memory_dies_per_region=8)
+    result_8hi = calculate_memory_power(
+        case, project_root=ROOT, geometry=geometry_8hi)
+    result_12hi = calculate_memory_power(
+        case, project_root=ROOT, geometry=geometry_12hi)
+
+    assert geometry_12hi.memory_dies_per_region == 12
+    assert result_12hi.diagnostics["total_stored_bits"] == 985694994432
+    assert result_12hi.P_refresh_W == pytest.approx(0.8172465768010997)
+    assert result_12hi.E_memory_internal_pj_bit == pytest.approx(
+        result_8hi.E_memory_internal_pj_bit, abs=0.0)
+    assert result_12hi.E_base_route_pj_bit == result_8hi.E_base_route_pj_bit == 0.0
+    assert result_12hi.E_interface_pj_bit == pytest.approx(
+        result_8hi.E_interface_pj_bit, abs=0.0)
+    assert result_12hi.E_vertical_pj_bit == pytest.approx(
+        1.5 * result_8hi.E_vertical_pj_bit)
+    diagnostics = result_12hi.diagnostics
+    assert diagnostics["electrical_reference_stack_die_count"] == 8
+    assert diagnostics["electrical_resolved_stack_die_count"] == 12
+    assert diagnostics["reference_average_tsv_layers_crossed"] == 4.0
+    assert diagnostics["resolved_average_tsv_layers_crossed"] == 6.0
+    assert diagnostics["reference_average_tsv_length_um"] == 120.0
+    assert diagnostics["resolved_average_tsv_length_um"] == 180.0
+    assert diagnostics["tsv_capacitance_per_crossed_layer_pF"] == 0.78
+    assert diagnostics["reference_average_tsv_capacitance_pF"] == 3.12
+    assert diagnostics["resolved_average_tsv_capacitance_pF"] == 4.68
+    assert diagnostics["tsv_data_serialization_factor"] == 4
+    assert diagnostics["active_data_tsv_count_per_command"] == 68
+    assert sum(diagnostics[
+        "vertical_components_reference_pJ_per_bit"].values()) == (
+        result_8hi.E_vertical_pj_bit)
+    assert sum(diagnostics[
+        "vertical_components_resolved_pJ_per_bit"].values()) == (
+        result_12hi.E_vertical_pj_bit)
 
 
 def test_canonical_m3d_has_single_geometry_and_operation_sources():
