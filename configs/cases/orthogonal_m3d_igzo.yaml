@@ -174,7 +174,7 @@ thermal:
     gpu: {cu_pillar_um: 70.0, bspdn_um: 1.715, feol_um: 0.15, beol_um: 1.4}
     tim_um: 200.0
     lid_um: 3000.0
-  adhesive: {thickness_um: 3.0}
+  adhesive: {thickness_um: 1.0}
   solve_status: NOT_RUN_BY_CONFIG_UNIFICATION
   mesh: {dx_mm: 0.5, dy_mm: 0.5, dz_max_um: 100.0}
   boundary:

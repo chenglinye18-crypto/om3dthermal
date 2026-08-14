@@ -183,8 +183,13 @@ def compile_case_thermal(
         })
         raw["stacks"].update({
             "hbm": {
-                "base": {"layers": [["GPU_HBM_uBump",
-                                      f"{stack['gpu_hbm_ubump_um']} um"]]},
+                "base": {"layers": [
+                    ["GPU_HBM_uBump", f"{stack['gpu_hbm_ubump_um']} um"],
+                    *([] if stack["base_logic_die"] == "removed" else [
+                        ["HBM_Base_BEOL", f"{stack['base_beol_um']} um"],
+                        ["Silicon", f"{stack['base_si_um']} um"],
+                    ]),
+                ]},
                 "dram": {"repeat": repeated_dram_count, "layers": [
                     ["Hybrid_Bonding", f"{repeated['hybrid_bonding_um']} um"],
                     ["DRAM_BEOL", f"{repeated['beol_um']} um"],
@@ -199,6 +204,8 @@ def compile_case_thermal(
         })
         hbm_height = (
             stack["gpu_hbm_ubump_um"]
+            + (0.0 if stack["base_logic_die"] == "removed" else
+               stack["base_beol_um"] + stack["base_si_um"])
             + repeated_dram_count * sum(repeated[k] for k in (
                 "hybrid_bonding_um", "beol_um", "si_um"))
             + sum(top[k] for k in (
@@ -215,7 +222,11 @@ def compile_case_thermal(
                           f"{orth.cube_length_x_mm} mm",
                           f"{orth.slab_height_z_mm} mm"],
             "background_material": "Mold",
-            "adhesive": {"material": "Adhesive", "thickness": "3 um"},
+            "adhesive": {
+                "material": "Adhesive",
+                "thickness": (
+                    f"{case.thermal['adhesive']['thickness_um']} um"),
+            },
             "memory_die": {
                 "count": orth.slab_count,
                 "width": f"{orth.slab_plane_y_mm} mm",
@@ -265,8 +276,11 @@ def compile_case_thermal(
             # explicitly so merged 2x1 layout semantics remain visible.
             index = int(target.name.rsplit("_", 1)[1])
             group = ("hbm_left", "hbm_right")[index]
+            material = (
+                "HBM_Base_BEOL" if target.name.startswith("base_route_")
+                else "DRAM_BEOL")
             selector = PowerSelector(
-                component=f"memory_column:{group}", material="DRAM_BEOL")
+                component=f"memory_column:{group}", material=material)
         elif case.geometry.type == "orthogonal_si":
             selector = PowerSelector(material="MOSAIC_BEOL")
         elif target.target_region == "M3D_BEOL_INTERCONNECT":

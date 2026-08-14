@@ -106,8 +106,29 @@ def resolve_system_power(
         "memory_power_model": mode.model,
         "memory_power_status": mode.status,
         "resolved_total_memory_power_W": total,
+        "E_memory_internal_pj_bit": memory.E_memory_internal_pj_bit,
+        "E_vertical_pj_bit": memory.E_vertical_pj_bit,
+        "E_base_route_pj_bit": memory.E_base_route_pj_bit,
+        "E_interface_pj_bit": memory.E_interface_pj_bit,
+        "E_access_total_pj_bit": memory.E_access_total_pj_bit,
+        "P_refresh_W": memory.P_refresh_W,
+        "P_base_FEOL_logic_W": memory.P_logic_background_W,
         **memory.diagnostics,
     }
+    if case.geometry.type == "dreamram_hbm":
+        bandwidth_scale = case.workload.read_bandwidth_gbps * 1e-3
+        diagnostics.update({
+            "P_DRAM_access_W": (
+                memory.E_memory_internal_pj_bit
+                + memory.E_vertical_pj_bit
+                + memory.E_interface_pj_bit
+                + memory.E_feol_route_pj_bit) * bandwidth_scale,
+            "P_base_route_W": (
+                memory.E_base_route_pj_bit * bandwidth_scale),
+            "P_base_FEOL_logic_status": "NOT_SEPARATELY_MODELED",
+            "P_base_FEOL_logic_provenance": (
+                "PLACEHOLDER_ZERO_FOR_FUTURE_LOGIC_MODEL"),
+        })
     return ResolvedSystemPower(
         case_name=case.name,
         architecture_type=case.geometry.type,
@@ -138,15 +159,39 @@ def map_system_power_to_thermal(
             total_mapped_power_W=gpu.power_W, unresolved=True)
 
     if case.geometry.type == "dreamram_hbm":
+        if system.memory_result is None:
+            raise ValueError("analytical HBM mapping requires component energy")
         group_count = int(case.geometry.layout["visible_group_count"])
-        each = system.resolved_total_memory_power_W / group_count
+        result = system.memory_result
+        bandwidth = system.read_bandwidth_gbps
+        base_route_power = result.E_base_route_pj_bit * bandwidth * 1e-3
+        dram_power = (
+            (result.E_memory_internal_pj_bit + result.E_vertical_pj_bit
+             + result.E_interface_pj_bit + result.E_feol_route_pj_bit)
+            * bandwidth * 1e-3
+            + float(result.P_refresh_W or 0.0)
+            + float(result.P_memory_background_W or 0.0))
+        base_logic_power = float(result.P_logic_background_W or 0.0)
+        if abs(dram_power + base_route_power + base_logic_power
+               - system.resolved_total_memory_power_W) > 1e-10:
+            raise RuntimeError("component-aware HBM power mapping does not close")
         memory_sources = tuple(
-            ThermalPowerTarget(
-                name=f"memory_group_{index}",
-                target_region=f"DRAM_BEOL_GROUP_{index}", power_W=each,
-                mapping_provenance=(
-                    "MODELING_CHOICE_COARSE_DRAM_AND_TSV_TO_DRAM_BEOL"))
-            for index in range(group_count))
+            source
+            for index in range(group_count)
+            for source in (
+                ThermalPowerTarget(
+                    name=f"dram_group_{index}",
+                    target_region=f"DRAM_BEOL_GROUP_{index}",
+                    power_W=dram_power / group_count,
+                    mapping_provenance=(
+                        "MODELING_CHOICE_COARSE_DRAM_TSV_DQ_REFRESH_TO_DRAM_BEOL")),
+                ThermalPowerTarget(
+                    name=f"base_route_group_{index}",
+                    target_region=f"HBM_BASE_BEOL_GROUP_{index}",
+                    power_W=base_route_power / group_count,
+                    mapping_provenance=(
+                        "DREAMRAM_BASE_ROUTE_TO_PHYSICAL_HBM_BASE_BEOL")),
+            ))
     elif case.geometry.type == "orthogonal_si":
         memory_sources = (ThermalPowerTarget(
             name="orthogonal_si_memory", target_region="ORTHOGONAL_DRAM_BEOL",

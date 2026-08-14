@@ -1283,7 +1283,7 @@ def test_refresh_does_not_change_m3d_read_transport_terms():
 
 def test_active_cases_parse_and_resolve_system_power():
     hbm_case = load_case_config(
-        CASE_CONFIGS / "conventional_hbm_2x1_nologic.yaml")
+        CASE_CONFIGS / "conventional_hbm_2x1.yaml")
     hbm_geometry = resolve_case_geometry(hbm_case)
     hbm_system = resolve_system_power(
         hbm_case, project_root=ROOT, geometry=hbm_geometry)
@@ -1294,7 +1294,8 @@ def test_active_cases_parse_and_resolve_system_power():
     assert hbm.diagnostics["effective_rd_per_act"] == 6.4
     assert hbm.P_refresh_W == pytest.approx(0.8172465768010997)
     assert hbm.diagnostics["total_stored_bits"] == 985694994432
-    assert hbm.E_base_route_pj_bit == 0.0
+    assert hbm.E_base_route_pj_bit == pytest.approx(
+        0.109992140663163, abs=0.0)
     assert hbm.E_vertical_pj_bit > 0.0
     assert hbm_case.architecture.geometry_source is None
     assert hbm.diagnostics["dies_stacked"] == 8
@@ -1307,7 +1308,7 @@ def test_active_cases_parse_and_resolve_system_power():
         0.38438756103515626, abs=0.0)
     assert hbm.E_interface_pj_bit == pytest.approx(0.0350625, abs=0.0)
     assert hbm.E_access_total_pj_bit == pytest.approx(
-        1.2871058441532088, abs=0.0)
+        1.3970979848163718, abs=0.0)
     assert hbm.diagnostics["geometry_feasible"] is True
 
     m3d_case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
@@ -1325,7 +1326,7 @@ def test_active_cases_parse_and_resolve_system_power():
 
 def test_active_case_surface_is_minimal_and_single_file():
     expected = {
-        "conventional_hbm_2x1_nologic.yaml",
+        "conventional_hbm_2x1.yaml",
         "orthogonal_si.yaml",
         "orthogonal_m3d_igzo.yaml",
         "orthogonal_m3d_si.yaml",
@@ -1345,7 +1346,7 @@ def test_active_case_surface_is_minimal_and_single_file():
 
 def test_active_case_system_mapping_uses_resolved_power():
     for name in (
-        "conventional_hbm_2x1_nologic.yaml",
+        "conventional_hbm_2x1.yaml",
         "orthogonal_si.yaml",
         "orthogonal_m3d_igzo.yaml",
     ):
@@ -1479,22 +1480,22 @@ def test_si_packing_rejects_fractional_or_nonfitting_primitives():
 
 def test_conventional_full_row_same_boundary_remains_stable():
     case = load_case_config(
-        CASE_CONFIGS / "conventional_hbm_2x1_nologic.yaml")
+        CASE_CONFIGS / "conventional_hbm_2x1.yaml")
     full = _with_row_utilization(case, 1.0)
     geometry = resolve_case_geometry(full)
     result = calculate_memory_power(full, project_root=ROOT, geometry=geometry)
     legacy = calculate_memory_power(
-        load_power_config(POWER_CONFIGS / "hbm3_si_logic_remove.yaml"),
+        load_power_config(POWER_CONFIGS / "hbm3_si.yaml"),
         project_root=ROOT)
     assert result.diagnostics["effective_rd_per_act"] == 64.0
-    assert result.E_base_route_pj_bit == 0.0
+    assert result.E_base_route_pj_bit == legacy.E_base_route_pj_bit
     assert result.E_memory_internal_pj_bit == legacy.E_memory_internal_pj_bit
     assert result.E_interface_pj_bit == legacy.E_interface_pj_bit
     assert result.E_vertical_pj_bit == pytest.approx(
         1.5 * legacy.E_vertical_pj_bit)
     assert result.E_access_total_pj_bit == pytest.approx(
         result.E_memory_internal_pj_bit + result.E_vertical_pj_bit
-        + result.E_interface_pj_bit)
+        + result.E_base_route_pj_bit + result.E_interface_pj_bit)
     # Refresh is deliberately enabled in the active case; the old split
     # logic-removed power input predated refresh accounting.
     assert result.P_refresh_W == pytest.approx(0.8172465768010997)
@@ -1502,7 +1503,7 @@ def test_conventional_full_row_same_boundary_remains_stable():
 
 def test_conventional_12hi_scales_only_dreamram_vertical_path():
     case = load_case_config(
-        CASE_CONFIGS / "conventional_hbm_2x1_nologic.yaml")
+        CASE_CONFIGS / "conventional_hbm_2x1.yaml")
     geometry_12hi = resolve_case_geometry(case)
     geometry_8hi = replace(geometry_12hi, memory_dies_per_region=8)
     result_8hi = calculate_memory_power(
@@ -1515,7 +1516,9 @@ def test_conventional_12hi_scales_only_dreamram_vertical_path():
     assert result_12hi.P_refresh_W == pytest.approx(0.8172465768010997)
     assert result_12hi.E_memory_internal_pj_bit == pytest.approx(
         result_8hi.E_memory_internal_pj_bit, abs=0.0)
-    assert result_12hi.E_base_route_pj_bit == result_8hi.E_base_route_pj_bit == 0.0
+    assert result_12hi.E_base_route_pj_bit == pytest.approx(
+        result_8hi.E_base_route_pj_bit, abs=0.0)
+    assert result_12hi.E_base_route_pj_bit > 0.0
     assert result_12hi.E_interface_pj_bit == pytest.approx(
         result_8hi.E_interface_pj_bit, abs=0.0)
     assert result_12hi.E_vertical_pj_bit == pytest.approx(

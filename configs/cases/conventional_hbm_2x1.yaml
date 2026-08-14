@@ -1,0 +1,106 @@
+name: conventional_hbm_2x1
+
+geometry:
+  type: dreamram_hbm
+  memory_region: {width_mm: 10.8, height_mm: 21.8}
+  layout:
+    arrangement: 2x1_hbm
+    visible_group_count: 2
+    visible_group_footprint_mm: [11.0, 22.0]
+    physical_stack_equivalents_per_group: 1
+    total_physical_stack_equivalents: 2
+    dram_dies_per_stack: 12
+    group_centers_mm: [[-9.5, 0.0], [9.5, 0.0]]
+    merged_axis: y
+    internal_y_mold_seam: absent
+
+memory:
+  technology: si_dram
+  backend: dreamram
+  dreamram:
+    memory_config: third_party/DreamRAM/configs/mem/baseline/hbm3_baseline.json
+    technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
+
+architecture:
+  vertical: {type: tsv, source: dreamram}
+  base_route: {enabled: true, source: dreamram}
+  interface: {type: hbm_dq, source: dreamram}
+  logic_background_w: 0.0
+
+workload:
+  read_bandwidth_gbps: 39200
+  write_bandwidth_gbps: 0
+  row_policy: {activated_row_data_utilization: 0.10}
+
+power:
+  gpu: {model: fixed, power_W: 300.0}
+  memory: {model: analytical, status: VALIDATED}
+  refresh:
+    enabled: true
+    model: dreamram_internal_refresh
+    refresh_window_s: 0.032
+    refresh_window_provenance: EXPLICIT_EXTERNAL_BASELINE_REQUIRES_DOCUMENTED_SOURCE
+  background: {enabled: false}
+
+thermal:
+  package_size_mm: [65.0, 65.0]
+  gpu_footprint_mm: [30.0, 22.0]
+  source_mapping:
+    gpu: GPU_FEOL
+    dram: DRAM_BEOL_PER_VISIBLE_GROUP
+    base_route: HBM_BASE_BEOL_PER_VISIBLE_GROUP
+    base_logic_feol: NOT_SEPARATELY_MODELED
+    approximation: MODELING_CHOICE_COMPONENT_AWARE_COARSE_BEOL
+  stack:
+    gpu_hbm_ubump_um: 40.0
+    base_logic_die: present
+    base_beol_um: 5.0
+    base_si_um: 50.0
+    dram_die_count_source: canonical_geometry_layout
+    repeated_dram: {hybrid_bonding_um: 2.0, beol_um: 3.0, si_um: 41.0}
+    top_dram: {hybrid_bonding_um: 2.0, beol_um: 3.0, si_um: 169.0}
+    hbm_top_to_tim: direct
+  materials:
+    Lid: 400.0
+    TIM: 9.71
+    Silicon: 140.0
+    Thermal_Silicon: 140.0
+    DRAM_BEOL: 0.85
+    HBM_Base_BEOL: 1.5
+    BEOL_MXY: 1.5
+    Oxide: 1.5
+    FEOL: 7.9
+    BSPDN: [83.0, 83.0, 71.0]
+    Cu_Pillar_Bump: [0.54, 0.54, 13.25]
+    GPU_HBM_uBump: [0.59, 0.59, 19.28]
+    Hybrid_Bonding: 4.8
+    Laminate: 13.0
+    Mold: 3.0
+  common_stack:
+    foundation_um: 300.0
+    gpu: {cu_pillar_um: 70.0, bspdn_um: 1.715, feol_um: 0.15, beol_um: 1.4}
+    tim_um: 200.0
+    lid_um: 3000.0
+  mesh: {dx_mm: 0.5, dy_mm: 0.5, dz_max_um: 100.0}
+  boundary:
+    ambient_degC: 20.0
+    lid_top_htc_W_m2K: 30000.0
+    laminate_bottom_htc_W_m2K: 200.0
+  solver: {method: pcg, rtol: 1.0e-6}
+
+provenance:
+  geometry_starting_reference: configs/legacy/exp_conv_2x1_g300_m160.yaml
+  two_by_one_semantics: TWO_VISIBLE_11X22_STACKS_TWO_PHYSICAL_STACKS
+  physical_stack_organization: CANONICAL_12HI_GEOMETRY
+  base_present_geometry: INHERITED_EXISTING_PAPER_ALIGNED_BASE_STACK
+  access_energy_organization: DREAMRAM_HBM3_REFERENCE_ANALYTICAL
+  electrical_stack_height_model: DREAMRAM_AVERAGE_CROSSED_LAYER_SCALING
+  electrical_stack_height_provenance: DERIVED_FROM_REFERENCE
+  capacity_model: GEOMETRY_DRIVEN_INTEGER_BANK_PACKING
+  paper_capacity_sanity_reference_GB: 144.0
+  paper_capacity_sanity_role: REFERENCE_ONLY_NOT_A_FITTING_TARGET
+  analytical_power_scope: WHOLE_CASE_AT_CONFIGURED_AGGREGATE_BANDWIDTH
+  base_logic_feol_power_W: 0.0
+  base_logic_feol_power_status: NOT_SEPARATELY_MODELED
+  base_logic_feol_power_provenance: PLACEHOLDER_ZERO_FOR_FUTURE_LOGIC_MODEL
+  bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED

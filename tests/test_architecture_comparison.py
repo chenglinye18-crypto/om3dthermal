@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from om3dthermal.cli import build_scene
 from om3dthermal.architecture_comparison import (
     _resolved_capacity,
     compile_case_thermal,
@@ -19,7 +20,7 @@ from om3dthermal.power import (
 ROOT = Path(__file__).parents[1]
 CASES = ROOT / "configs" / "cases"
 NAMES = (
-    "conventional_hbm_2x1_nologic",
+    "conventional_hbm_2x1",
     "orthogonal_si",
     "orthogonal_m3d_igzo",
 )
@@ -48,7 +49,7 @@ def test_system_scope_capacity_and_refresh_close():
 
 
 def test_access_energy_regressions_and_system_bandwidth_are_frozen():
-    expected = (1.2871058441532088, 1.3676557831180527,
+    expected = (1.3970979848163718, 1.3676557831180527,
                 0.8552605756733209)
     for name, energy in zip(NAMES, expected):
         _, _, system = _resolved(name)
@@ -71,6 +72,14 @@ def test_resolved_to_thermal_source_closure_and_same_case_compile():
         assert thermal.metadata["case_id"] == case.name
 
 
+@pytest.mark.parametrize("name", NAMES[1:])
+def test_orthogonal_adhesive_thickness_comes_from_canonical_case(name):
+    case, _, system = _resolved(name)
+    thermal = compile_case_thermal(case, system)
+    assert case.thermal["adhesive"]["thickness_um"] == 1.0
+    assert thermal.orthogonal_hbm.adhesive.thickness == pytest.approx(1e-6)
+
+
 def test_conventional_physical_geometry_drives_capacity_and_thermal_stack():
     case, geometry, system = _resolved(NAMES[0])
     diagnostics = system.diagnostics
@@ -86,6 +95,56 @@ def test_conventional_physical_geometry_drives_capacity_and_thermal_stack():
     hbm = thermal.stack_templates["hbm_12hi"].model_dump()
     repeated = next(item for item in hbm["items"] if item["kind"] == "repeat")
     assert repeated["count"] == 11
+    assert hbm["items"][1]["material"] == "HBM_Base_BEOL"
+    assert hbm["items"][1]["thickness"] == pytest.approx(5e-6)
+    assert hbm["items"][2]["material"] == "Silicon"
+    assert hbm["items"][2]["thickness"] == pytest.approx(50e-6)
+
+
+def test_conventional_base_route_maps_only_to_physical_base_beol():
+    case, _, system = _resolved(NAMES[0])
+    result = system.memory_result
+    assert result is not None
+    assert result.E_base_route_pj_bit > 0.0
+    mapping = map_system_power_to_thermal(case, system)
+    base = [source for source in mapping.sources
+            if source.name.startswith("base_route_group_")]
+    dram = [source for source in mapping.sources
+            if source.name.startswith("dram_group_")]
+    expected_base_W = (
+        result.E_base_route_pj_bit * system.read_bandwidth_gbps * 1e-3)
+    assert len(base) == len(dram) == 2
+    assert sum(source.power_W for source in base) == pytest.approx(expected_base_W)
+    assert sum(source.power_W for source in dram) == pytest.approx(
+        system.resolved_total_memory_power_W - expected_base_W)
+    thermal = compile_case_thermal(case, system)
+    sources = {source.name: source for source in
+               thermal.thermal_power_sources.sources}
+    assert all(sources[source.name].selector.material == "HBM_Base_BEOL"
+               for source in base)
+    assert all(sources[source.name].selector.material == "DRAM_BEOL"
+               for source in dram)
+    assert result.P_logic_background_W == 0.0
+    assert system.diagnostics["P_base_FEOL_logic_W"] == 0.0
+    assert system.diagnostics["P_base_FEOL_logic_status"] == (
+        "NOT_SEPARATELY_MODELED")
+
+
+def test_conventional_has_two_physical_base_dies_and_775um_stack():
+    case, _, system = _resolved(NAMES[0])
+    thermal = compile_case_thermal(case, system)
+    scene = build_scene(thermal)
+    base_beol = [box for box in scene.boxes
+                 if box.material == "HBM_Base_BEOL"]
+    base_si = [box for box in scene.boxes
+               if box.tags.get("layer") == "hbm_base_si"]
+    assert len(base_beol) == len(base_si) == 2
+    assert thermal.stack_templates["hbm_12hi"].total_thickness == pytest.approx(
+        775e-6)
+    assert all(box.z1 - box.z0 == pytest.approx(5e-6)
+               for box in base_beol)
+    assert all(box.z1 - box.z0 == pytest.approx(50e-6)
+               for box in base_si)
 
 
 def test_unified_memory_mapping_targets_complete_beol_only():
