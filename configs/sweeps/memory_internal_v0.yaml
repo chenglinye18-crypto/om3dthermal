@@ -1,0 +1,64 @@
+name: memory_internal_v0
+
+# OFAT = One Factor At A Time. The canonical case is loaded fresh for every
+# point; only one parameter is overridden per point. Do not add Cartesian
+# product entries.
+mode: ofat
+
+# Whether to run the full steady-state thermal pipeline for each point.
+# The framework reuses the current production solver (PCG, matrix-free,
+# CPU or GPU; v0 runs CPU on this Windows/WSL host).
+thermal: true
+
+cases:
+  conventional_hbm:
+    alias: conventional_hbm
+    path: configs/cases/conventional_hbm_2x1.yaml
+  orthogonal_si:
+    alias: orthogonal_si
+    path: configs/cases/orthogonal_si.yaml
+  orthogonal_m3d_igzo:
+    alias: orthogonal_m3d_igzo
+    path: configs/cases/orthogonal_m3d_igzo.yaml
+
+# Per-axis OFAT sweeps. Each entry lists which cases accept the override and
+# which values to enumerate. Values are interpreted by the physical field
+# table inside om3dthermal/sweep.py:ALLOWED_ALIASES.
+sweeps:
+
+  - name: rd_per_act
+    cases: [conventional_hbm, orthogonal_si]
+    parameter: activated_row_data_utilization
+    values:
+      - 0.015625   # 1/64
+      - 0.03125    # 2/64
+      - 0.0625     # 4/64
+      - 0.10       # historical reference
+      - 0.125      # 8/64
+      - 0.25       # 16/64
+      - 0.50       # 32/64
+      - 1.00       # 64/64
+
+  - name: mat_rows
+    cases: [conventional_hbm, orthogonal_si]
+    parameter: mat_rows
+    values: [256, 512, 1024]
+
+  - name: mat_cols
+    cases: [conventional_hbm, orthogonal_si]
+    parameter: mat_cols
+    values: [256, 512, 1024]
+
+  - name: m3d_subarray_rows
+    cases: [orthogonal_m3d_igzo]
+    parameter: m3d_subarray_rows
+    values: [256, 512, 1024]
+
+  - name: m3d_subarray_cols
+    cases: [orthogonal_m3d_igzo]
+    parameter: m3d_subarray_cols
+    values: [256, 512, 1024]
+
+# Output directory is created if missing. Stable across runs so the
+# benchmark can be appended/re-run.
+output_dir: runs/sweeps/memory_internal_v0

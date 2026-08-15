@@ -598,6 +598,12 @@ def main(argv: list[str] | None = None) -> int:
     power_parser = subparsers.add_parser(
         "power", help="run a config-driven standalone memory-power model")
     power_parser.add_argument("config", type=Path)
+    sweep_parser = subparsers.add_parser(
+        "sweep",
+        help=(
+            "run a config-driven OFAT memory parameter sweep; "
+            "reuses the same case -> power -> thermal pipeline"))
+    sweep_parser.add_argument("config", type=Path)
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -657,6 +663,19 @@ def main(argv: list[str] | None = None) -> int:
         else:
             result = run_memory_power(args.config)
         print(json.dumps(result.as_dict(display_na=True), indent=2))
+    elif args.command == "sweep":
+        from .sweep import run_sweep
+        from . import _git_metadata
+        git_meta = _git_metadata(args.config)
+        result = run_sweep(args.config, git_metadata=git_meta)
+        print(
+            f"[sweep] {result.config_name}: "
+            f"{result.pass_count} PASS / {result.fail_count} FAIL "
+            f"out of {len(result.point_results)} points\n"
+            f"[sweep] summary.csv: {Path(result.output_dir) / 'summary.csv'}\n"
+            f"[sweep] metadata.json: {Path(result.output_dir) / 'metadata.json'}\n"
+            f"[sweep] output_dir:   {result.output_dir}")
+        return 0 if result.fail_count == 0 else 2
     return 0
 
 
