@@ -4,6 +4,14 @@ CuPy is imported lazily so CPU-only installations can import and run
 ``om3dthermal`` without a CUDA runtime.  All graph arrays and PCG vectors stay
 on the device for the solve; only compact scalar convergence diagnostics are
 synchronized periodically, followed by one final temperature-vector download.
+
+The GPU thermal matvec is row-oriented: the cell graph adjacency is uploaded
+once as a fixed-width ``(N, MAX_DEG)`` pair of ``(neighbor_id, neighbor_G)``
+arrays plus a pre-aggregated ``boundary_G`` vector, and a single RawKernel
+writes one result per cell.  No ``bincount`` scatter, no edge-sized
+``delta`` / ``flux`` temporaries, no atomic accumulations.  Boundary
+contribution is folded into the per-cell ``boundary_G`` scalar so the
+internal + boundary sum is produced in a single pass.
 """
 from __future__ import annotations
 
@@ -30,6 +38,45 @@ class GPUSolverBreakdownError(RuntimeError):
 
 _CUPY_MODULE = None
 _CUDA_DLL_HANDLES: list[object] = []
+
+
+# Maximum internal-edge degree per cell.  The Conventional HBM / Orthogonal
+# Si / M3D nominal operators all have max_degree <= 6; if a future geometry
+# exceeds this, ``from_cpu`` will assert and the operator should be
+# rebuilt with a wider layout (or a CSR adjacency list).
+MAX_NEIGHBORS_PER_CELL = 6
+
+
+# CUDA kernel source.  FP64 throughout.  One thread per cell, walks up to
+# ``MAX_DEG`` neighbor slots, skips the -1 padding, and writes one result.
+# Memory layout: ``neighbor_id`` and ``neighbor_G`` are row-major
+# ``(N, MAX_DEG)`` and indexed ``i*MAX_DEG + k``.  ``boundary_G[i]`` is
+# pre-summed over all boundary faces of cell ``i``.
+_MATVEC_KERNEL_SRC = r"""
+extern "C" __global__
+void matvec_row_fp64(
+    const double* __restrict__ T,
+    const int*    __restrict__ nbr_id,
+    const double* __restrict__ nbr_G,
+    const double* __restrict__ boundary_G,
+    double*       __restrict__ out,
+    int N,
+    int MAX_DEG)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    double v = boundary_G[i] * T[i];
+    int base = i * MAX_DEG;
+    #pragma unroll
+    for (int k = 0; k < 6; ++k) {
+        if (k >= MAX_DEG) break;
+        int j = nbr_id[base + k];
+        if (j < 0) continue;
+        v += nbr_G[base + k] * (T[i] - T[j]);
+    }
+    out[i] = v;
+}
+"""
 
 
 def _register_pip_cuda_dll_directories() -> None:
@@ -84,65 +131,157 @@ def require_cupy():
     return cp
 
 
+# Module-level cache for the compiled RawKernel; one kernel handles every
+# pipeline because MAX_DEG is a runtime argument (the inlined inner loop
+# branches on the device-side ``k >= MAX_DEG``).
+_KERNEL_CACHE: dict[tuple, object] = {}
+
+
+def _matvec_kernel(cp, max_deg: int):
+    """Return a cached RawKernel for ``matvec_row_fp64``."""
+    key = (cp.__version__, max_deg)
+    cached = _KERNEL_CACHE.get(key)
+    if cached is not None:
+        return cached
+    kernel = cp.RawKernel(
+        _MATVEC_KERNEL_SRC, "matvec_row_fp64", backend="nvrtc",
+        options=("--use_fast_math",))
+    _KERNEL_CACHE[key] = kernel
+    return kernel
+
+
 @dataclass
 class CuPyMatrixFreeThermalOperator:
-    """Device-resident representation of the existing thermal operator."""
+    """Device-resident, row-oriented representation of the thermal operator.
+
+    Only the data the GPU actually consumes is held on the device: the
+    fixed-width neighbor table, the pre-aggregated per-cell boundary
+    conductance, the per-cell power, the Jacobi diagonal inverse, the
+    RHS, and one reusable ``out_buffer`` that ``apply`` writes into.
+    The CPU edge-list arrays are *not* re-uploaded alongside the new
+    representation.
+    """
 
     cell_count: int
-    internal_cell_a: object
-    internal_cell_b: object
-    internal_conductance_W_K: object
-    boundary_cell: object
-    boundary_conductance_W_K: object
-    power_W: object
-    diagonal_W_K: object
-    diagonal_inverse_K_W: object
-    rhs_W: object
+    neighbor_id: object           # (N, MAX_DEG) int32, padded with -1
+    neighbor_G: object            # (N, MAX_DEG) float64
+    boundary_G: object            # (N,) float64, pre-summed per cell
+    power_W: object               # (N,) float64
+    diagonal_inverse_K_W: object  # (N,) float64
+    rhs_W: object                 # (N,) float64
+    out_buffer: object            # (N,) float64, reused by apply
     matvec_count: int = 0
+    max_neighbors: int = MAX_NEIGHBORS_PER_CELL
 
     @classmethod
     def from_cpu(cls, operator: MatrixFreeThermalOperator
                  ) -> "CuPyMatrixFreeThermalOperator":
-        """Upload every solver array once, preserving int64/float64 types."""
+        """Build the row-oriented GPU operator from a CPU one.
+
+        No edge-list arrays are kept on the GPU; the row-oriented
+        ``(neighbor_id, neighbor_G)`` pair is the only adjacency
+        representation uploaded.
+        """
         cp = require_cupy()
-        arrays = {
-            "internal_cell_a": cp.asarray(
-                operator.internal_cell_a, dtype=cp.int64),
-            "internal_cell_b": cp.asarray(
-                operator.internal_cell_b, dtype=cp.int64),
-            "internal_conductance_W_K": cp.asarray(
-                operator.internal_conductance_W_K, dtype=cp.float64),
-            "boundary_cell": cp.asarray(operator.boundary_cell, dtype=cp.int64),
-            "boundary_conductance_W_K": cp.asarray(
-                operator.boundary_conductance_W_K, dtype=cp.float64),
-            "power_W": cp.asarray(operator.power_W, dtype=cp.float64),
-            "diagonal_W_K": cp.asarray(
-                operator.diagonal_W_K, dtype=cp.float64),
-            "rhs_W": cp.asarray(operator.rhs_W, dtype=cp.float64),
-        }
-        diagonal = arrays["diagonal_W_K"]
-        checks = cp.asnumpy(cp.asarray([
-            cp.all(cp.isfinite(arrays["internal_conductance_W_K"])),
-            cp.all(arrays["internal_conductance_W_K"] > 0),
-            cp.all(cp.isfinite(arrays["boundary_conductance_W_K"])),
-            cp.all(arrays["boundary_conductance_W_K"] > 0),
-            cp.all(cp.isfinite(diagonal)),
-            cp.all(diagonal > 0),
-            cp.all(cp.isfinite(arrays["rhs_W"])),
-        ], dtype=cp.bool_))
-        labels = (
-            "finite internal conductance", "positive internal conductance",
-            "finite boundary conductance", "positive boundary conductance",
-            "finite diagonal", "positive diagonal", "finite rhs")
-        for valid, label in zip(checks.tolist(), labels):
-            if not valid:
-                raise ValueError(f"GPU operator validation failed: {label}")
-        arrays["diagonal_inverse_K_W"] = 1.0 / diagonal
-        cp.cuda.Stream.null.synchronize()
-        return cls(cell_count=operator.cell_count, **arrays)
+        N = int(operator.cell_count)
+        a = np.asarray(operator.internal_cell_a, dtype=np.int64)
+        b = np.asarray(operator.internal_cell_b, dtype=np.int64)
+        G = np.asarray(operator.internal_conductance_W_K, dtype=np.float64)
+        MAX = cls.max_neighbors
+
+        # Sanity-check degree before allocating the row-oriented table.
+        deg = np.zeros(N, dtype=np.int64)
+        if a.size:
+            np.add.at(deg, a, 1)
+            np.add.at(deg, b, 1)
+        if int(deg.max()) > MAX:
+            raise ValueError(
+                f"GPU operator row-oriented adjacency requires "
+                f"max_degree <= {MAX}, got {int(deg.max())}. "
+                f"Rebuild with a wider layout (or CSR).")
+
+        neighbor_id = np.full((N, MAX), -1, dtype=np.int32)
+        neighbor_G = np.zeros((N, MAX), dtype=np.float64)
+
+        # Build a-side entries first via argsort, then b-side entries at
+        # slot = post-a-side count for that cell.  Without this two-sided
+        # assignment, the a- and b-side writes collide at slot 0 for cells
+        # that appear on both ends of different edges.
+        if a.size:
+            order_a = np.argsort(a, kind="stable")
+            a_s = a[order_a]
+            b_s = b[order_a]
+            G_s = G[order_a]
+            change_a = np.where(np.diff(a_s) != 0)[0] + 1
+            starts_a = np.concatenate(([0], change_a, [a_s.size]))
+            sizes_a = np.diff(starts_a)
+            slot_a = np.arange(a_s.size) - np.repeat(starts_a[:-1], sizes_a)
+            neighbor_id[a_s, slot_a] = b_s.astype(np.int32)
+            neighbor_G[a_s, slot_a] = G_s
+
+            # count[i] = number of a-side neighbors placed for cell i
+            counts = np.zeros(N, dtype=np.int64)
+            np.add.at(counts, a_s, 1)
+
+            order_b = np.argsort(b, kind="stable")
+            a2 = a[order_b]
+            b2 = b[order_b]
+            G2 = G[order_b]
+            # For each b2 entry, its slot = counts[b2] BEFORE placement
+            # (use np.add to claim).  Compute slots with a per-cell offset.
+            # Vectorized: for each k, slot_b[k] = counts[b2[k]] + offset_in_b_group[k]
+            # offset_in_b_group is the position within the b-group (0,1,...).
+            change_b = np.where(np.diff(b2) != 0)[0] + 1
+            starts_b = np.concatenate(([0], change_b, [b2.size]))
+            sizes_b = np.diff(starts_b)
+            offset_in_group = np.arange(b2.size) - np.repeat(starts_b[:-1], sizes_b)
+            slot_b = counts[b2] + offset_in_group
+            neighbor_id[b2, slot_b] = a2.astype(np.int32)
+            neighbor_G[b2, slot_b] = G2
+            np.add.at(counts, b2, 1)
+            if int(counts.max()) > MAX:
+                raise ValueError(
+                    f"GPU operator row-oriented adjacency requires "
+                    f"max_degree <= {MAX}, got {int(counts.max())}")
+
+        # Pre-aggregate boundary conductance per cell so the matvec kernel
+        # sees a single scalar per cell.
+        bc = np.asarray(operator.boundary_cell, dtype=np.int64)
+        bG = np.asarray(operator.boundary_conductance_W_K, dtype=np.float64)
+        boundary_G_per_cell = np.zeros(N, dtype=np.float64)
+        if bc.size:
+            np.add.at(boundary_G_per_cell, bc, bG)
+
+        # Diagonal inverse on device.
+        diag = np.asarray(operator.diagonal_W_K, dtype=np.float64)
+        diag_inv = 1.0 / diag
+        if not np.all(np.isfinite(diag_inv)) or not np.all(diag > 0.0):
+            raise ValueError("GPU operator validation failed: non-finite/positive diagonal")
+        if not np.all(np.isfinite(boundary_G_per_cell)):
+            raise ValueError("GPU operator validation failed: non-finite boundary_G")
+        if not np.all(np.isfinite(neighbor_G)):
+            raise ValueError("GPU operator validation failed: non-finite neighbor_G")
+
+        return cls(
+            cell_count=N,
+            neighbor_id=cp.asarray(neighbor_id, dtype=cp.int32),
+            neighbor_G=cp.asarray(neighbor_G, dtype=cp.float64),
+            boundary_G=cp.asarray(boundary_G_per_cell, dtype=cp.float64),
+            power_W=cp.asarray(operator.power_W, dtype=cp.float64),
+            diagonal_inverse_K_W=cp.asarray(diag_inv, dtype=cp.float64),
+            rhs_W=cp.asarray(operator.rhs_W, dtype=cp.float64),
+            out_buffer=cp.zeros(N, dtype=cp.float64),
+            max_neighbors=MAX,
+        )
 
     def apply(self, vector):
-        """Return ``A @ vector`` using CuPy gather/bincount scatter sums."""
+        """Return ``A @ vector`` using a one-thread-per-cell RawKernel.
+
+        The result reuses the device-resident ``out_buffer``; callers
+        that need a separate handle should explicitly copy.  PCG only
+        uses ``Ap`` once before overwriting it on the next call, so
+        reuse is safe in production.
+        """
         cp = require_cupy()
         if vector.shape != (self.cell_count,):
             raise ValueError(
@@ -150,24 +289,17 @@ class CuPyMatrixFreeThermalOperator:
                 f"({self.cell_count},)")
         if vector.dtype != cp.float64:
             raise TypeError("GPU matrix-free operator requires float64 vectors")
-        if self.internal_conductance_W_K.size:
-            delta = vector[self.internal_cell_a] - vector[self.internal_cell_b]
-            flux = self.internal_conductance_W_K * delta
-            result = cp.bincount(
-                self.internal_cell_a, weights=flux, minlength=self.cell_count)
-            result += cp.bincount(
-                self.internal_cell_b, weights=-flux, minlength=self.cell_count)
-        else:
-            result = cp.zeros(self.cell_count, dtype=cp.float64)
-        if self.boundary_conductance_W_K.size:
-            result += cp.bincount(
-                self.boundary_cell,
-                weights=(self.boundary_conductance_W_K
-                         * vector[self.boundary_cell]),
-                minlength=self.cell_count,
-            )
+        kernel = _matvec_kernel(cp, self.max_neighbors)
+        block = 256
+        grid = ((self.cell_count + block - 1) // block,)
+        kernel(
+            grid, (block,),
+            (vector, self.neighbor_id, self.neighbor_G,
+             self.boundary_G, self.out_buffer, self.cell_count,
+             self.max_neighbors),
+        )
         self.matvec_count += 1
-        return result
+        return self.out_buffer
 
 
 def solve_pcg_gpu(
@@ -186,7 +318,8 @@ def solve_pcg_gpu(
     PCG vectors, reductions, alpha, and beta stay on device.  Every
     ``diagnostic_interval`` iterations one small scalar diagnostic bundle is
     synchronized for convergence/breakdown handling; no iteration transfers a
-    cell-sized vector.
+    cell-sized vector.  The matvec uses a row-oriented RawKernel that visits
+    one cell per GPU thread.
     """
     if relative_residual_tolerance < 0 or absolute_residual_tolerance < 0:
         raise ValueError("PCG residual tolerances must be non-negative")
@@ -339,6 +472,8 @@ def solve_pcg_gpu(
             "device_vector_downloads": 1,
             "per_iteration_vector_transfers": 0,
             "dtype": "float64",
+            "matvec_kernel": "row_oriented_raw_fp64",
+            "max_neighbors_per_cell": gpu.max_neighbors,
         },
         initial_residual=initial_relative,
         final_absolute_residual=final_absolute,
