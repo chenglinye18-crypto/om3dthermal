@@ -16,6 +16,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -46,7 +47,10 @@ def test_load_sweep_config_basic():
     assert cfg.name == "memory_internal_v0"
     assert cfg.mode == "ofat"
     assert cfg.thermal is True
-    assert cfg.thermal_backend == "cpu"
+    # The official memory_internal_v0 benchmark pins the GPU PCG
+    # backend explicitly so the run does not depend on SweepConfig's
+    # default. Targeted validation enforces this at config-load time.
+    assert cfg.thermal_backend == "gpu"
     assert set(cfg.cases.keys()) == {
         "conventional_hbm", "orthogonal_si", "orthogonal_m3d_igzo",
     }
@@ -120,6 +124,126 @@ def test_unknown_alias_rejected_at_config_load_time():
         SweepConfig.model_validate(raw)
 
 
+def test_system_metrics_fails_loudly_without_memory_result(
+        monkeypatch, tmp_path):
+    """``_system_metrics`` must fail loudly if the analytical
+    ``MemoryPowerResult`` is missing, instead of fabricating energy
+    decomposition fields."""
+    from om3dthermal.power.config import load_case_config
+    from om3dthermal.power.geometry import ResolvedGeometry
+    from om3dthermal.power.system import ResolvedSystemPower
+    from om3dthermal.sweep import _system_metrics
+
+    case = load_case_config(
+        REPO_ROOT / "configs" / "cases" / "conventional_hbm_2x1.yaml")
+    geom = ResolvedGeometry(
+        source="fake",
+        memory_region="hbm_dram_die",
+        configured_x_mm=14.0, configured_y_mm=12.0,
+        memory_region_count=1, memory_dies_per_region=1, m3d=None)
+    sys_pow = ResolvedSystemPower(
+        case_name="fake", architecture_type="dreamram_hbm",
+        gpu_power_W=300.0, memory_power_model="reference_fixed",
+        memory_power_status="placeholder",
+        read_bandwidth_gbps=819.2,
+        memory_access_energy_pJ_per_bit=0.0,
+        memory_access_power_W=0.0, refresh_power_W=0.0,
+        resolved_total_memory_power_W=0.0,
+        memory_result=None,
+        diagnostics={},
+    )
+    monkeypatch.setattr(
+        "om3dthermal.sweep.resolve_case_geometry", lambda c: geom)
+    monkeypatch.setattr(
+        "om3dthermal.sweep.resolve_system_power",
+        lambda c, project_root, geometry: sys_pow)
+    monkeypatch.setattr(
+        "om3dthermal.sweep._resolved_capacity",
+        lambda c, g, s: {
+            "system_capacity_GiB": 0.0,
+            "capacity_per_instance_GiB": 0.0,
+            "instance_count": 0,
+            "memory_plane_area_mm2": 0.0,
+            "memory_plane_density_Mb_mm2": 0.0,
+            "architecture_footprint_area_mm2": 0.0,
+            "architecture_footprint_density_Gb_mm2": 0.0,
+        })
+    with pytest.raises(RuntimeError, match="memory_result=None"):
+        _system_metrics(case, REPO_ROOT)
+
+
+def test_system_metrics_extracts_energy_and_power_from_memory_result(
+        monkeypatch):
+    """Component metrics come from ``MemoryPowerResult``, never aliases in
+    ``ResolvedSystemPower`` or its diagnostics mapping.
+    """
+    from om3dthermal.power.config import load_case_config
+    from om3dthermal.sweep import _system_metrics
+
+    case = load_case_config(
+        REPO_ROOT / "configs" / "cases" / "conventional_hbm_2x1.yaml")
+    memory = SimpleNamespace(
+        E_memory_internal_pj_bit=1.0,
+        E_vertical_pj_bit=2.0,
+        E_feol_route_pj_bit=3.0,
+        E_base_route_pj_bit=4.0,
+        E_interface_pj_bit=5.0,
+        E_access_total_pj_bit=15.0,
+        P_access_W=6.0,
+        P_refresh_W=7.0,
+        P_memory_background_W=8.0,
+        P_logic_background_W=9.0,
+        P_total_W=30.0,
+    )
+    sys_pow = SimpleNamespace(
+        memory_result=memory,
+        # Deliberately conflicting legacy/system aliases catch regressions.
+        memory_access_energy_pJ_per_bit=999.0,
+        memory_access_power_W=998.0,
+        refresh_power_W=997.0,
+        resolved_total_memory_power_W=30.0,
+        gpu_power_W=300.0,
+        diagnostics={
+            "E_vertical_pj_bit": 996.0,
+            "E_feol_route_pj_bit": 995.0,
+            "E_base_route_pj_bit": 994.0,
+            "E_interface_pj_bit": 993.0,
+        },
+    )
+    capacity = {
+        "system_capacity_GiB": 1.0,
+        "capacity_per_instance_GiB": 1.0,
+        "instance_count": 1,
+        "memory_plane_area_mm2": 1.0,
+        "memory_plane_density_Mb_mm2": 1.0,
+        "architecture_footprint_area_mm2": 1.0,
+        "architecture_footprint_density_Gb_mm2": 1.0,
+    }
+    monkeypatch.setattr(
+        "om3dthermal.sweep.resolve_case_geometry", lambda c: object())
+    monkeypatch.setattr(
+        "om3dthermal.sweep.resolve_system_power",
+        lambda c, project_root, geometry: sys_pow)
+    monkeypatch.setattr(
+        "om3dthermal.sweep._resolved_capacity",
+        lambda c, g, s: capacity)
+
+    metrics = _system_metrics(case, REPO_ROOT)
+
+    assert metrics["E_memory_internal_pJ_per_bit"] == 1.0
+    assert metrics["E_vertical_pJ_per_bit"] == 2.0
+    assert metrics["E_feol_route_pJ_per_bit"] == 3.0
+    assert metrics["E_base_route_pJ_per_bit"] == 4.0
+    assert metrics["E_interface_pJ_per_bit"] == 5.0
+    assert metrics["E_access_total_pJ_per_bit"] == 15.0
+    assert metrics["P_access_W"] == 6.0
+    assert metrics["P_refresh_W"] == 7.0
+    assert metrics["P_memory_background_W"] == 8.0
+    assert metrics["P_base_logic_background_W"] == 9.0
+    assert metrics["P_memory_total_W"] == 30.0
+    assert metrics["P_total_memory_W"] == 30.0
+
+
 def test_enum_axes_total_point_count_is_34():
     cfg = load_sweep_config(
         REPO_ROOT / "configs" / "sweeps" / "memory_internal_v0.yaml")
@@ -129,6 +253,57 @@ def test_enum_axes_total_point_count_is_34():
     assert cases_seen == {
         "conventional_hbm", "orthogonal_si", "orthogonal_m3d_igzo",
     }
+
+
+@pytest.mark.parametrize("case_path", [
+    "configs/cases/conventional_hbm_2x1.yaml",
+    "configs/cases/orthogonal_si.yaml",
+])
+def test_rd_act_sweep_results_are_monotonic(tmp_path, case_path):
+    """Exercise the real analytical power path for all eight Si points."""
+    from om3dthermal.power.config import load_case_config
+    from om3dthermal.sweep import _system_metrics
+
+    values = [0.015625, 0.03125, 0.0625, 0.10,
+              0.125, 0.25, 0.50, 1.00]
+    canonical = load_case_config(REPO_ROOT / case_path)
+    metrics = []
+    for value in values:
+        point, _ = apply_override(
+            canonical, REPO_ROOT,
+            alias="activated_row_data_utilization", value=value,
+            override_dir=tmp_path)
+        metrics.append(_system_metrics(point, REPO_ROOT))
+
+    rd_per_act = [float(m["effective_RD_per_ACT"]) for m in metrics]
+    energy = [float(m["E_access_total_pJ_per_bit"]) for m in metrics]
+    assert all(a < b for a, b in zip(rd_per_act, rd_per_act[1:]))
+    assert all(a >= b for a, b in zip(energy, energy[1:]))
+
+
+@pytest.mark.parametrize("case_path,alias,value", [
+    ("configs/cases/conventional_hbm_2x1.yaml", "mat_rows", 512),
+    ("configs/cases/orthogonal_si.yaml", "mat_cols", 512),
+    ("configs/cases/orthogonal_m3d_igzo.yaml", "m3d_subarray_rows", 512),
+])
+def test_nominal_override_reproduces_canonical_system_metrics(
+        tmp_path, case_path, alias, value):
+    """Nominal OFAT overrides reproduce canonical capacity, energy, power."""
+    from om3dthermal.power.config import load_case_config
+    from om3dthermal.sweep import _system_metrics
+
+    canonical = load_case_config(REPO_ROOT / case_path)
+    point, _ = apply_override(
+        canonical, REPO_ROOT, alias=alias, value=value,
+        override_dir=tmp_path)
+    expected = _system_metrics(canonical, REPO_ROOT)
+    actual = _system_metrics(point, REPO_ROOT)
+    for key in (
+        "system_capacity_GiB",
+        "E_access_total_pJ_per_bit",
+        "P_total_memory_W",
+    ):
+        assert actual[key] == pytest.approx(expected[key], rel=1e-12, abs=1e-12)
 
 
 # ---------------------------------------------------------------------------

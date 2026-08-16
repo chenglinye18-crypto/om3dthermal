@@ -364,6 +364,18 @@ def _system_metrics(
         case, project_root=project_root, geometry=geom)
     capacity = _resolved_capacity(case, geom, sys_pow)
     diagnostics = sys_pow.diagnostics or {}
+    memory = sys_pow.memory_result
+    if memory is None:
+        # All three canonical cases have analytical ``MemoryPowerResult``;
+        # if the value is missing here, the power backend has silently
+        # degraded to a reference-fixed mode and the per-component
+        # decomposition would be fabricated. Fail loudly.
+        raise RuntimeError(
+            "sweep requires analytical MemoryPowerResult; "
+            f"got memory_result=None for {case.name!r} "
+            f"(model={sys_pow.memory_power_model}, "
+            f"status={sys_pow.memory_power_status})")
+    pj = lambda v: None if v is None else float(v)
     return {
         "system_capacity_GiB": float(capacity["system_capacity_GiB"]),
         "capacity_per_instance_GiB": float(capacity["capacity_per_instance_GiB"]),
@@ -375,21 +387,37 @@ def _system_metrics(
             capacity["architecture_footprint_area_mm2"]),
         "architecture_footprint_density_Gb_mm2": float(
             capacity["architecture_footprint_density_Gb_mm2"]),
-        "E_memory_internal_pJ_per_bit": sys_pow.memory_access_energy_pJ_per_bit,
-        "E_vertical_pJ_per_bit": diagnostics.get("E_vertical_pj_bit"),
-        "E_feol_route_pJ_per_bit": diagnostics.get("E_feol_route_pj_bit"),
-        "E_base_route_pJ_per_bit": diagnostics.get("E_base_route_pj_bit"),
-        "E_interface_pJ_per_bit": diagnostics.get("E_interface_pj_bit"),
-        "E_access_total_pJ_per_bit": sys_pow.memory_access_energy_pJ_per_bit,
-        "P_access_W": sys_pow.memory_access_power_W,
-        "P_refresh_W": sys_pow.refresh_power_W,
-        "P_memory_background_W": diagnostics.get("P_memory_background_W"),
-        "P_base_logic_background_W": diagnostics.get("P_base_FEOL_logic_W"),
-        "P_total_memory_W": sys_pow.resolved_total_memory_power_W,
-        "P_gpu_W": sys_pow.gpu_power_W,
+        # Read energy decomposition directly from MemoryPowerResult;
+        # do not read energy fields from ``sys_pow.diagnostics`` (that
+        # was the previous bug: ``E_memory_internal`` was aliased to the
+        # access total).
+        "E_memory_internal_pJ_per_bit": float(memory.E_memory_internal_pj_bit),
+        "E_vertical_pJ_per_bit": float(memory.E_vertical_pj_bit),
+        "E_feol_route_pJ_per_bit": float(memory.E_feol_route_pj_bit),
+        "E_base_route_pJ_per_bit": float(memory.E_base_route_pj_bit),
+        "E_interface_pJ_per_bit": float(memory.E_interface_pj_bit),
+        "E_access_total_pJ_per_bit": float(memory.E_access_total_pj_bit),
+        # Read per-component power directly from MemoryPowerResult.
+        "P_access_W": float(memory.P_access_W),
+        "P_refresh_W": pj(memory.P_refresh_W),
+        "P_memory_background_W": pj(memory.P_memory_background_W),
+        "P_base_logic_background_W": pj(memory.P_logic_background_W),
+        # System-level totals come from ResolvedSystemPower; the
+        # analytical ``memory.P_total_W`` is the same number when the
+        # backend is component-aware, but the system path is the
+        # canonical closure.
+        "P_total_memory_W": float(sys_pow.resolved_total_memory_power_W),
+        "P_memory_total_W": pj(memory.P_total_W),
+        "P_gpu_W": float(sys_pow.gpu_power_W),
         "P_package_W": (
-            sys_pow.gpu_power_W
-            + (sys_pow.resolved_total_memory_power_W or 0.0)),
+            float(sys_pow.gpu_power_W)
+            + float(sys_pow.resolved_total_memory_power_W or 0.0)),
+        # Geometrical bank-level quantities are not defined as a
+        # single resolved value in the current ResolvedGeometry /
+        # MemoryPowerResult schema; record N/A rather than fabricate.
+        "packing_utilization": "N/A",
+        "bank_count": "N/A",
+        "bank_tile_dimensions": "N/A",
         "activated_row_data_utilization": (
             None if case.workload.row_policy is None
             else case.workload.row_policy.activated_row_data_utilization),

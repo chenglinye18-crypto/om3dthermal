@@ -7,8 +7,15 @@ mode: ofat
 
 # Whether to run the full steady-state thermal pipeline for each point.
 # The framework reuses the current production solver (PCG, matrix-free,
-# CPU or GPU; v0 runs CPU on this Windows/WSL host).
+# CPU or GPU; v0 pins the GPU PCG backend to keep the benchmark results
+# consistent with the project's current production thermal path).
 thermal: true
+
+# Explicitly select the GPU PCG backend so this benchmark does not depend
+# on the ``SweepConfig`` default. Same routing as
+# ``om3dthermal.cli solve-steady --backend gpu`` and the existing
+# ``case_runner.run_steady_pipeline(backend="gpu")`` keyword.
+thermal_backend: gpu
 
 cases:
   conventional_hbm:
