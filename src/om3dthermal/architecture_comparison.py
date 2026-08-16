@@ -150,7 +150,7 @@ def _common_compact(case: CanonicalCaseConfig) -> dict[str, Any]:
                 f"{thermal['boundary']['laminate_bottom_htc_W_m2K']} W/m^2/K"),
         },
         "power": {"model": "uniform", "gpu": "1 W"},
-        "solver": {"method": "pcg", "rtol": thermal["solver"]["rtol"]},
+        "solver": {"alpha": 0.7, "rtol": thermal["solver"]["rtol"]},
         "metadata": {"case_id": case.name, "solver": {"backend": "cpu"}},
     }
 
@@ -332,9 +332,9 @@ def run_architecture_comparison(
                 f"thermal power closure failed for {case.name}: {error} W")
         thermal_config = compile_case_thermal(case, system)
         pipeline = run_steady_pipeline(
-            thermal_config, method="pcg",
+            thermal_config, alpha=0.7,
             rtol=float(case.thermal["solver"]["rtol"]),
-            max_iterations=10_000, initial_temperature_K=293.15)
+            max_iterations=100_000, initial_temperature_K=293.15)
         mapped_actual = float(np.sum(pipeline.power.power_W))
         if abs(mapped_actual - resolved_package) > 1e-9:
             raise RuntimeError("cell-level mapped thermal power does not close")

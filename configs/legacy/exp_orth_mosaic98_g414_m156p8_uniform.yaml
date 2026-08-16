@@ -1,4 +1,4 @@
-# Paper-aligned first steady-state MOSAIC baseline.
+﻿# Paper-aligned first steady-state MOSAIC baseline.
 # Provenance details and unresolved placement questions live in
 # docs/benchmarks/ref_vlsi26_orth_mosaic98_g300_m156p8_uniform.md.
 name: exp_orth_mosaic98_g414_m156p8_uniform
@@ -62,7 +62,7 @@ power:
   gpu: 414 W
 
 solver:
-  method: pcg
+  alpha: 0.7
   rtol: 1e-6
 
 metadata:

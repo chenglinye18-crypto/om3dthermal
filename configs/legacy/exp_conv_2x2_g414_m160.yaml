@@ -1,4 +1,4 @@
-# Canonical conventional 12Hi HBM using Son23 component-aware placement.
+﻿# Canonical conventional 12Hi HBM using Son23 component-aware placement.
 name: exp_conv_2x2_g414_m160
 
 materials:
@@ -73,7 +73,7 @@ power:
     dram_die_count:    12
 
 solver:
-  method: pcg
+  alpha: 0.7
   rtol: 1e-6
 
 metadata:

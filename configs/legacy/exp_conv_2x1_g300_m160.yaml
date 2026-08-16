@@ -1,4 +1,4 @@
-# GPU-power-only derivative of exp_conv_2x1_g414_m160.yaml.
+﻿# GPU-power-only derivative of exp_conv_2x1_g414_m160.yaml.
 name: exp_conv_2x1_g300_m160
 
 materials:
@@ -66,7 +66,7 @@ power:
     dram_tsv_per_die: 0.5 W
     dram_die_count: 12
 
-solver: {method: pcg, rtol: 1e-6}
+solver: {alpha: 0.7, rtol: 1e-6}
 metadata:
   case_id: exp_conv_2x1_g300_m160
   scope: exp

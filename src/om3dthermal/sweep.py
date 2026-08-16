@@ -151,8 +151,12 @@ class SweepConfig(BaseModel):
     name: str = Field(min_length=1)
     mode: Literal["ofat"] = "ofat"
     thermal: bool = True
-    # Selects the matrix-free PCG backend for the steady-state solve.
-    # ``"cpu"`` -> :func:`solve_pcg`; ``"gpu"`` -> :func:`solve_pcg_gpu`
+    # Selects the matrix-free thermal-resistance-network relaxation
+    # backend for the steady-state solve. ``"cpu"`` ->
+    # :func:`solve_thermal_resistance_relaxation`; ``"gpu"`` ->
+    # :func:`solve_thermal_resistance_relaxation_gpu`. Both
+    # backends implement the same relaxation equation:
+    # ``delta_T = alpha * delta_Q * R_eff``.
     # (CuPy/NVRTC). This is a thin pass-through to the same routing
     # used by ``om3dthermal.cli solve-steady --backend <cpu|gpu>``;
     # the framework does not re-implement either solver.
@@ -447,7 +451,7 @@ def _thermal_metrics(
         case, project_root=project_root, geometry=geom)
     sim = compile_case_thermal(case, sys_pow)
     pipeline = run_steady_pipeline(
-        sim, method="pcg", rtol=1e-6, max_iterations=10_000,
+        sim, alpha=0.7, rtol=1e-6, max_iterations=100_000,
         initial_temperature_K=293.15, backend=backend)
     mem_t, gpu_t, pkg_t = _temperature_maxima(pipeline)
     mapped_actual = float(sum(pipeline.power.power_W))
@@ -599,7 +603,7 @@ def _run_one_point(
             status="FAIL",
             failure={"failure_stage": "thermal",
                      "failure_type": "non_convergence",
-                     "failure_message": "PCG did not converge"},
+                     "failure_message": "thermal resistance relaxation did not converge"},
             metrics=metrics, override_provenance=provenance)
     if thermal_metrics.get("power_closure_absolute_error_W", 0.0) > 1e-6:
         return PointResult(

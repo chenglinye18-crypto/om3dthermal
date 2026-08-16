@@ -1,4 +1,4 @@
-# Strict derivative of exp_orth_mosaic98_g414_m156p8_uniform.yaml.
+﻿# Strict derivative of exp_orth_mosaic98_g414_m156p8_uniform.yaml.
 # The only physical difference is GPU power: 414 W -> 300 W.
 name: exp_orth_mosaic98_g300_m156p8_uniform
 
@@ -61,7 +61,7 @@ power:
   gpu: 300 W
 
 solver:
-  method: pcg
+  alpha: 0.7
   rtol: 1e-6
 
 metadata:

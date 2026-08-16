@@ -50,8 +50,8 @@ class MatrixFreeThermalOperator:
     :class:`ConductanceTable` form; the boundary link arrays come
     from :class:`BoundaryLinkTable`. The diagonal and rhs are
     precomputed once at construction time so the per-iteration
-    work in Jacobi / PCG is one ``apply`` plus trivial vector
-    arithmetic.
+    work in the thermal-resistance relaxation is one ``apply``
+    plus trivial vector arithmetic.
     """
 
     cell_count: int

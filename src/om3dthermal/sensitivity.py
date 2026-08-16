@@ -9,8 +9,9 @@ that the v0.1.0-steady benchmark does not get from the paper:
 
 The sweep runs the existing steady-state pipeline
 (``config -> geometry -> mesh -> conductance -> boundary/power
--> matrix-free PCG``) with each swept parameter overridden
-**in memory**; the YAML on disk is never modified.
+-> thermal-resistance-network relaxation``) with each swept
+parameter overridden **in memory**; the YAML on disk is never
+modified.
 
 Two single-factor sweeps are produced (mirroring the mesh
 convergence sweep's shape):
@@ -40,8 +41,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from .case_runner import PipelineResult, run_steady_pipeline
 from .config import SimulationConfig
-from .pipeline import PipelineResult, run_steady_pipeline
 from .units import parse_length
 
 
@@ -446,7 +447,7 @@ def write_sensitivity_json(
     baseline_mold_k_W_mK: float,
     rtol: float,
     initial_temperature_K: float,
-    method: str,
+    alpha: float,
     path: str | Path,
 ) -> None:
     path = Path(path)
@@ -465,7 +466,8 @@ def write_sensitivity_json(
              "two parameters and re-solves the same steady-state "
              "linear system."),
         "config_path": str(config_path),
-        "solver_method": method,
+        "solver_method": "thermal_resistance_relaxation",
+        "solver_alpha": alpha,
         "solver_rtol": rtol,
         "initial_temperature_K": initial_temperature_K,
         "inset_sizes_m": list(inset_sizes_m),
@@ -576,9 +578,9 @@ def run_single_sensitivity_case(
     yaml_path: str | Path,
     case: SensitivityCase,
     *,
-    method: str = "pcg",
+    alpha: float = 0.7,
     rtol: float = 1e-6,
-    max_iterations: int = 10_000,
+    max_iterations: int = 100_000,
     initial_temperature_K: float = 293.15,
 ) -> dict:
     """Run one sensitivity-sweep case and return the per-case
@@ -595,7 +597,7 @@ def run_single_sensitivity_case(
     config = SimulationConfig.model_validate(compile_user_config(overridden))
     pipeline = run_steady_pipeline(
         config,
-        method=method,
+        alpha=alpha,
         rtol=rtol,
         max_iterations=max_iterations,
         initial_temperature_K=initial_temperature_K,

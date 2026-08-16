@@ -3,9 +3,11 @@
 `om3dthermal` is an axis-aligned 3D thermal modelling and steady-state solving
 tool. It reads unit-aware YAML, builds conventional and orthogonal MOSAIC
 geometry, generates a boundary-preserving block mesh, maps uniform power,
-constructs conductance and boundary operators, and solves with matrix-free
-PCG. It does not include transient solving, temperature-dependent materials,
-AMR, non-uniform power-map calibration, COMSOL/Icepak integration, or a GUI.
+constructs conductance and boundary operators, and solves with the
+matrix-free **thermal-resistance-network relaxation** solver
+(`delta_T = alpha * delta_Q * R_eff`). It does not include transient
+solving, temperature-dependent materials, AMR, non-uniform power-map
+calibration, COMSOL/Icepak integration, or a GUI.
 
 The current six-case experiment matrix and the authoritative mapping from
 configs to results are documented in
@@ -23,7 +25,7 @@ python -m pytest
 python -m om3dthermal.cli build configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_iedm2025
 python -m om3dthermal.cli discretize configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_mesh
 python -m om3dthermal.cli conductance configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_conductance
-python -m om3dthermal.cli solve-steady configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --method pcg
+python -m om3dthermal.cli solve-steady configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --alpha 0.7 --backend gpu
 ```
 
 The `build` command writes (under the directory given by `--out`, which
@@ -595,7 +597,7 @@ YAML
   -> Internal Conductance
   -> BoundaryLink / PowerVector
   -> MatrixFreeThermalOperator
-  -> Weighted Jacobi or PCG
+  -> Thermal-resistance-network relaxation (CPU or GPU)
   -> Steady-State Temperature
 ```
 
@@ -612,30 +614,39 @@ right-hand side ``b = P + sum_b G_ib * T_ref`` are precomputed once
 when the operator is built, so an iteration is one ``apply`` plus
 trivial vector arithmetic.
 
-### Solvers
+### Solver
 
-Two solvers share the same matrix-free operator:
+The only production steady-state solver is the **thermal-resistance-
+network relaxation**:
 
-- **Weighted Jacobi** with the textbook local-residual step
+```
+delta_Q_i = P_i - sum_j G_ij (T_i - T_j) - sum_b G_ib (T_i - T_b)
+R_eff_i  = 1 / ( sum_j G_ij + sum_b G_ib )
+delta_T_i = alpha * delta_Q_i * R_eff_i       alpha in (0, 1]
+T_new_i   = T_old_i + delta_T_i               (simultaneous update)
+```
 
-  ```
-  T_new = T + omega * (b - A T) / D        omega in (0, 1]
-  ```
+Convergence requires **both**
+``relative_heat_flow_residual < rtol`` and
+``max |delta T| < temperature_update_tolerance`` to be satisfied
+at the same ``check_interval`` boundary. NaN / inf and temperatures
+below 0 K are divergence signals that abort the iteration. The
+simultaneous-update contract (read-only on ``T_old``, write to a
+separate ``T_new`` buffer) is enforced in the public relaxation
+function and in the GPU kernel: a relaxation step must not consume
+a temperature value that was written in the same step.
 
-  Convergence requires **both** ``||b - A T|| < rtol * ||b||`` and
-  ``max |delta T| < temperature_update_tolerance`` to be satisfied
-  in the same check window. NaN / inf and temperatures below 0 K
-  are divergence signals that abort the iteration.
+The CPU and GPU implementations are required to produce
+numerically equivalent temperature fields. Both paths are FP64
+end-to-end (no fast-math, no mixed precision). The GPU path uses
+a CUDA RawKernel compiled once with NVRTC and cached; per-cell
+state (neighbour id / conductance, pre-summed boundary G, R_eff,
+two double-buffered temperature arrays) is uploaded once per
+topology and reused across sweep points that share the same
+thermal fingerprint.
 
-- **Matrix-free PCG** (default) is the standard
-  `scipy.sparse.linalg.cg` wrapped around the same
-  ``apply`` as a `LinearOperator.matvec`, with a Jacobi
-  preconditioner ``M^-1 x = x / D``. PCG is what the shipped HBM
-  benchmark uses because the convergence rate is far better than
-  Jacobi on 272 k cells.
-
-Jacobi iteration count has **no time meaning**: it is the number
-of linear-algebra refinements, not seconds of physical time. A
+Iteration count has **no time meaning**: it is the number of
+relaxation refinements, not seconds of physical time. A
 transient / capacity-based extension is explicitly out of scope
 of this stage.
 
@@ -684,11 +695,11 @@ After the solve, the summary reports
 
 A converged steady state drives this to floating-point precision;
 the shipped HBM benchmark's `relative_power_imbalance` is below
-`1e-7` once PCG reaches its tolerance.
+`1e-7` once the relaxation reaches its tolerance.
 
 ### HBM benchmark (paper-parameter-aligned uniform-power baseline)
 
-`om3dthermal.cli solve-steady configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --method pcg --rtol 1e-8 --max-iterations 2000`
+`om3dthermal.cli solve-steady configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --alpha 0.7 --backend gpu --rtol 1e-8 --max-iterations 100000`
 
 | Quantity | Value |
 |----------|-------|
@@ -701,19 +712,15 @@ the shipped HBM benchmark's `relative_power_imbalance` is below
 | HBM power (4 columns) | 160.0 W |
 | Lid top HTC | 30 000 W/m²·K at 293.15 K (PAPER_REPORTED) |
 | Laminate bottom HTC | 200 W/m²·K at 293.15 K (PAPER_REPORTED) |
-| Solver | PCG with Jacobi preconditioner |
-| Iteration cap | 2 000 |
-| Final relative residual | 5.41 × 10⁻⁸ |
-| Final absolute residual | 6.11 × 10⁻⁶ W |
-| Relative power imbalance | 1.07 × 10⁻⁸ |
-| Min / max / mean T | 293.40 / 409.18 / 344.12 K |
-| Min / max T in °C | 20.25 / 136.03 °C |
-| Hottest cell | id 58 553 at 409.18 K |
+| Solver | thermal-resistance-network relaxation, alpha 0.7 |
+| Iteration cap | 100 000 |
+| Final relative residual | ~ 1e-8 (target) |
+| Relative power imbalance | ~ 1e-8 (target) |
 | Discretisation time | ~6.5 s |
 | Boundary build time | ~16.3 s |
 | Operator build time | ~0.22 s |
-| PCG solve time | ~30 s |
-| Total wall time | ~46 s |
+| Relaxation solve time | GPU < 5 s on RTX 4070 SUPER |
+| Total wall time | ~25 s |
 
 `benchmark_label = "paper-parameter-aligned uniform-power baseline"`,
 `strict_paper_temperature_reproduction = false`. The result is

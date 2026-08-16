@@ -147,9 +147,9 @@ tag); the per-column totals therefore cover all 12 dies.
 
 ## Solver
 
-- `method: pcg`, `rtol: 1e-6` in the compact YAML; the CLI accepts
-  `--rtol 1e-8` for the published benchmark.
-- Preconditioner: weighted Jacobi.
+- `alpha: 0.7`, `rtol: 1e-6` in the compact YAML; the CLI accepts
+  `--alpha 0.7` and `--rtol 1e-8` for the published benchmark.
+- Solver: thermal-resistance-network relaxation (CPU or GPU).
 - Default `max_iterations = 10 000`.
 - Initial temperature: 293.15 K.
 

@@ -1,4 +1,4 @@
-name: exp_orth_m3d8_g300_bw39p2_all1read
+﻿name: exp_orth_m3d8_g300_bw39p2_all1read
 
 materials:
   Lid:             400
@@ -57,7 +57,7 @@ power:
   read_state_probability: {p0: 0.0, p1: 1.0}
   operation_energy_fJ_per_bit: {read_0: 0.60, read_1: 368.0}
 
-solver: {method: pcg, rtol: 1e-6}
+solver: {alpha: 0.7, rtol: 1e-6}
 
 metadata:
   case_id: exp_orth_m3d8_g300_bw39p2_all1read

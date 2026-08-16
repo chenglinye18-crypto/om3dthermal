@@ -151,7 +151,7 @@ def toy_sensitivity_rows():
             "mold_k_W_mK": mold_k,
             "cell_count": 12, "internal_edge_count": 16,
             "active_boundary_link_count": 4, "adiabatic_face_count": 0,
-            "solver_method": "pcg", "converged": True,
+            "solver_method": "thermal_resistance_relaxation", "converged": True,
             "iterations": 2, "matvec_count": 2,
             "initial_residual": 1.0, "final_relative_residual": 1e-10,
             "min_temperature_K": 293.15, "max_temperature_K": tmax,
@@ -294,7 +294,7 @@ class TestWriters:
             baseline_mold_k_W_mK=3.0,
             rtol=1e-10,
             initial_temperature_K=293.15,
-            method="pcg",
+            alpha=0.7,
             path=path,
         )
         with path.open("r", encoding="utf-8") as stream:

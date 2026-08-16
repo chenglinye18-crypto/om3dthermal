@@ -1,5 +1,5 @@
 """Thermal layer: conductance, boundary conditions, power, and
-matrix-free steady-state solver.
+steady-state solver.
 
 Modules:
 
@@ -13,7 +13,12 @@ Modules:
   ``BoundaryLinkTable``
 - :mod:`.power` — per-cell power source mapping
 - :mod:`.operator` — matrix-free thermal operator
-- :mod:`.steady_state` — weighted Jacobi and PCG solvers
+- :mod:`.steady_state` — shared diagnostics and result type for the
+  steady-state solver
+- :mod:`.thermal_relaxation` — CPU thermal-resistance relaxation
+  solver (the only production steady-state solver)
+- :mod:`.gpu_relaxation` — GPU implementation of the same solver
+- :mod:`.gpu_common` — shared CuPy loader and probe
 - :mod:`.solution_export` — solver CSV / NPZ / JSON writers
 """
 from .boundary import (
@@ -28,12 +33,10 @@ from .errors import (
     UnsupportedMaterialRotationError,
 )
 from .interfaces import InterfaceResistanceQuery, InterfaceResistanceRegistry
-from .gpu_solver import (
-    CuPyMatrixFreeThermalOperator,
-    GPUBackendUnavailableError,
-    GPUSolverBreakdownError,
-    require_cupy,
-    solve_pcg_gpu,
+from .gpu_common import GPUBackendUnavailableError, require_cupy
+from .gpu_relaxation import (
+    GPURelaxationState,
+    solve_thermal_resistance_relaxation_gpu,
 )
 from .m3d_power import (
     M3DMemoryPowerResolution,
@@ -62,10 +65,9 @@ from .solution_export import (
 from .steady_state import (
     SteadyStateResult,
     UnanchoredThermalComponentError,
-    solve_pcg,
-    solve_weighted_jacobi,
     validate_anchored_components,
 )
+from .thermal_relaxation import solve_thermal_resistance_relaxation
 from .tensors import (
     canonical_rotation_key,
     global_conductivity_tensor,
@@ -77,9 +79,8 @@ from .tensors import (
 __all__ = [
     "BoundaryLinkTable",
     "ConductanceTable",
-    "CuPyMatrixFreeThermalOperator",
+    "GPURelaxationState",
     "GPUBackendUnavailableError",
-    "GPUSolverBreakdownError",
     "InterfaceResistanceQuery",
     "InterfaceResistanceRegistry",
     "InvalidRotationMatrixError",
@@ -109,9 +110,8 @@ __all__ = [
     "resolve_m3d_memory_power",
     "require_cupy",
     "select_boundary_rule",
-    "solve_pcg",
-    "solve_pcg_gpu",
-    "solve_weighted_jacobi",
+    "solve_thermal_resistance_relaxation",
+    "solve_thermal_resistance_relaxation_gpu",
     "validate_anchored_components",
     "validate_rotation_matrix",
     "write_boundary_heat_flows_csv",

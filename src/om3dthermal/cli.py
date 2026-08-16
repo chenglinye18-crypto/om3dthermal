@@ -57,9 +57,8 @@ from .thermal import (
     build_matrix_free_operator,
     build_power_breakdown,
     map_power_sources,
-    solve_pcg,
-    solve_pcg_gpu,
-    solve_weighted_jacobi,
+    solve_thermal_resistance_relaxation,
+    solve_thermal_resistance_relaxation_gpu,
     validate_anchored_components,
 )
 from .thermal.export import (
@@ -236,15 +235,17 @@ def solve_steady(
     config_path: str | Path,
     output_dir: str | Path,
     *,
-    method: str = "pcg",
-    omega: float = 0.7,
-    max_iterations: int = 10_000,
+    alpha: float = 0.7,
+    max_iterations: int = 100_000,
     rtol: float = 1e-8,
+    max_delta_t_K: float = 1e-6,
     initial_temperature: float = 293.15,
     backend: str | None = None,
 ) -> dict:
     """End-to-end steady-state thermal solve without ever
     materialising a dense or sparse matrix on the production path.
+    The only production solver is the thermal-resistance-network
+    relaxation (CPU or GPU).
     """
     import numpy as np
     config = load_config(config_path)
@@ -316,32 +317,22 @@ def solve_steady(
     # Solve.
     initial_T = np.full(operator.cell_count, initial_temperature,
                         dtype=np.float64)
-    if method == "pcg" and resolved_backend == "cpu":
-        result = solve_pcg(
+    if resolved_backend == "cpu":
+        result = solve_thermal_resistance_relaxation(
             operator, initial_T, boundary_table,
+            alpha=alpha,
             relative_residual_tolerance=rtol,
+            max_temperature_update_tolerance=max_delta_t_K,
             max_iterations=max_iterations,
         )
-    elif method == "pcg" and resolved_backend == "gpu":
-        result = solve_pcg_gpu(
-            operator, initial_T, boundary_table,
-            relative_residual_tolerance=rtol,
-            max_iterations=max_iterations,
-        )
-    elif method == "jacobi" and resolved_backend == "cpu":
-        result = solve_weighted_jacobi(
-            operator, initial_T, boundary_table,
-            omega=omega,
-            relative_residual_tolerance=rtol,
-            max_iterations=max_iterations,
-        )
-    elif method == "jacobi":
-        raise ValueError(
-            "GPU backend currently supports method='pcg' only; weighted "
-            "Jacobi remains available on backend='cpu'")
     else:
-        raise ValueError(
-            f"unknown method {method!r}; expected 'pcg' or 'jacobi'")
+        result = solve_thermal_resistance_relaxation_gpu(
+            operator, initial_T, boundary_table,
+            alpha=alpha,
+            relative_residual_tolerance=rtol,
+            max_temperature_update_tolerance=max_delta_t_K,
+            max_iterations=max_iterations,
+        )
 
     package_power = power_breakdown["whole_package"]
     gpu_power = float(package_power["gpu_total_W"])
@@ -427,9 +418,9 @@ def sweep_sensitivity(
     *,
     inset_sizes: str,
     k_values: str,
-    method: str = "pcg",
+    alpha: float = 0.7,
     rtol: float = 1e-6,
-    max_iterations: int = 10_000,
+    max_iterations: int = 100_000,
     initial_temperature: float = 293.15,
     resume: bool = False,
 ) -> dict:
@@ -456,7 +447,7 @@ def sweep_sensitivity(
             f"inset={case.inset_m*1e3:.3f}mm, "
             f"k={case.mold_k_W_mK:g} W/(m*K)")
         row = run_single_sensitivity_case(
-            config_path, case, method=method, rtol=rtol,
+            config_path, case, alpha=alpha, rtol=rtol,
             max_iterations=max_iterations,
             initial_temperature_K=initial_temperature)
         write_sensitivity_case_row_partial(rows_csv, row)
@@ -470,7 +461,7 @@ def sweep_sensitivity(
         inset_sizes_m=inset_list, k_values_W_mK=k_list,
         baseline_inset_m=baseline_inset,
         baseline_mold_k_W_mK=baseline_k, rtol=rtol,
-        initial_temperature_K=initial_temperature, method=method,
+        initial_temperature_K=initial_temperature, alpha=alpha,
         path=json_path)
     return {
         "case_count": len(rows),
@@ -486,9 +477,9 @@ def sweep_mesh(
     *,
     xy_sizes: str,
     z_sizes: str,
-    method: str = "pcg",
+    alpha: float = 0.7,
     rtol: float = 1e-6,
-    max_iterations: int = 10_000,
+    max_iterations: int = 100_000,
     initial_temperature: float = 293.15,
     resume: bool = False,
 ) -> dict:
@@ -511,7 +502,7 @@ def sweep_mesh(
             f"dx={spec.dx_m*1e3:.4f}mm dy={spec.dy_m*1e3:.4f}mm "
             f"dz={spec.dz_m*1e6:.2f}um")
         row = run_single_mesh_case(
-            config, spec, method=method, rtol=rtol,
+            config, spec, alpha=alpha, rtol=rtol,
             max_iterations=max_iterations,
             initial_temperature_K=initial_temperature)
         write_mesh_case_row_partial(rows_csv, row)
@@ -522,7 +513,7 @@ def sweep_mesh(
     write_mesh_convergence_json(
         rows, delta, config_path=config_path,
         xy_sizes_m=xy_list, z_sizes_m=z_list, rtol=rtol,
-        initial_temperature_K=initial_temperature, method=method,
+        initial_temperature_K=initial_temperature, alpha=alpha,
         path=json_path)
     return {
         "case_count": len(rows),
@@ -552,17 +543,19 @@ def main(argv: list[str] | None = None) -> int:
         help="also write a 790k-row conductance_edges.csv (off by default)")
     solve_parser = subparsers.add_parser(
         "solve-steady",
-        help="matrix-free steady-state thermal solve (PCG or Jacobi)")
+        help="matrix-free thermal-resistance relaxation (CPU or GPU)")
     solve_parser.add_argument("config", type=Path)
     solve_parser.add_argument("--out", type=Path, required=True)
     solve_parser.add_argument(
-        "--method", choices=["pcg", "jacobi"], default="pcg")
+        "--alpha", type=float, default=0.7,
+        help="relaxation factor (0 < alpha <= 1)")
     solve_parser.add_argument(
         "--backend", choices=["cpu", "gpu"], default=None,
         help="solver backend; defaults to config solver.backend or cpu")
-    solve_parser.add_argument("--omega", type=float, default=0.7)
-    solve_parser.add_argument("--max-iterations", type=int, default=10_000)
+    solve_parser.add_argument("--max-iterations", type=int, default=100_000)
     solve_parser.add_argument("--rtol", type=float, default=1e-8)
+    solve_parser.add_argument(
+        "--max-delta-t-K", type=float, default=1e-6)
     solve_parser.add_argument(
         "--initial-temperature", type=parse_temperature, default=293.15,
         help="uniform starting temperature in K (default 20 degC = 293.15 K)")
@@ -573,11 +566,10 @@ def main(argv: list[str] | None = None) -> int:
     sensitivity_parser.add_argument("--out", type=Path, required=True)
     sensitivity_parser.add_argument("--inset", required=True)
     sensitivity_parser.add_argument("--mold-k", dest="mold_k", required=True)
-    sensitivity_parser.add_argument(
-        "--method", choices=["pcg", "jacobi"], default="pcg")
+    sensitivity_parser.add_argument("--alpha", type=float, default=0.7)
     sensitivity_parser.add_argument("--rtol", type=float, default=1e-6)
     sensitivity_parser.add_argument(
-        "--max-iterations", type=int, default=10_000)
+        "--max-iterations", type=int, default=100_000)
     sensitivity_parser.add_argument(
         "--initial-temperature", type=parse_temperature, default=293.15)
     sensitivity_parser.add_argument("--resume", action="store_true")
@@ -588,10 +580,9 @@ def main(argv: list[str] | None = None) -> int:
     mesh_parser.add_argument("--out", type=Path, required=True)
     mesh_parser.add_argument("--xy", required=True)
     mesh_parser.add_argument("--z", required=True)
-    mesh_parser.add_argument(
-        "--method", choices=["pcg", "jacobi"], default="pcg")
+    mesh_parser.add_argument("--alpha", type=float, default=0.7)
     mesh_parser.add_argument("--rtol", type=float, default=1e-6)
-    mesh_parser.add_argument("--max-iterations", type=int, default=10_000)
+    mesh_parser.add_argument("--max-iterations", type=int, default=100_000)
     mesh_parser.add_argument(
         "--initial-temperature", type=parse_temperature, default=293.15)
     mesh_parser.add_argument("--resume", action="store_true")
@@ -622,14 +613,15 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "solve-steady":
         summary = solve_steady(
             args.config, args.out,
-            method=args.method, omega=args.omega,
+            alpha=args.alpha,
             max_iterations=args.max_iterations, rtol=args.rtol,
+            max_delta_t_K=args.max_delta_t_K,
             initial_temperature=args.initial_temperature,
             backend=args.backend,
         )
         print(
-            f"Solved {summary['cell_count']} cells with {args.method}/"
-            f"{summary['solver_backend']} "
+            f"Solved {summary['cell_count']} cells with relaxation/"
+            f"{summary['solver_backend']} (alpha={args.alpha}) "
             f"in {summary['iterations']} iterations: "
             f"T=[{summary['min_temperature_K']:.2f}, "
             f"{summary['max_temperature_K']:.2f}] K, "
@@ -640,7 +632,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "sweep-sensitivity":
         result = sweep_sensitivity(
             args.config, args.out, inset_sizes=args.inset,
-            k_values=args.mold_k, method=args.method, rtol=args.rtol,
+            k_values=args.mold_k, alpha=args.alpha, rtol=args.rtol,
             max_iterations=args.max_iterations,
             initial_temperature=args.initial_temperature,
             resume=args.resume)
@@ -650,7 +642,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "sweep-mesh":
         result = sweep_mesh(
             args.config, args.out, xy_sizes=args.xy, z_sizes=args.z,
-            method=args.method, rtol=args.rtol,
+            alpha=args.alpha, rtol=args.rtol,
             max_iterations=args.max_iterations,
             initial_temperature=args.initial_temperature,
             resume=args.resume)

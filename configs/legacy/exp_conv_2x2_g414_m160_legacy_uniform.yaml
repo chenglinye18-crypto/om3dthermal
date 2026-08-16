@@ -1,4 +1,4 @@
-# Paper-anchored 3D HBM-on-GPU benchmark, IEDM 2025 Fig. 3.
+﻿# Paper-anchored 3D HBM-on-GPU benchmark, IEDM 2025 Fig. 3.
 # All paper citations, source locations and modelling assumptions
 # retained only as legacy uniform-power history.
 name: exp_conv_2x2_g414_m160_legacy_uniform
@@ -86,7 +86,7 @@ power:
 
 # Solver settings.
 solver:
-  method: pcg
+  alpha: 0.7
   rtol:   1e-6
 
 metadata:

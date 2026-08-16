@@ -1,4 +1,4 @@
-# Conventional 2x1 with HBM base logic BEOL/Si removed.
+﻿# Conventional 2x1 with HBM base logic BEOL/Si removed.
 name: exp_conv_2x1_nobase_g414_m128
 materials:
   Lid: 400
@@ -44,7 +44,7 @@ power:
   gpu: 414 W
   hbm_each: 64 W
   son23_reference: {stack_total: 30 W, logic_phy: 4 W, logic_tsv: 2 W, dram_bank_per_die: 1.5 W, dram_tsv_per_die: 0.5 W, dram_die_count: 12}
-solver: {method: pcg, rtol: 1e-6}
+solver: {alpha: 0.7, rtol: 1e-6}
 metadata:
   case_id: exp_conv_2x1_nobase_g414_m128
   scope: exp

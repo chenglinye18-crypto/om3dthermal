@@ -141,7 +141,7 @@ def test_uniform_power_sources_total_414_W_gpu_and_156_8_W_memory(cfg):
 def steady_result(tmp_path_factory):
     output = tmp_path_factory.mktemp("orthogonal_hbm_steady")
     summary = solve_steady(
-        CONFIG, output, method="pcg", rtol=1e-6, max_iterations=3000)
+        CONFIG, output, alpha=0.7, rtol=1e-6, max_iterations=10_000)
     hottest = None
     with (output / "temperature_cells.csv").open(encoding="utf-8", newline="") as stream:
         for row in csv.DictReader(stream):

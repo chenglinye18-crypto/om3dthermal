@@ -3,7 +3,7 @@
 The sweep runs the existing steady-state pipeline
 
     config -> geometry -> mesh -> conductance -> boundary/power
-           -> matrix-free operator -> PCG
+           -> matrix-free operator -> thermal resistance relaxation
 
 five times (xy 1.0 / 0.5 / 0.25 mm at fixed dz, plus z 200 / 50 um
 at fixed dx=dy=0.5 mm; the 0.5 / 100 case is shared), with each
@@ -370,7 +370,7 @@ def write_mesh_convergence_json(
     z_sizes_m: Sequence[float],
     rtol: float,
     initial_temperature_K: float,
-    method: str,
+    alpha: float,
     path: str | Path,
 ) -> None:
     path = Path(path)
@@ -381,7 +381,8 @@ def write_mesh_convergence_json(
             "mesh-convergence sweep, mesh overridden in memory only",
         "strict_paper_temperature_reproduction": False,
         "config_path": str(config_path),
-        "solver_method": method,
+        "solver_method": "thermal_resistance_relaxation",
+        "solver_alpha": alpha,
         "solver_rtol": rtol,
         "initial_temperature_K": initial_temperature_K,
         "xy_sizes_m": list(xy_sizes_m),
@@ -520,9 +521,9 @@ def run_single_case(
     config: SimulationConfig,
     spec: CaseSpec,
     *,
-    method: str = "pcg",
+    alpha: float = 0.7,
     rtol: float = 1e-6,
-    max_iterations: int = 10_000,
+    max_iterations: int = 100_000,
     initial_temperature_K: float = 293.15,
 ) -> dict:
     """Run one sweep case and return the per-case summary row.
@@ -534,7 +535,7 @@ def run_single_case(
     pipeline = run_steady_pipeline(
         config,
         max_cell_size_m=spec.tuple,
-        method=method,
+        alpha=alpha,
         rtol=rtol,
         max_iterations=max_iterations,
         initial_temperature_K=initial_temperature_K,

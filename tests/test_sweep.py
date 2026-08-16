@@ -47,9 +47,10 @@ def test_load_sweep_config_basic():
     assert cfg.name == "memory_internal_v0"
     assert cfg.mode == "ofat"
     assert cfg.thermal is True
-    # The official memory_internal_v0 benchmark pins the GPU PCG
-    # backend explicitly so the run does not depend on SweepConfig's
-    # default. Targeted validation enforces this at config-load time.
+    # The official memory_internal_v0 benchmark pins the GPU
+    # thermal-resistance relaxation backend explicitly so the run
+    # does not depend on SweepConfig's default. Targeted validation
+    # enforces this at config-load time.
     assert cfg.thermal_backend == "gpu"
     assert set(cfg.cases.keys()) == {
         "conventional_hbm", "orthogonal_si", "orthogonal_m3d_igzo",

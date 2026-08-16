@@ -1,4 +1,4 @@
-# LEGACY SPLIT POWER CONFIG. Active case: configs/cases/conventional_hbm_2x1.yaml.
+﻿# LEGACY SPLIT POWER CONFIG. Active case: configs/cases/conventional_hbm_2x1.yaml.
 memory:
   technology: si_dram
   backend: dreamram

@@ -1,4 +1,4 @@
-memory:
+﻿memory:
   technology: si_dram
   backend: dreamram
   dreamram:

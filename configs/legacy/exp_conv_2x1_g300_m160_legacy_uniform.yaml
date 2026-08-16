@@ -1,4 +1,4 @@
-# Legacy uniform-power GPU-300 W derivative.
+﻿# Legacy uniform-power GPU-300 W derivative.
 name: exp_conv_2x1_g300_m160_legacy_uniform
 
 materials:
@@ -64,7 +64,7 @@ power:
   hbm_each: 80 W
 
 solver:
-  method: pcg
+  alpha: 0.7
   rtol: 1e-6
 
 metadata:

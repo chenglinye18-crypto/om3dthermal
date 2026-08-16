@@ -1,4 +1,4 @@
-# LEGACY COMPATIBILITY TEMPLATE: canonical analytical geometry and memory power
+﻿# LEGACY COMPATIBILITY TEMPLATE: canonical analytical geometry and memory power
 # now live together in configs/cases/orthogonal_m3d_igzo.yaml.
 # Geometry- and material-closed research template. Formal thermal cases use
 # the production configs exp_orth_m3d8_g{414,300}_bw39p2_all1read.yaml.

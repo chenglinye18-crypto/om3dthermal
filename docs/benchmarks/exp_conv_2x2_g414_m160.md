@@ -41,6 +41,6 @@ the unchanged 414 W GPU, package input is 574 W.
 - HBM Tmax: 122.4325 degC.
 - DRAM-region Tmax: 117.8021 degC; DRAM_BEOL Tmax: 117.3315 degC.
 - Lid / laminate heat out: 554.4279 / 19.5721 W.
-- PCG: 2,040 iterations; relative residual 9.8698e-9.
+- Thermal-resistance-network relaxation: 2,040 iterations; relative residual 9.8698e-9.
 - Relative power imbalance: 8.0487e-10.
 - Delta Tmax versus total-power-matched uniform case: +1.9914 degC.

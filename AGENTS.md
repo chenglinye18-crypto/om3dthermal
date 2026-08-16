@@ -75,7 +75,7 @@ python -c "import om3dthermal; print(om3dthermal.__file__)"
 python -m pytest tests/test_sweep.py -q
 
 REM Gate 9: one GPU thermal smoke (Conventional HBM baseline, backend=gpu)
-python -m om3dthermal.cli solve-steady configs\cases\conventional_hbm_2x1.yaml --out runs\_gpu_smoke --method pcg --backend gpu
+python -m om3dthermal.cli solve-steady configs\cases\conventional_hbm_2x1.yaml --out runs\_gpu_smoke --alpha 0.7 --backend gpu
 ```
 
 If any gate fails, the failure must be diagnosed inside the `om3dthermal`
@@ -102,10 +102,32 @@ canonical Son23-powered Conventional 2x2 HBM case.
 
 Compact YAML -> geometry -> ThermalCell discretization -> face adjacency ->
 anisotropic face conductance -> boundary/power mapping -> matrix-free thermal
-operator -> PCG steady-state solution.
+operator -> thermal-resistance-network relaxation (CPU or GPU).
 
-The CPU reference solver and CuPy GPU backend are both matrix-free. Weighted
-Jacobi is retained only as a reference/debugging solver.
+The CPU reference solver and the CuPy GPU backend are both matrix-free
+and both implement the same relaxation equation.
+
+## Formal solver (do not change)
+
+The only production steady-state thermal solver is the
+**thermal-resistance-network relaxation**:
+
+```
+delta_Q_i = P_i - sum_j G_ij (T_i - T_j) - sum_b G_ib (T_i - T_b)
+R_eff_i  = 1 / ( sum_j G_ij + sum_b G_ib )
+delta_T_i = alpha * delta_Q_i * R_eff_i        alpha in (0, 1]
+T_new_i   = T_old_i + delta_T_i                (simultaneous update)
+```
+
+Convergence requires both `relative_heat_flow_residual < tol` and
+`max_abs_delta_T < tol` to be satisfied at the same `check_interval`
+boundary. CPU and GPU backends must implement the same relaxation
+equation (FP64 end-to-end; no fast-math, no mixed precision).
+
+Do not introduce PCG, CG, sparse linear solvers, matrix inversion,
+or alternative steady-state solvers unless explicitly requested by the
+user. The GPU and CPU relaxation kernels must produce numerically
+equivalent temperature fields.
 
 ## Configuration
 

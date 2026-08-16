@@ -1,4 +1,4 @@
-# Conventional 12Hi HBM with two y-merged 2x1 groups.
+﻿# Conventional 12Hi HBM with two y-merged 2x1 groups.
 name: exp_conv_2x1_g414_m160_legacy_uniform
 
 materials:
@@ -64,7 +64,7 @@ power:
   hbm_each: 80 W
 
 solver:
-  method: pcg
+  alpha: 0.7
   rtol: 1e-6
 
 metadata:

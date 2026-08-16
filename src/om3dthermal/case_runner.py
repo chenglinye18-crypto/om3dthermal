@@ -8,7 +8,7 @@ both need to run the same sequence
       -> mesh
       -> conductance / boundary links / power
       -> matrix-free operator
-      -> PCG (or weighted Jacobi)
+      -> thermal-resistance-network relaxation (CPU or GPU)
 
 without ever materialising a dense matrix. This module isolates that
 pipeline as a single function so the two call sites cannot drift.
@@ -39,11 +39,10 @@ from .thermal import (
     build_conductance_table,
     build_matrix_free_operator,
     map_power_sources,
-    solve_pcg,
-    solve_weighted_jacobi,
+    solve_thermal_resistance_relaxation,
+    solve_thermal_resistance_relaxation_gpu,
     validate_anchored_components,
 )
-from .thermal.gpu_solver import solve_pcg_gpu
 from .thermal.boundary import BoundaryLinkTable
 from .thermal.operator import MatrixFreeThermalOperator
 from .thermal.steady_state import SteadyStateResult
@@ -153,10 +152,11 @@ def run_steady_pipeline(
     config: SimulationConfig,
     *,
     max_cell_size_m: tuple[float, float, float] | None = None,
-    method: str = "pcg",
-    omega: float = 0.7,
+    alpha: float = 0.7,
     rtol: float = 1e-8,
-    max_iterations: int = 10_000,
+    max_delta_t_K: float = 1e-6,
+    max_iterations: int = 100_000,
+    check_interval: int = 10,
     initial_temperature_K: float = 293.15,
     backend: str = "cpu",
 ) -> PipelineResult:
@@ -166,12 +166,18 @@ def run_steady_pipeline(
     overrides ``config.discretization.max_cell_size`` for this run.
     Pass ``None`` (the default) to use whatever the config declares.
 
-    ``backend`` selects between the matrix-free PCG implementations:
-    ``"cpu"`` (default) calls :func:`solve_pcg`; ``"gpu"`` calls
-    :func:`solve_pcg_gpu` (CuPy/NVRTC). Weighted-Jacobi stays on CPU
-    regardless. The same routing already used by
-    ``om3dthermal.cli solve-steady --backend gpu`` is reused here so
-    sweep callers see identical results for the same canonical case.
+    ``backend`` selects between two implementations of the
+    *same* thermal-resistance-network relaxation equation:
+
+    * ``"cpu"`` (default) calls
+      :func:`solve_thermal_resistance_relaxation` (NumPy on host).
+    * ``"gpu"`` calls
+      :func:`solve_thermal_resistance_relaxation_gpu` (CuPy / NVRTC).
+
+    Convergence is measured on two physical quantities:
+    ``relative_heat_flow_residual`` and ``max_abs_delta_T``.  Both
+    must drop below the configured tolerance at the same
+    ``check_interval`` boundary.
     """
     if backend not in {"cpu", "gpu"}:
         raise ValueError(
@@ -240,28 +246,24 @@ def run_steady_pipeline(
     # Solve.
     initial_T = np.full(operator.cell_count, initial_temperature_K,
                         dtype=np.float64)
-    if method == "pcg" and backend == "cpu":
-        result = solve_pcg(
+    if backend == "cpu":
+        result = solve_thermal_resistance_relaxation(
             operator, initial_T, boundary_table,
+            alpha=alpha,
             relative_residual_tolerance=rtol,
+            max_temperature_update_tolerance=max_delta_t_K,
             max_iterations=max_iterations,
-        )
-    elif method == "pcg" and backend == "gpu":
-        result = solve_pcg_gpu(
-            operator, initial_T, boundary_table,
-            relative_residual_tolerance=rtol,
-            max_iterations=max_iterations,
-        )
-    elif method == "jacobi":
-        result = solve_weighted_jacobi(
-            operator, initial_T, boundary_table,
-            omega=omega,
-            relative_residual_tolerance=rtol,
-            max_iterations=max_iterations,
+            check_interval=check_interval,
         )
     else:
-        raise ValueError(
-            f"unknown method {method!r}; expected 'pcg' or 'jacobi'")
+        result = solve_thermal_resistance_relaxation_gpu(
+            operator, initial_T, boundary_table,
+            alpha=alpha,
+            relative_residual_tolerance=rtol,
+            max_temperature_update_tolerance=max_delta_t_K,
+            max_iterations=max_iterations,
+            check_interval=check_interval,
+        )
 
     # Power-by-source breakdown.
     gpu_power = 0.0

@@ -1,4 +1,4 @@
-# Conventional canonical HBM power-only paper check.
+﻿# Conventional canonical HBM power-only paper check.
 # Legacy uniform-power derivative; only GPU power changes.
 name: exp_conv_2x2_g300_m160_legacy_uniform
 
@@ -67,7 +67,7 @@ power:
   hbm_each: 40 W
 
 solver:
-  method: pcg
+  alpha: 0.7
   rtol: 1e-6
 
 metadata:

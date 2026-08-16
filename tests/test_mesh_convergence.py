@@ -287,7 +287,7 @@ class TestWriters:
             z_sizes_m=z_list,
             rtol=1e-10,
             initial_temperature_K=293.15,
-            method="pcg",
+            alpha=0.7,
             path=path,
         )
         with path.open("r", encoding="utf-8") as stream:

@@ -1,4 +1,4 @@
-# LEGACY SPLIT POWER CONFIG. Prefer configs/cases/orthogonal_m3d_igzo.yaml.
+﻿# LEGACY SPLIT POWER CONFIG. Prefer configs/cases/orthogonal_m3d_igzo.yaml.
 memory:
   technology: igzo_2t0c
   backend: dreamram

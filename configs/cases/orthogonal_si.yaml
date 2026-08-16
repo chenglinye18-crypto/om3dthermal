@@ -1,4 +1,4 @@
-name: orthogonal_si
+﻿name: orthogonal_si
 
 geometry:
   type: orthogonal_si
@@ -74,7 +74,7 @@ thermal:
     ambient_degC: 20.0
     lid_top_htc_W_m2K: 30000.0
     laminate_bottom_htc_W_m2K: 200.0
-  solver: {method: pcg, rtol: 1.0e-6}
+  solver: {alpha: 0.7, rtol: 1.0e-6}
 
 provenance:
   geometry: INHERITED_ORTHOGONAL_MOSAIC98

@@ -28,5 +28,5 @@ boundary:
 power:
   gpu: 1 W
 solver:
-  method: pcg
+  alpha:  0.7
   rtol:   1e-6
