@@ -151,6 +151,12 @@ class SweepConfig(BaseModel):
     name: str = Field(min_length=1)
     mode: Literal["ofat"] = "ofat"
     thermal: bool = True
+    # Selects the matrix-free PCG backend for the steady-state solve.
+    # ``"cpu"`` -> :func:`solve_pcg`; ``"gpu"`` -> :func:`solve_pcg_gpu`
+    # (CuPy/NVRTC). This is a thin pass-through to the same routing
+    # used by ``om3dthermal.cli solve-steady --backend <cpu|gpu>``;
+    # the framework does not re-implement either solver.
+    thermal_backend: Literal["cpu", "gpu"] = "cpu"
     cases: dict[str, CaseRef] = Field(min_length=1)
     sweeps: list[SweepAxis] = Field(min_length=1)
     output_dir: str = Field(min_length=1)
@@ -406,14 +412,15 @@ def _system_metrics(
 
 def _thermal_metrics(
         case: CanonicalCaseConfig, project_root: Path,
-        system_metrics: dict[str, Any]) -> dict[str, Any]:
+        system_metrics: dict[str, Any], *,
+        backend: str = "cpu") -> dict[str, Any]:
     geom = resolve_case_geometry(case)
     sys_pow = resolve_system_power(
         case, project_root=project_root, geometry=geom)
     sim = compile_case_thermal(case, sys_pow)
     pipeline = run_steady_pipeline(
         sim, method="pcg", rtol=1e-6, max_iterations=10_000,
-        initial_temperature_K=293.15)
+        initial_temperature_K=293.15, backend=backend)
     mem_t, gpu_t, pkg_t = _temperature_maxima(pipeline)
     mapped_actual = float(sum(pipeline.power.power_W))
     resolved = system_metrics["P_package_W"]
@@ -422,7 +429,7 @@ def _thermal_metrics(
         "gpu_Tmax_degC": gpu_t,
         "package_Tmax_degC": pkg_t,
         "delta_Tmax_K": pkg_t - 20.0,
-        "thermal_backend": "cpu",
+        "thermal_backend": backend,
         "converged": bool(pipeline.result.converged),
         "iterations": int(pipeline.result.iterations),
         "final_relative_residual": float(
@@ -445,7 +452,8 @@ def _thermal_metrics(
 
 def _run_one_point(
         case_alias: str, case_path: Path, axis: SweepAxis, value: float,
-        is_nominal: bool, output_dir: Path, project_root: Path) -> PointResult:
+        is_nominal: bool, output_dir: Path, project_root: Path, *,
+        backend: str = "cpu") -> PointResult:
     canonical = load_case_config(case_path)
     if axis.parameter not in ALLOWED_ALIASES:
         return PointResult(
@@ -519,7 +527,7 @@ def _run_one_point(
     if True:  # thermal: true is the only supported mode for v0
         try:
             thermal_metrics = _thermal_metrics(
-                new_case, project_root, sys_metrics)
+                new_case, project_root, sys_metrics, backend=backend)
         except Exception as exc:
             return PointResult(
                 case=case_alias, case_path=str(case_path),
@@ -687,7 +695,7 @@ def run_sweep(
         "main_repo_branch": (git_metadata or {}).get("main_repo_branch"),
         "dreamram_commit": (git_metadata or {}).get("dreamram_commit"),
         "dreamram_branch": (git_metadata or {}).get("dreamram_branch"),
-        "thermal_backend": "cpu",
+        "thermal_backend": cfg.thermal_backend,
         "python_version": _python_version(),
         "case_paths": {
             alias: str(cfg.resolve_case_path(alias, repo_root))
@@ -732,7 +740,7 @@ def run_sweep(
         t0 = time.perf_counter()
         pt = _run_one_point(
             case_alias, case_path, axis, value, is_nominal,
-            output_dir, repo_root)
+            output_dir, repo_root, backend=cfg.thermal_backend)
         dt = time.perf_counter() - t0
         # persist per-point metrics.json
         point_dir = (

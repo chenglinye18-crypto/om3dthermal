@@ -43,6 +43,7 @@ from .thermal import (
     solve_weighted_jacobi,
     validate_anchored_components,
 )
+from .thermal.gpu_solver import solve_pcg_gpu
 from .thermal.boundary import BoundaryLinkTable
 from .thermal.operator import MatrixFreeThermalOperator
 from .thermal.steady_state import SteadyStateResult
@@ -157,13 +158,24 @@ def run_steady_pipeline(
     rtol: float = 1e-8,
     max_iterations: int = 10_000,
     initial_temperature_K: float = 293.15,
+    backend: str = "cpu",
 ) -> PipelineResult:
     """Run the full steady-state pipeline and return all artifacts.
 
     ``max_cell_size_m`` is a 3-tuple ``(dx, dy, dz)`` in metres that
     overrides ``config.discretization.max_cell_size`` for this run.
     Pass ``None`` (the default) to use whatever the config declares.
+
+    ``backend`` selects between the matrix-free PCG implementations:
+    ``"cpu"`` (default) calls :func:`solve_pcg`; ``"gpu"`` calls
+    :func:`solve_pcg_gpu` (CuPy/NVRTC). Weighted-Jacobi stays on CPU
+    regardless. The same routing already used by
+    ``om3dthermal.cli solve-steady --backend gpu`` is reused here so
+    sweep callers see identical results for the same canonical case.
     """
+    if backend not in {"cpu", "gpu"}:
+        raise ValueError(
+            f"unknown backend {backend!r}; expected 'cpu' or 'gpu'")
     if config.thermal_conductance is None:
         raise ValueError(
             "config has no 'thermal_conductance' block; add one before "
@@ -228,8 +240,14 @@ def run_steady_pipeline(
     # Solve.
     initial_T = np.full(operator.cell_count, initial_temperature_K,
                         dtype=np.float64)
-    if method == "pcg":
+    if method == "pcg" and backend == "cpu":
         result = solve_pcg(
+            operator, initial_T, boundary_table,
+            relative_residual_tolerance=rtol,
+            max_iterations=max_iterations,
+        )
+    elif method == "pcg" and backend == "gpu":
+        result = solve_pcg_gpu(
             operator, initial_T, boundary_table,
             relative_residual_tolerance=rtol,
             max_iterations=max_iterations,

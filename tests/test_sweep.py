@@ -46,6 +46,7 @@ def test_load_sweep_config_basic():
     assert cfg.name == "memory_internal_v0"
     assert cfg.mode == "ofat"
     assert cfg.thermal is True
+    assert cfg.thermal_backend == "cpu"
     assert set(cfg.cases.keys()) == {
         "conventional_hbm", "orthogonal_si", "orthogonal_m3d_igzo",
     }
@@ -54,6 +55,51 @@ def test_load_sweep_config_basic():
         "rd_per_act", "mat_rows", "mat_cols",
         "m3d_subarray_rows", "m3d_subarray_cols",
     }
+
+
+def test_thermal_backend_explicit_gpu_parsed():
+    raw = {
+        "name": "gpu_pass_through",
+        "mode": "ofat",
+        "thermal": True,
+        "thermal_backend": "gpu",
+        "output_dir": "runs/sweeps/_gpu_pass_through",
+        "cases": {
+            "conventional_hbm": {
+                "alias": "conventional_hbm",
+                "path": "configs/cases/conventional_hbm_2x1.yaml",
+            },
+        },
+        "sweeps": [{
+            "name": "rd_per_act",
+            "cases": ["conventional_hbm"],
+            "parameter": "activated_row_data_utilization",
+            "values": [0.10],
+        }],
+    }
+    cfg = SweepConfig.model_validate(raw)
+    assert cfg.thermal_backend == "gpu"
+
+
+def test_thermal_backend_rejects_unknown_value():
+    raw = {
+        "name": "bad_backend",
+        "mode": "ofat",
+        "thermal": True,
+        "thermal_backend": "tpu",
+        "output_dir": "runs/sweeps/_bad_backend",
+        "cases": {
+            "x": {"alias": "x", "path": "configs/cases/x.yaml"},
+        },
+        "sweeps": [{
+            "name": "n",
+            "cases": ["x"],
+            "parameter": "activated_row_data_utilization",
+            "values": [0.10],
+        }],
+    }
+    with pytest.raises(Exception):
+        SweepConfig.model_validate(raw)
 
 
 def test_unknown_alias_rejected_at_config_load_time():
