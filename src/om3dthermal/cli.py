@@ -595,6 +595,13 @@ def main(argv: list[str] | None = None) -> int:
             "run a config-driven OFAT memory parameter sweep; "
             "reuses the same case -> power -> thermal pipeline"))
     sweep_parser.add_argument("config", type=Path)
+    sweep_parser.add_argument(
+        "--thermal-backend", choices=["cpu", "gpu", "gpu_pcg"],
+        default=None,
+        help="override the sweep thermal solver without changing its cases")
+    sweep_parser.add_argument(
+        "--output-dir", type=Path, default=None,
+        help="override the sweep output directory")
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -659,7 +666,10 @@ def main(argv: list[str] | None = None) -> int:
         from .sweep import run_sweep
         from . import _git_metadata
         git_meta = _git_metadata(args.config)
-        result = run_sweep(args.config, git_metadata=git_meta)
+        result = run_sweep(
+            args.config, git_metadata=git_meta,
+            thermal_backend_override=args.thermal_backend,
+            output_dir_override=args.output_dir)
         print(
             f"[sweep] {result.config_name}: "
             f"{result.pass_count} PASS / {result.fail_count} FAIL "

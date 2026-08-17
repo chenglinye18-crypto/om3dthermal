@@ -41,6 +41,7 @@ from .thermal import (
     map_power_sources,
     solve_thermal_resistance_relaxation,
     solve_thermal_resistance_relaxation_gpu,
+    solve_pcg_gpu,
     validate_anchored_components,
 )
 from .thermal.boundary import BoundaryLinkTable
@@ -179,9 +180,10 @@ def run_steady_pipeline(
     must drop below the configured tolerance at the same
     ``check_interval`` boundary.
     """
-    if backend not in {"cpu", "gpu"}:
+    if backend not in {"cpu", "gpu", "gpu_pcg"}:
         raise ValueError(
-            f"unknown backend {backend!r}; expected 'cpu' or 'gpu'")
+            f"unknown backend {backend!r}; expected 'cpu', 'gpu', or "
+            "'gpu_pcg'")
     if config.thermal_conductance is None:
         raise ValueError(
             "config has no 'thermal_conductance' block; add one before "
@@ -255,10 +257,18 @@ def run_steady_pipeline(
             max_iterations=max_iterations,
             check_interval=check_interval,
         )
-    else:
+    elif backend == "gpu":
         result = solve_thermal_resistance_relaxation_gpu(
             operator, initial_T, boundary_table,
             alpha=alpha,
+            relative_residual_tolerance=rtol,
+            max_temperature_update_tolerance=max_delta_t_K,
+            max_iterations=max_iterations,
+            check_interval=check_interval,
+        )
+    else:
+        result = solve_pcg_gpu(
+            operator, initial_T, boundary_table,
             relative_residual_tolerance=rtol,
             max_temperature_update_tolerance=max_delta_t_K,
             max_iterations=max_iterations,

@@ -6,17 +6,14 @@
 mode: ofat
 
 # Whether to run the full steady-state thermal pipeline for each point.
-# The framework reuses the current production solver (thermal-resistance-
-# network relaxation, matrix-free, CPU or GPU; v0 pins the GPU relaxation
-# backend to keep the benchmark results consistent with the project's
-# current production thermal path).
+# The framework reuses the matrix-free steady-state thermal network. This
+# formal benchmark pins the device-resident FP64 Jacobi-preconditioned GPU PCG
+# backend; no point-to-point warm start is used.
 thermal: true
 
-# Explicitly select the GPU relaxation backend so this benchmark does
-# not depend on the ``SweepConfig`` default. Same routing as
-# ``om3dthermal.cli solve-steady --backend gpu`` and the existing
-# ``case_runner.run_steady_pipeline(backend="gpu")`` keyword.
-thermal_backend: gpu
+# Explicitly select GPU PCG so a direct ``python -m om3dthermal sweep`` run
+# cannot silently return to the discarded relaxation benchmark path.
+thermal_backend: gpu_pcg
 
 cases:
   conventional_hbm:
@@ -69,4 +66,4 @@ sweeps:
 
 # Output directory is created if missing. Stable across runs so the
 # benchmark can be appended/re-run.
-output_dir: runs/sweeps/memory_internal_v0
+output_dir: runs/sweeps/memory_internal_v0_pcg_gpu

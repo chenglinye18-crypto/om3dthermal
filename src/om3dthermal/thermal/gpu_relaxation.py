@@ -66,6 +66,7 @@ void thermal_relax_fp64(
     const double* __restrict__ rhs_W,
     const double* __restrict__ R_eff,
     double*       __restrict__ T_new,
+    double*       __restrict__ delta_T_out,
     int N,
     int MAX_DEG,
     double alpha)
@@ -86,7 +87,34 @@ void thermal_relax_fp64(
     // power_W[i] + sum_b G_ib * T_ref so we use it directly).
     double delta_Q = rhs_W[i] - q_out;
     double delta_T = alpha * delta_Q * R_eff[i];
+    delta_T_out[i] = delta_T;
     T_new[i] = Ti + delta_T;
+}
+
+extern "C" __global__
+void thermal_residual_fp64(
+    const double* __restrict__ T,
+    const int*    __restrict__ nbr_id,
+    const double* __restrict__ nbr_G,
+    const double* __restrict__ boundary_G,
+    const double* __restrict__ rhs_W,
+    double*       __restrict__ residual,
+    int N,
+    int MAX_DEG)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    double Ti = T[i];
+    double q_out = boundary_G[i] * Ti;
+    int base = i * MAX_DEG;
+    #pragma unroll
+    for (int k = 0; k < 6; ++k) {
+        if (k >= MAX_DEG) break;
+        int j = nbr_id[base + k];
+        if (j < 0) continue;
+        q_out += nbr_G[base + k] * (Ti - T[j]);
+    }
+    residual[i] = rhs_W[i] - q_out;
 }
 """
 
@@ -94,19 +122,22 @@ void thermal_relax_fp64(
 _KERNEL_CACHE: dict[tuple, object] = {}
 
 
-def _get_kernel(cp, max_deg: int):
-    """Return a cached RawKernel compiled with NVRTC for the
-    thermal relaxation update.
-    """
+def _get_kernels(cp, max_deg: int):
+    """Return cached relaxation and residual kernels."""
     key = (cp.__version__, max_deg)
     cached = _KERNEL_CACHE.get(key)
     if cached is not None:
         return cached
-    kernel = cp.RawKernel(
-        _RELAX_KERNEL_SRC, "thermal_relax_fp64", backend="nvrtc",
+    module = cp.RawModule(
+        code=_RELAX_KERNEL_SRC, backend="nvrtc",
+        name_expressions=("thermal_relax_fp64", "thermal_residual_fp64"),
     )
-    _KERNEL_CACHE[key] = kernel
-    return kernel
+    kernels = (
+        module.get_function("thermal_relax_fp64"),
+        module.get_function("thermal_residual_fp64"),
+    )
+    _KERNEL_CACHE[key] = kernels
+    return kernels
 
 
 @dataclass
@@ -128,6 +159,8 @@ class GPURelaxationState:
     R_eff: object
     T_old: object
     T_new: object
+    delta_T: object
+    residual: object
     max_neighbors: int = MAX_NEIGHBORS_PER_CELL
 
     @classmethod
@@ -203,20 +236,34 @@ class GPURelaxationState:
             R_eff=cp_module.asarray(_build_thermal_resistance(operator), dtype=cp_module.float64),
             T_old=cp_module.empty(N, dtype=cp_module.float64),
             T_new=cp_module.empty(N, dtype=cp_module.float64),
+            delta_T=cp_module.empty(N, dtype=cp_module.float64),
+            residual=cp_module.empty(N, dtype=cp_module.float64),
             max_neighbors=MAX,
         )
 
     def launch_one_step(self, cp_module, alpha: float) -> None:
         """Apply one relaxation step: read T_old, write T_new."""
-        kernel = _get_kernel(cp_module, self.max_neighbors)
+        kernel, _ = _get_kernels(cp_module, self.max_neighbors)
         block = 256
         grid = ((self.cell_count + block - 1) // block,)
         kernel(
             grid, (block,),
             (self.T_old, self.neighbor_id, self.neighbor_G,
              self.boundary_G, self.power_W, self.rhs_W,
-             self.R_eff, self.T_new, self.cell_count,
+             self.R_eff, self.T_new, self.delta_T, self.cell_count,
              self.max_neighbors, float(alpha)),
+        )
+
+    def launch_residual(self, cp_module, temperature) -> None:
+        """Evaluate the true KCL residual at ``temperature`` on device."""
+        _, kernel = _get_kernels(cp_module, self.max_neighbors)
+        block = 256
+        grid = ((self.cell_count + block - 1) // block,)
+        kernel(
+            grid, (block,),
+            (temperature, self.neighbor_id, self.neighbor_G,
+             self.boundary_G, self.rhs_W, self.residual,
+             self.cell_count, self.max_neighbors),
         )
 
     def swap_buffers(self) -> None:
@@ -262,78 +309,77 @@ def solve_thermal_resistance_relaxation_gpu(
         raise ValueError("initial_temperature contains NaN or Inf")
     t0 = time.perf_counter()
     state = GPURelaxationState.from_cpu(operator, cp)
-    cp.cuda.Stream.null.synchronize()
     state.T_old.set(host_initial)
     state.T_new.set(host_initial)
-    # Build the host-side diagnostic workspace.
-    diag_block = 4  # max_abs_delta_T, residual, breakdown, true_residual
-    R_eff_host = np.asarray(state.R_eff.get(), dtype=np.float64)
-    initial_residual = operator.relative_residual(host_initial)
+    # All iteration-sized arrays stay on device.  Only compact diagnostic
+    # bundles cross to the host at check boundaries.
+    b_norm_device = cp.linalg.norm(state.rhs_W)
+    residual_denom_device = cp.maximum(b_norm_device, 1e-30)
+    state.launch_residual(cp, state.T_old)
+    initial_absolute_device = cp.linalg.norm(state.residual)
+    initial_relative_device = (
+        initial_absolute_device / residual_denom_device)
+    initial_diag = cp.asnumpy(cp.stack((
+        initial_absolute_device, initial_relative_device)))
+    initial_absolute = float(initial_diag[0])
+    initial_residual = float(initial_diag[1])
+    compact_diagnostic_downloads = 1
+    residual_kernel_count = 1
     residual_history: list[float] = [float(initial_residual)]
     update_history: list[float] = []
     converged = False
     iterations = 0
     last_update = float("inf")
     last_relative = float(initial_residual)
-    last_absolute = float("nan")
-    tiny = np.finfo(np.float64).tiny
+    last_absolute = initial_absolute
     while iterations < max_iterations:
         state.launch_one_step(cp, alpha)
         iterations += 1
+        should_stop = False
         if iterations % check_interval == 0 or iterations == max_iterations:
-            # Compact host-side diagnostic bundle.
-            T_new_host = cp.asnumpy(state.T_new)
-            max_abs_delta_T = float(np.max(np.abs(T_new_host - host_initial)))
-            # true KCL residual via host copy: b - A T
-            Ap = operator.apply(T_new_host)
-            r = operator.rhs_W - Ap
-            residual_norm = float(np.linalg.norm(r))
-            b_norm = float(np.linalg.norm(operator.rhs_W))
-            denom = max(b_norm, 1e-30)
-            relative = residual_norm / denom
-            finite = bool(np.all(np.isfinite(T_new_host))
-                          and np.all(np.isfinite(Ap))
-                          and np.all(np.isfinite(r))
-                          and np.all(T_new_host >= 0))
-            last_update = max_abs_delta_T
-            last_relative = relative
-            last_absolute = residual_norm
-            residual_history.append(relative)
-            update_history.append(max_abs_delta_T)
+            state.launch_residual(cp, state.T_new)
+            residual_kernel_count += 1
+            max_abs_delta_device = cp.max(cp.abs(state.delta_T))
+            residual_norm_device = cp.linalg.norm(state.residual)
+            relative_device = residual_norm_device / residual_denom_device
+            finite_device = (
+                cp.all(cp.isfinite(state.T_new))
+                & cp.all(state.T_new >= 0.0)
+                & cp.all(cp.isfinite(state.delta_T))
+                & cp.all(cp.isfinite(state.residual)))
+            diagnostic = cp.asnumpy(cp.stack((
+                max_abs_delta_device,
+                residual_norm_device,
+                relative_device,
+                finite_device.astype(cp.float64),
+            )))
+            compact_diagnostic_downloads += 1
+            last_update = float(diagnostic[0])
+            last_absolute = float(diagnostic[1])
+            last_relative = float(diagnostic[2])
+            finite = bool(diagnostic[3])
+            residual_history.append(last_relative)
+            update_history.append(last_update)
             if not finite:
-                # Divergence: stop and report as unconverged.
-                break
-            host_initial = T_new_host
-            if (relative < relative_residual_tolerance
-                    and max_abs_delta_T < max_temperature_update_tolerance):
+                should_stop = True
+            elif (last_relative < relative_residual_tolerance
+                  and last_update < max_temperature_update_tolerance):
                 converged = True
-                break
-        else:
-            # No host-side read; just swap so the next iteration
-            # reads the buffer we just wrote. The previous
-            # ``host_initial`` value is still valid because the
-            # device-resident temperature did not change between
-            # the two check boundaries in a way that would alter
-            # the per-iteration update measurement.
-            state.swap_buffers()
-    if not converged:
-        # One last host copy for the diagnostic return values.
-        T_new_host = cp.asnumpy(state.T_new)
-        Ap = operator.apply(T_new_host)
-        r = operator.rhs_W - Ap
-        last_absolute = float(np.linalg.norm(r))
-        last_relative = last_absolute / max(
-            float(np.linalg.norm(operator.rhs_W)), 1e-30)
-        last_update = float(np.max(np.abs(T_new_host - host_initial))) \
-            if host_initial is not None else float("inf")
-        residual_history.append(last_relative)
-        update_history.append(last_update)
-        host_initial = T_new_host
+                should_stop = True
+
+        # Every iteration, including every diagnostic iteration, advances
+        # T_old to the T_new buffer just written.
+        state.swap_buffers()
+        if should_stop:
+            break
+
+    # Exactly one full temperature-field download, after iteration ends.
+    temperature = cp.asnumpy(state.T_old)
     elapsed = time.perf_counter() - t0
     q_input, q_out, imbalance, rel_imbalance = _global_power_balance(
-        operator, boundary, host_initial)
+        operator, boundary, temperature)
     return SteadyStateResult(
-        temperature_K=host_initial,
+        temperature_K=temperature,
         method="thermal_resistance_relaxation",
         converged=converged,
         iterations=iterations,
@@ -345,8 +391,12 @@ def solve_thermal_resistance_relaxation_gpu(
                 max_temperature_update_tolerance,
             "max_iterations": max_iterations,
             "cupy_version": cp.__version__,
-            "matvec_count": iterations,
+            "matvec_count": residual_kernel_count,
+            "relaxation_kernel_count": iterations,
+            "residual_kernel_count": residual_kernel_count,
             "device_vector_downloads": 1,
+            "device_full_vector_downloads_during_iteration": 0,
+            "device_scalar_downloads": compact_diagnostic_downloads,
             "kernel": "thermal_relax_fp64",
             "max_neighbors_per_cell": state.max_neighbors,
         },
@@ -354,9 +404,9 @@ def solve_thermal_resistance_relaxation_gpu(
         final_absolute_residual=last_absolute,
         final_relative_residual=last_relative,
         max_temperature_update=last_update if iterations else None,
-        min_temperature_K=float(host_initial.min()),
-        max_temperature_K=float(host_initial.max()),
-        mean_temperature_K=float(host_initial.mean()),
+        min_temperature_K=float(temperature.min()),
+        max_temperature_K=float(temperature.max()),
+        mean_temperature_K=float(temperature.mean()),
         total_input_power_W=q_input,
         total_boundary_heat_out_W=q_out,
         global_power_imbalance_W=imbalance,

@@ -160,7 +160,7 @@ class SweepConfig(BaseModel):
     # (CuPy/NVRTC). This is a thin pass-through to the same routing
     # used by ``om3dthermal.cli solve-steady --backend <cpu|gpu>``;
     # the framework does not re-implement either solver.
-    thermal_backend: Literal["cpu", "gpu"] = "cpu"
+    thermal_backend: Literal["cpu", "gpu", "gpu_pcg"] = "cpu"
     cases: dict[str, CaseRef] = Field(min_length=1)
     sweeps: list[SweepAxis] = Field(min_length=1)
     output_dir: str = Field(min_length=1)
@@ -451,11 +451,13 @@ def _thermal_metrics(
         case, project_root=project_root, geometry=geom)
     sim = compile_case_thermal(case, sys_pow)
     pipeline = run_steady_pipeline(
-        sim, alpha=0.7, rtol=1e-6, max_iterations=100_000,
+        sim, alpha=0.7, rtol=1e-3, max_delta_t_K=1e-2,
+        max_iterations=1_000_000,
         initial_temperature_K=293.15, backend=backend)
     mem_t, gpu_t, pkg_t = _temperature_maxima(pipeline)
     mapped_actual = float(sum(pipeline.power.power_W))
     resolved = system_metrics["P_package_W"]
+    solver_info = pipeline.result.solver_info
     return {
         "memory_Tmax_degC": mem_t,
         "gpu_Tmax_degC": gpu_t,
@@ -464,12 +466,24 @@ def _thermal_metrics(
         "thermal_backend": backend,
         "converged": bool(pipeline.result.converged),
         "iterations": int(pipeline.result.iterations),
+        "solve_seconds": float(pipeline.result.solve_seconds),
+        "max_temperature_update_K": (
+            None if pipeline.result.max_temperature_update is None
+            else float(pipeline.result.max_temperature_update)),
         "final_relative_residual": float(
             pipeline.result.final_relative_residual),
         "relative_power_imbalance": float(
             pipeline.result.relative_power_imbalance),
         "cell_count": int(pipeline.cell_count),
         "internal_edge_count": int(pipeline.internal_edge_count),
+        "full_vector_h2d_copy_count": solver_info.get(
+            "full_vector_h2d_copy_count"),
+        "full_vector_d2h_copy_count": solver_info.get(
+            "full_vector_d2h_copy_count"),
+        "full_vector_d2h_during_iteration": solver_info.get(
+            "full_vector_d2h_during_iteration"),
+        "scalar_synchronization_count": solver_info.get(
+            "scalar_synchronization_count"),
         "hottest_cell_id": int(pipeline.hottest_cell_id),
         "hottest_cell_material": str(pipeline.hottest_cell_material),
         "hottest_cell_component": str(pipeline.hottest_cell_component),
@@ -603,7 +617,7 @@ def _run_one_point(
             status="FAIL",
             failure={"failure_stage": "thermal",
                      "failure_type": "non_convergence",
-                     "failure_message": "thermal resistance relaxation did not converge"},
+                     "failure_message": "thermal solver did not converge"},
             metrics=metrics, override_provenance=provenance)
     if thermal_metrics.get("power_closure_absolute_error_W", 0.0) > 1e-6:
         return PointResult(
@@ -699,8 +713,19 @@ def run_sweep(
         config_path: str | Path,
         *,
         repo_root: Path | None = None,
-        git_metadata: dict[str, Any] | None = None) -> SweepRunResult:
+        git_metadata: dict[str, Any] | None = None,
+        thermal_backend_override: str | None = None,
+        output_dir_override: str | Path | None = None) -> SweepRunResult:
     cfg = load_sweep_config(config_path)
+    if thermal_backend_override is not None:
+        if thermal_backend_override not in {"cpu", "gpu", "gpu_pcg"}:
+            raise ValueError(
+                "thermal_backend_override must be cpu, gpu, or gpu_pcg")
+        cfg = cfg.model_copy(update={
+            "thermal_backend": thermal_backend_override})
+    if output_dir_override is not None:
+        cfg = cfg.model_copy(update={
+            "output_dir": str(output_dir_override)})
     if repo_root is None:
         repo_root = Path(config_path).resolve().parent
         # walk up to find pyproject.toml
@@ -728,6 +753,13 @@ def run_sweep(
         "dreamram_commit": (git_metadata or {}).get("dreamram_commit"),
         "dreamram_branch": (git_metadata or {}).get("dreamram_branch"),
         "thermal_backend": cfg.thermal_backend,
+        "thermal_solver": (
+            "pcg" if cfg.thermal_backend == "gpu_pcg"
+            else "thermal_resistance_relaxation"),
+        "relative_residual_tolerance": 1e-3,
+        "max_temperature_update_tolerance_K": 1e-2,
+        "initial_temperature_K": 293.15,
+        "cross_point_warm_start": False,
         "python_version": _python_version(),
         "case_paths": {
             alias: str(cfg.resolve_case_path(alias, repo_root))
@@ -793,9 +825,19 @@ def run_sweep(
                 "wall_seconds": dt,
             }, indent=2, sort_keys=True, default=str),
             encoding="utf-8")
+        iterations = pt.metrics.get("iterations", "N/A")
+        solve_seconds = pt.metrics.get("solve_seconds")
+        solve_text = (
+            "N/A" if solve_seconds is None else f"{float(solve_seconds):.3f}s")
+        tmax = pt.metrics.get("package_Tmax_degC")
+        tmax_text = "N/A" if tmax is None else f"{float(tmax):.6f}C"
         print(
-            f"[sweep] {pt.status:>4} {case_alias}/{axis.name}/{axis.parameter}"
-            f"={value} ({dt:.1f}s)")
+            f"[sweep] {pt.status:>4} {case_alias}/{axis.parameter}={value} "
+            f"iterations={iterations} solve_seconds={solve_text} "
+            f"Tmax={tmax_text} residual="
+            f"{pt.metrics.get('final_relative_residual', 'N/A')} "
+            f"wall={dt:.1f}s",
+            flush=True)
         results.append(pt)
 
     # Write summary.csv

@@ -47,11 +47,9 @@ def test_load_sweep_config_basic():
     assert cfg.name == "memory_internal_v0"
     assert cfg.mode == "ofat"
     assert cfg.thermal is True
-    # The official memory_internal_v0 benchmark pins the GPU
-    # thermal-resistance relaxation backend explicitly so the run
-    # does not depend on SweepConfig's default. Targeted validation
-    # enforces this at config-load time.
-    assert cfg.thermal_backend == "gpu"
+    # The official benchmark pins the device-resident GPU PCG backend so a
+    # direct invocation cannot fall back to relaxation.
+    assert cfg.thermal_backend == "gpu_pcg"
     assert set(cfg.cases.keys()) == {
         "conventional_hbm", "orthogonal_si", "orthogonal_m3d_igzo",
     }
@@ -105,6 +103,25 @@ def test_thermal_backend_rejects_unknown_value():
     }
     with pytest.raises(Exception):
         SweepConfig.model_validate(raw)
+
+
+def test_run_sweep_applies_backend_and_output_overrides(tmp_path, monkeypatch):
+    import om3dthermal.sweep as sweep_module
+
+    monkeypatch.setattr(sweep_module, "_enum_axes", lambda config: iter(()))
+    destination = tmp_path / "pcg_results"
+    result = sweep_module.run_sweep(
+        REPO_ROOT / "configs" / "sweeps" / "memory_internal_v0.yaml",
+        repo_root=REPO_ROOT,
+        thermal_backend_override="gpu_pcg",
+        output_dir_override=destination,
+    )
+    assert Path(result.output_dir) == destination.resolve()
+    metadata = json.loads((destination / "metadata.json").read_text())
+    assert metadata["thermal_backend"] == "gpu_pcg"
+    resolved_text = (
+        destination / "sweep_config.resolved.yaml").read_text()
+    assert f"output_dir: {destination}" in resolved_text
 
 
 def test_unknown_alias_rejected_at_config_load_time():

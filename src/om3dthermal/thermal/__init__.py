@@ -38,6 +38,7 @@ from .gpu_relaxation import (
     GPURelaxationState,
     solve_thermal_resistance_relaxation_gpu,
 )
+from .gpu_pcg import GPUPCGOperator, GPUSolverBreakdownError, solve_pcg_gpu
 from .m3d_power import (
     M3DMemoryPowerResolution,
     M3DOperationPowerBreakdown,
@@ -80,7 +81,9 @@ __all__ = [
     "BoundaryLinkTable",
     "ConductanceTable",
     "GPURelaxationState",
+    "GPUPCGOperator",
     "GPUBackendUnavailableError",
+    "GPUSolverBreakdownError",
     "InterfaceResistanceQuery",
     "InterfaceResistanceRegistry",
     "InvalidRotationMatrixError",
@@ -112,6 +115,7 @@ __all__ = [
     "select_boundary_rule",
     "solve_thermal_resistance_relaxation",
     "solve_thermal_resistance_relaxation_gpu",
+    "solve_pcg_gpu",
     "validate_anchored_components",
     "validate_rotation_matrix",
     "write_boundary_heat_flows_csv",

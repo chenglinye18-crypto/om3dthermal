@@ -20,10 +20,13 @@ import numpy as np
 import pytest
 
 from om3dthermal.thermal import (
+    GPUPCGOperator,
     GPURelaxationState,
     build_matrix_free_operator,
     solve_thermal_resistance_relaxation,
     solve_thermal_resistance_relaxation_gpu,
+    solve_pcg_gpu,
+    require_cupy,
 )
 from om3dthermal.thermal.boundary import BoundaryLinkTable
 from om3dthermal.thermal.conductance import ConductanceTable
@@ -118,6 +121,50 @@ def _two_cell_resistor(P1: float, P2: float, G_int: float, G_b: float,
         conductance, boundary, np.array([P1, P2], dtype=np.float64),
     )
     return op, boundary
+
+
+def test_gpu_pcg_matches_two_cell_analytical_solution():
+    op, boundary = _two_cell_resistor(2.0, 1.0, 3.0, 2.0, 295.0)
+    # Closed form for [[5, -3], [-3, 5]] @ T = [592, 591].
+    expected = np.array([295.8125, 295.6875])
+    result = solve_pcg_gpu(
+        op, np.full(2, 293.15), boundary,
+        relative_residual_tolerance=1e-12,
+        max_temperature_update_tolerance=10.0,
+        max_iterations=20,
+        check_interval=1,
+    )
+    assert result.converged
+    np.testing.assert_allclose(result.temperature_K, expected, rtol=0, atol=1e-10)
+    assert result.final_relative_residual < 1e-12
+    assert result.solver_info["full_vector_d2h_during_iteration"] == 0
+    assert result.solver_info["full_vector_d2h_copy_count"] == 1
+    assert result.solver_info["solver_vector_h2d_copy_count"] == 1
+    assert result.solver_info["scalar_synchronization_count"] >= 2
+
+
+def test_gpu_pcg_matrix_free_operator_matches_cpu_fp64():
+    op, _ = _two_cell_resistor(2.0, 1.0, 3.0, 2.0, 295.0)
+    vector = np.array([301.25, 297.75], dtype=np.float64)
+    expected = op.apply(vector)
+    cp = require_cupy()
+    gpu = GPUPCGOperator.from_cpu(op, cp)
+    actual = cp.asnumpy(gpu.apply(cp.asarray(vector), cp))
+    np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-13)
+
+
+def test_gpu_pcg_requires_update_and_residual_together():
+    op, boundary = _one_cell_with_boundary(10.0, 1.0, 293.15)
+    result = solve_pcg_gpu(
+        op, np.array([293.15]), boundary,
+        relative_residual_tolerance=1.0,
+        max_temperature_update_tolerance=1.0,
+        max_iterations=1,
+        check_interval=1,
+    )
+    assert result.final_relative_residual < 1.0
+    assert result.max_temperature_update == pytest.approx(10.0)
+    assert not result.converged
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +265,82 @@ def test_cpu_and_gpu_relaxation_match_full_temperature_field():
         rtol=1e-10, atol=1e-10,
         err_msg="CPU and GPU relaxation produced different steady states",
     )
+
+
+@pytest.mark.parametrize("check_interval", [1, 2, 10])
+def test_gpu_check_interval_does_not_change_steady_state(check_interval):
+    """Diagnostic cadence must not alter the device buffer evolution."""
+    op, boundary = _two_cell_resistor(
+        P1=1.0, P2=0.5, G_int=0.4, G_b=1.0, T_ref=295.0,
+    )
+    init = np.array([295.0, 295.0])
+    cpu = solve_thermal_resistance_relaxation(
+        op, init, boundary,
+        alpha=0.7,
+        relative_residual_tolerance=1e-11,
+        max_temperature_update_tolerance=1e-11,
+        max_iterations=2_000,
+        check_interval=1,
+    )
+    gpu = solve_thermal_resistance_relaxation_gpu(
+        op, init, boundary,
+        alpha=0.7,
+        relative_residual_tolerance=1e-11,
+        max_temperature_update_tolerance=1e-11,
+        max_iterations=2_000,
+        check_interval=check_interval,
+    )
+    assert cpu.converged and gpu.converged
+    np.testing.assert_allclose(
+        gpu.temperature_K, cpu.temperature_K, rtol=1e-10, atol=1e-10)
+    assert gpu.solver_info["device_full_vector_downloads_during_iteration"] == 0
+    assert gpu.solver_info["device_vector_downloads"] == 1
+
+
+def test_gpu_one_step_matches_formula_and_simultaneous_update():
+    """GPU writes exactly alpha*(b-A*T_old)*R_eff for every cell."""
+    op, boundary = _two_cell_resistor(
+        P1=1.0, P2=0.5, G_int=0.4, G_b=1.0, T_ref=295.0,
+    )
+    T0 = np.array([300.0, 297.0])
+    alpha = 0.7
+    delta_Q = op.rhs_W - op.apply(T0)
+    delta_T = alpha * delta_Q / op.diagonal_W_K
+    expected = T0 + delta_T
+    gpu = solve_thermal_resistance_relaxation_gpu(
+        op, T0, boundary,
+        alpha=alpha,
+        relative_residual_tolerance=0.0,
+        max_temperature_update_tolerance=0.0,
+        max_iterations=1,
+        check_interval=1,
+    )
+    np.testing.assert_allclose(
+        gpu.temperature_K, expected, rtol=1e-12, atol=1e-12)
+    assert gpu.max_temperature_update == pytest.approx(
+        np.max(np.abs(delta_T)), rel=1e-12, abs=1e-12)
+
+
+def test_gpu_swaps_buffers_at_every_check_boundary():
+    """With check_interval=1, iteration two must consume iteration one."""
+    op, boundary = _two_cell_resistor(
+        P1=1.0, P2=0.5, G_int=0.4, G_b=1.0, T_ref=295.0,
+    )
+    alpha = 0.7
+    expected = np.array([300.0, 297.0])
+    for _ in range(2):
+        delta_Q = op.rhs_W - op.apply(expected)
+        expected = expected + alpha * delta_Q / op.diagonal_W_K
+    gpu = solve_thermal_resistance_relaxation_gpu(
+        op, np.array([300.0, 297.0]), boundary,
+        alpha=alpha,
+        relative_residual_tolerance=0.0,
+        max_temperature_update_tolerance=0.0,
+        max_iterations=2,
+        check_interval=1,
+    )
+    np.testing.assert_allclose(
+        gpu.temperature_K, expected, rtol=1e-12, atol=1e-12)
 
 
 # ---------------------------------------------------------------------------
