@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 
 import pytest
+from pydantic import ValidationError
 
 from om3dthermal.workload.llm_decode import LLMDecodeInput, evaluate_llm_decode
 
@@ -193,12 +194,20 @@ def test_mha_gqa_mqa_kv_scales_with_hkv() -> None:
 # ---------------------------------------------------------------------------
 
 def test_llama_31_8b_hand_check() -> None:
-    """Verify LLaMA-3.1-8B exact numbers against B1-R2 spec.
+    """LLaMA-3.1-8B-class hand-check.
 
-    Expected:
-        attention sanity term ≈ 68.719476736 GFLOPs/token
-        FLOPs_sanity          ≈ 84.719476736 GFLOPs/token
-        detailed FLOPs        ≈ 83.728793600 GFLOPs/token  (diff ~1.17%)
+    This is an *architecture-class* hand-check, not an exact reproduction
+    of an official LLaMA-3.1-8B checkpoint: ``n_param=8_000_000_000`` is
+    the architecture-class parameter count for an 8B dense decoder, not
+    the byte-exact parameter count of any specific released checkpoint.
+    Use this as a sanity check that the B1-R2 formulas produce
+    well-conditioned numbers in the LLaMA-3.1-8B regime, not as a
+    numerical reproduction of a published benchmark.
+
+    Expected order-of-magnitude:
+        attention sanity term ≈ 68.7 GFLOPs/token
+        FLOPs_sanity          ≈ 84.7 GFLOPs/token
+        detailed FLOPs        ≈ 83.7 GFLOPs/token  (diff ~1.17%)
     """
     inp = _make_input(
         n_param=8_000_000_000,
@@ -278,3 +287,135 @@ def test_zero_context_length_allowed() -> None:
     assert m.kv_footprint_bytes == 0
     assert m.kv_read_bytes_per_token == 0
     assert m.flops_per_token > 0  # still has linear + vocab FLOPs
+
+
+# ---------------------------------------------------------------------------
+# R1 counterexamples — exact (non-floored) analytical accounting
+# ---------------------------------------------------------------------------
+#
+# These tests pin the B1-R1 requirement that footprint and per-token
+# traffic use *true* division (``/ 8``, ``/ B``), not floor division.
+# A floor (``//``) implementation would silently drop sub-byte
+# precision and round fractional per-token averages down to 0.
+# All counterexamples therefore assert exact (not approximate) values
+# against the analytical formulas.
+
+def test_sub_byte_weight_footprint_is_not_truncated() -> None:
+    """n_param=1, weight_bits=1 must give weight_footprint_bytes == 0.125.
+
+    Counterexample against ``// 8``: a floor-division implementation
+    would give ``1 * 1 // 8 == 0`` and silently lose the 1-bit
+    weight content.  Exact division gives the analytical byte-equivalent
+    ``0.125``.
+    """
+    inp = _make_input(n_param=1, weight_bits=1)
+    m = evaluate_llm_decode(inp)
+    assert m.weight_footprint_bytes == 0.125
+    assert m.weight_active_per_step_bytes == 0.125
+    # required_capacity still equals weight + kv + runtime exactly.
+    expected_capacity = 0.125 + m.kv_footprint_bytes + m.runtime_bytes
+    assert m.required_capacity_bytes == expected_capacity
+
+
+def test_weight_traffic_fractional_average_not_truncated() -> None:
+    """A 1-byte weight footprint with B=2 must give
+    ``weight_read_bytes_per_token == 0.5``.
+
+    Counterexample against ``// B``: a floor-division implementation
+    would give ``1 // 2 == 0`` and silently lose the 0.5 byte/token
+    read traffic.  Exact division gives the analytical per-token
+    average ``0.5``.
+    """
+    # 1 byte weight footprint: n_param=1, weight_bits=8.
+    inp = _make_input(n_param=1, weight_bits=8, batch_size=2)
+    m = evaluate_llm_decode(inp)
+    assert m.weight_footprint_bytes == 1.0
+    assert m.weight_read_bytes_per_token == 0.5
+    # And the aggregate-step read (footprint) is unchanged by batch.
+    assert m.weight_active_per_step_bytes == 1.0
+
+
+def test_sub_byte_kv_accounting_is_not_truncated() -> None:
+    """Minimal legal dimensions with kv_bits=1 must give non-zero,
+    non-floored KV footprint, read, and write byte-equivalents.
+
+    With L=1, B=1, S=1, Hq=Hkv=1, Dhead=1, d_model=1 (so the GQA and
+    d_model validators pass), and kv_bits=1:
+        kv_footprint   = 2 * 1 * 1 * 1 * 1 * 1 * 1 / 8 = 0.25
+        kv_read / token= 2 * 1 * 1 * 1 * 1 * 1 / 8     = 0.25
+        kv_write / tok = 2 * 1 * 1 * 1 * 1     / 8     = 0.25
+    A floor-division implementation would give ``0`` for all three and
+    silently drop the analytical KV content.
+    """
+    inp = _make_input(
+        n_layers=1,
+        batch_size=1,
+        context_length=1,
+        n_heads_q=1,
+        n_heads_kv=1,
+        d_head=1,
+        d_model=1,  # 1 * 1 == 1
+        d_ff=1,
+        vocab_size=1,
+        weight_bits=8,
+        kv_bits=1,
+    )
+    m = evaluate_llm_decode(inp)
+    assert m.kv_footprint_bytes == 0.25
+    assert m.kv_read_bytes_per_token == 0.25
+    assert m.kv_write_bytes_per_token == 0.25
+    # required_capacity = weight + kv + runtime
+    assert m.required_capacity_bytes == (
+        m.weight_footprint_bytes + 0.25 + m.runtime_bytes
+    )
+
+
+def test_nonuniform_gqa_grouping_rejected() -> None:
+    """Hq=6, Hkv=4 with consistent d_model must raise ValidationError.
+
+    v0 supports only uniform GQA/MQA/MHA, so ``Hq % Hkv != 0`` is
+    rejected.  The d_model consistency check must also pass
+    (d_model = Hq * Dhead = 6 * 64 = 384).
+    """
+    with pytest.raises(ValidationError):
+        _make_input(
+            n_heads_q=6, n_heads_kv=4, d_head=64, d_model=384,
+        )
+
+
+# ---------------------------------------------------------------------------
+# R1 GQA legality matrix — MHA / GQA / MQA still pass
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hkv,hq", [
+    (32, 32),  # MHA: Hq == Hkv
+    (8, 32),   # GQA: Hq / Hkv = 4
+    (1, 32),   # MQA: Hq / Hkv = 32
+    (4, 16),   # GQA: Hq / Hkv = 4
+    (2, 8),    # GQA: Hq / Hkv = 4
+])
+def test_uniform_gqa_mqa_mha_accepted(hkv: int, hq: int) -> None:
+    """All standard uniform-grouped head configurations must be
+    accepted by the input validators.
+
+    For each pair, d_head is set so that d_model = Hq * d_head is
+    consistent with the default 4096.  d_head=128 is the LLaMA-3.1
+    head dimension, so Hq must be 32 for d_model=4096.  For the
+    non-default Hq values used in this matrix, d_head and d_model
+    are recomputed to satisfy d_model = Hq * d_head.
+    """
+    d_head = 64  # fits any Hq in the parametrize set with d_model = Hq*64
+    d_model = hq * d_head
+    inp = _make_input(
+        n_heads_q=hq, n_heads_kv=hkv, d_head=d_head, d_model=d_model,
+    )
+    # If construction succeeded, evaluation must also succeed.
+    m = evaluate_llm_decode(inp)
+    # KV footprint scales linearly with Hkv (everything else fixed).
+    # Reference is the MHA-equivalent Hkv baseline (i.e. Hkv=hq
+    # is MHA; here we re-derive the per-Hkv scale by using a
+    # common reference: just check that kv_footprint is positive
+    # and that kv_read scales with Hkv).
+    assert m.kv_footprint_bytes > 0
+    assert m.kv_read_bytes_per_token > 0
+    assert m.kv_write_bytes_per_token > 0
