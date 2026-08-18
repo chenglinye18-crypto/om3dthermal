@@ -29,3 +29,6 @@ third_party/DreamRAM/
 /PROJECT_STATUS.md
 /TRACK_*.md
 /*.md.tmp
+
+# Audit / regression scripts (kept locally; not version-controlled)
+/_audit_*.py
