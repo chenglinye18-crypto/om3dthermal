@@ -12,3 +12,20 @@ dist/
 venv/
 runs/
 third_party/DreamRAM/
+
+# Local debug / scratch scripts (hidden dot-files at repo root)
+/.*.cmd
+/.*.py
+/.*.sh
+/.*.ps1
+
+# External reference materials and dev tools (per AGENTS.md "no PDFs in git history")
+/ref/
+/tools/
+/third_party/accel-sim-framework/
+/.research_runs/
+
+# Project status / spec draft documents (out of repo per current scope)
+/PROJECT_STATUS.md
+/TRACK_*.md
+/*.md.tmp

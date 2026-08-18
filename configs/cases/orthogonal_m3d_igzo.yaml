@@ -151,9 +151,9 @@ thermal:
   gpu_footprint_mm: [30.0, 22.0]
   source_mapping:
     gpu: GPU_FEOL
-    memory_internal_miv_interface: M3D_BITCELL_STACK
-    feol_route: M3D_FEOL
-    approximation: MODELING_CHOICE_COARSE_MIV_INTERFACE_TO_ACTIVE_STACK
+    memory_internal_miv_interface: M3D_BITCELL_BEOL_STACK
+    feol_route: M3D_BITCELL_BEOL_STACK
+    approximation: MODELING_CHOICE_HOMOGENIZED_EQUAL_K_BITCELL_BEOL
   materials:
     Lid: 400.0
     TIM: 9.71
@@ -161,6 +161,7 @@ thermal:
     M3D_FEOL: 7.9
     M3D_Bitcell: 0.85
     M3D_BEOL: 0.85
+    M3D_Bitcell_BEOL: 0.85
     M3D_DAA: 0.2
     Adhesive: 0.2
     BEOL_MXY: 1.5

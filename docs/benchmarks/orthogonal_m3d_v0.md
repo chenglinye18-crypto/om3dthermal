@@ -30,13 +30,16 @@ DAA occurs once in the orthogonal slab-pitch cross-section and is not inserted
 between M3D bit-cell layers. The M3D-BEOL internal order is bit-cell stack then
 interconnect.
 
-For the formal thermal mesh, the eight 288 nm physical layers are combined
-into one 2.304 um `M3D_Bitcell` box per slab. The architecture still contains
-eight layers for capacity and operation-energy bookkeeping. This homogenized
-representation preserves total thickness, material conductivity, volume, and
-total array power, while avoiding seven unnecessary internal mesh planes per
-slab. Consequently, thermal output identifies the hottest homogenized stack,
-not a temperature difference among the eight unresolved sublayers.
+For the canonical thermal mesh, the eight 288 nm physical layers and the
+3.0 um BEOL interconnect are combined into one 5.304 um
+`M3D_Bitcell_BEOL` box per slab. Both source regions use the same modeled
+thermal conductivity, 0.85 W/(m K). Their powers are summed before thermal
+mapping and distributed as one uniform volumetric source over the merged
+region, matching the uniform active-memory-region assumption used by the
+other canonical architectures. The merge preserves total thickness,
+conductivity, volume, and total power while removing one global cut plane per
+slab. Electrical bitcell and interconnect accounting remains separate for
+capacity and operation-energy decomposition.
 
 ## Power target
 

@@ -252,13 +252,11 @@ def compile_case_thermal(
                  "role": "si_substrate", "name": "si_substrate"},
                 {"material": "M3D_FEOL", "thickness": f"{s.feol_um} um",
                  "role": "feol", "name": "feol"},
-                {"material": "M3D_Bitcell",
+                {"material": "M3D_Bitcell_BEOL",
                  "thickness": (
-                     f"{s.bitcell_layers * s.bitcell_layer_pitch_nm * 1e-3} um"),
-                 "role": "m3d_bitcell_stack", "name": "m3d_bitcell_stack"},
-                {"material": "M3D_BEOL",
-                 "thickness": f"{s.beol_interconnect_um} um",
-                 "role": "beol_interconnect", "name": "beol_interconnect"},
+                     f"{s.bitcell_layers * s.bitcell_layer_pitch_nm * 1e-3 + s.beol_interconnect_um} um"),
+                 "role": "m3d_bitcell_beol_stack",
+                 "name": "m3d_bitcell_beol_stack"},
                 {"material": "M3D_DAA", "thickness": f"{s.daa_um} um",
                  "role": "daa", "name": "daa"},
             ]
@@ -283,10 +281,16 @@ def compile_case_thermal(
                 component=f"memory_column:{group}", material=material)
         elif case.geometry.type == "orthogonal_si":
             selector = PowerSelector(material="MOSAIC_BEOL")
-        elif target.target_region == "M3D_BEOL_INTERCONNECT":
-            selector = PowerSelector(tags={"role": "beol_interconnect"})
+        elif case.geometry.type == "orthogonal_m3d":
+            # Bitcell and BEOL have the same thermal conductivity and their
+            # powers are already split in proportion to thickness.  Mapping
+            # both sources onto the combined region therefore preserves the
+            # original uniform volumetric heat density exactly.
+            selector = PowerSelector(
+                tags={"role": "m3d_bitcell_beol_stack"})
         else:
-            selector = PowerSelector(tags={"role": "m3d_bitcell_stack"})
+            raise AssertionError(
+                f"unhandled thermal target {target.target_region!r}")
         sources.append(PowerSourceConfig(
             name=target.name,
             total_power=target.power_W,

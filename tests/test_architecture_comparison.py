@@ -165,10 +165,46 @@ def test_unified_memory_mapping_targets_complete_beol_only():
 
     case, _, system = _resolved(NAMES[2])
     memory = map_system_power_to_thermal(case, system).sources[1:]
-    assert {source.target_region for source in memory} == {
-        "M3D_BITCELL_STACK", "M3D_BEOL_INTERCONNECT"}
-    bitcell, interconnect = memory
-    assert bitcell.power_W / interconnect.power_W == pytest.approx(2.304 / 3.0)
+    assert len(memory) == 1
+    assert memory[0].target_region == "M3D_BITCELL_BEOL_STACK"
+    assert memory[0].power_W == pytest.approx(
+        system.resolved_total_memory_power_W)
+
+
+def test_canonical_m3d_thermal_merges_equal_k_bitcell_and_beol():
+    case, _, system = _resolved(NAMES[2])
+    thermal = compile_case_thermal(case, system)
+    die = thermal.orthogonal_hbm.memory_die
+    assert [layer.role for layer in die.layers] == [
+        "si_substrate", "feol", "m3d_bitcell_beol_stack", "daa"]
+    merged = die.layers[2]
+    assert merged.material == "M3D_Bitcell_BEOL"
+    assert merged.thickness == pytest.approx((2.304 + 3.0) * 1e-6)
+    assert thermal.materials[merged.material].k_local == pytest.approx(
+        (0.85, 0.85, 0.85))
+
+    scene = build_scene(thermal)
+    slabs = sorted({
+        box.tags.get("component") for box in scene.boxes
+        if str(box.tags.get("component", "")).startswith(
+            "orthogonal_hbm:die_")})
+    assert len(slabs) == 98
+    for component in slabs:
+        boxes = scene.filter(component=component)
+        assert len(boxes) == 4
+        combined = [box for box in boxes if box.tags.get("role") ==
+                    "m3d_bitcell_beol_stack"]
+        assert len(combined) == 1
+        assert combined[0].x1 - combined[0].x0 == pytest.approx(5.304e-6)
+
+    memory_sources = [
+        source for source in thermal.thermal_power_sources.sources
+        if source.name != "gpu"]
+    assert len(memory_sources) == 1
+    assert all(source.selector.tags == {
+        "role": "m3d_bitcell_beol_stack"} for source in memory_sources)
+    assert sum(source.total_power for source in memory_sources) == pytest.approx(
+        system.resolved_total_memory_power_W)
 
 
 def test_density_denominators_are_geometry_derived():
