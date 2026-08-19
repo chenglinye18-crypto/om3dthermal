@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 
+from .architecture_capacity import resolve_architecture_capacity
 from .case_runner import run_steady_pipeline
 from .config import (
     PowerSelector,
@@ -61,55 +62,9 @@ class ArchitectureMetrics:
 
 def _resolved_capacity(
         case: CanonicalCaseConfig, geometry: ResolvedGeometry,
-        system: ResolvedSystemPower) -> dict[str, float | int]:
-    result = system.memory_result
-    if result is None:
-        raise ValueError("comparison requires validated analytical memory power")
-    d = result.diagnostics
-    if geometry.memory_region == "hbm_dram_die":
-        instances = geometry.memory_region_count
-        total_bits = int(d["total_stored_bits"])
-        bits_per_instance = int(d["bits_per_stack"])
-        bits_per_plane = int(d["bits_per_die"])
-        plane_area = geometry.configured_x_mm * geometry.configured_y_mm
-        layout = case.geometry.layout
-        footprint_area = (
-            int(layout["visible_group_count"])
-            * float(layout["visible_group_footprint_mm"][0])
-            * float(layout["visible_group_footprint_mm"][1]))
-    elif geometry.memory_region == "orthogonal_memory_slab":
-        instances = geometry.memory_region_count
-        bits_per_instance = int(d["bits_per_slab"])
-        total_bits = int(d["total_stored_bits"])
-        bits_per_plane = bits_per_instance
-        plane_area = geometry.configured_x_mm * geometry.configured_y_mm
-        orth = case.geometry.orthogonal
-        assert orth is not None
-        footprint_area = orth.cube_length_x_mm * orth.slab_plane_y_mm
-    else:
-        instances = geometry.memory_region_count
-        layers = int(d["memory_layer_count"])
-        bits_per_plane = int(d["bits_per_layer"])
-        bits_per_instance = bits_per_plane * layers
-        total_bits = int(d["total_stored_bits"])
-        plane_area = geometry.configured_x_mm * geometry.configured_y_mm
-        orth = case.geometry.orthogonal
-        assert orth is not None
-        footprint_area = orth.cube_length_x_mm * orth.slab_plane_y_mm
-    if total_bits != bits_per_instance * instances:
-        raise RuntimeError("system capacity does not close over physical instances")
-    return {
-        "instance_count": instances,
-        "bits_per_instance": bits_per_instance,
-        "total_bits": total_bits,
-        "capacity_per_instance_GiB": bits_per_instance / 8 / 2**30,
-        "system_capacity_GiB": total_bits / 8 / 2**30,
-        "memory_plane_area_mm2": plane_area,
-        "memory_plane_density_Mb_mm2": bits_per_plane / 1e6 / plane_area,
-        "architecture_footprint_area_mm2": footprint_area,
-        "architecture_footprint_density_Gb_mm2": (
-            total_bits / 1e9 / footprint_area),
-    }
+        system: ResolvedSystemPower) -> dict[str, float | int | str]:
+    """Compatibility mapping backed by the public capacity resolver."""
+    return resolve_architecture_capacity(case, geometry, system).as_dict()
 
 
 def _common_compact(case: CanonicalCaseConfig) -> dict[str, Any]:

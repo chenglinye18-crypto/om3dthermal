@@ -1,3 +1,7 @@
+from om3dthermal.workload.architecture_capacity import (
+    ArchitectureCapacityFeasibility,
+    evaluate_architecture_capacity_feasibility,
+)
 from om3dthermal.workload.capacity import (
     CapacityFeasibilityMetrics,
     evaluate_capacity_feasibility,
@@ -9,9 +13,11 @@ from om3dthermal.workload.llm_decode import (
 )
 
 __all__ = [
+    "ArchitectureCapacityFeasibility",
     "CapacityFeasibilityMetrics",
     "LLMDecodeInput",
     "LLMDecodeMetrics",
+    "evaluate_architecture_capacity_feasibility",
     "evaluate_capacity_feasibility",
     "evaluate_llm_decode",
 ]
