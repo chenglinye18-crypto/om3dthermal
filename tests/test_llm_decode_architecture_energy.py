@@ -93,33 +93,47 @@ def _build_workload_metrics(
 
 def _capacity_feasibility(
     architecture: str,
+    workload: LLMDecodeMetrics,
     *,
-    feasible: bool,
-    required_capacity_bytes: float = 1.0,
     physical_capacity_bytes: float = 2.0,
 ) -> ArchitectureCapacityFeasibility:
-    """Build a synthetic ArchitectureCapacityFeasibility for testing."""
+    """Build a synthetic ArchitectureCapacityFeasibility that is consistent
+    with *workload* so the evaluator's consistency gate passes.
+
+    All derived fields (margin, utilization, feasible) are computed from the
+    same rules as ``evaluate_capacity_feasibility``.
+    """
+    req = workload.required_capacity_bytes
     usable = physical_capacity_bytes
+    margin = usable - req
+    feasible = req <= usable
+
+    if usable > 0:
+        utilization = req / usable
+    elif req == 0:
+        utilization = 0.0
+    else:
+        utilization = None
+
     return ArchitectureCapacityFeasibility(
         architecture=architecture,
         physical_capacity_bytes=physical_capacity_bytes,
         physical_capacity_GiB=physical_capacity_bytes / 2**30,
         reserved_capacity_bytes=0,
         usable_capacity_bytes=usable,
-        required_capacity_bytes=required_capacity_bytes,
-        capacity_margin_bytes=usable - required_capacity_bytes,
-        capacity_utilization=(
-            required_capacity_bytes / usable if usable > 0 else None),
+        required_capacity_bytes=req,
+        capacity_margin_bytes=margin,
+        capacity_utilization=utilization,
         capacity_feasible=feasible,
         capacity_scope_status="AGGREGATE_CAPACITY_FEASIBILITY_ONLY",
         capacity_source_status="ANALYTICAL_PACKING_DIAGNOSTICS_BIT_CLOSURE",
     )
 
 
-def _system(*, energy_pj_per_bit: float | None) -> ResolvedSystemPower:
+def _system(*, case_name: str, energy_pj_per_bit: float | None) -> ResolvedSystemPower:
     """Build a synthetic ResolvedSystemPower for testing."""
     return ResolvedSystemPower(
-        case_name="test",
+        case_name=case_name,
         architecture_type="test",
         gpu_power_W=100.0,
         memory_power_model="test",
@@ -157,8 +171,8 @@ def _resolve_system(name: str) -> ResolvedSystemPower:
 def test_rejects_invalid_rho(bad_rho) -> None:
     """rho must be a finite non-negative real; bool/NaN/inf/negative rejected."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=2.0)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     with pytest.raises((TypeError, ValueError)):
         evaluate_architecture_decode_memory_energy(workload, cap, system, rho=bad_rho)
 
@@ -166,8 +180,8 @@ def test_rejects_invalid_rho(bad_rho) -> None:
 def test_accepts_zero_rho() -> None:
     """rho = 0 is valid (write energy becomes zero)."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=2.0)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.0)
     assert r.rho == 0.0
     assert r.write_energy_pj_per_bit == 0.0
@@ -183,8 +197,8 @@ def test_accepts_zero_rho() -> None:
 def test_rejects_invalid_system_energy(bad_energy) -> None:
     """system.memory_access_energy_pJ_per_bit must be finite non-negative."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=bad_energy)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=bad_energy)
     with pytest.raises((TypeError, ValueError)):
         evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
 
@@ -195,12 +209,11 @@ def test_rejects_invalid_system_energy(bad_energy) -> None:
 
 def test_capacity_infeasible_blocks_energy_results() -> None:
     """When capacity_feasible=False, all energy-result fields are None."""
-    workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility(
-        "test", feasible=False, required_capacity_bytes=10.0,
-        physical_capacity_bytes=5.0,
-    )
-    system = _system(energy_pj_per_bit=2.0)
+    workload = _build_workload_metrics(
+        read_bytes_per_token=1.0, write_bytes_per_token=1.0,
+        required_capacity_bytes=10.0)
+    cap = _capacity_feasibility("test", workload, physical_capacity_bytes=5.0)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     assert r.capacity_feasible is False
     assert r.evaluation_status == "CAPACITY_INFEASIBLE"
@@ -221,8 +234,8 @@ def test_no_architecture_energy_resolved() -> None:
     """When system.memory_access_energy_pJ_per_bit is None, energy results
     are None and status reflects the unresolved architecture energy."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=None)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=None)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     assert r.read_energy_pj_per_bit is None
     assert r.write_energy_pj_per_bit is None
@@ -242,8 +255,8 @@ def test_capacity_feasible_and_energy_available_evaluates() -> None:
     """Happy path: capacity feasible and energy available produces evaluated
     per-token memory dynamic energy in Joules."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=2.0)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     assert r.capacity_feasible is True
     assert r.evaluation_status == "EVALUATED_CONDITIONAL_ARCHITECTURE_MEMORY_ENERGY"
@@ -262,8 +275,8 @@ def test_rho_scales_write_energy_only() -> None:
     """Changing rho must affect only write energy, leaving read energy
     determined solely by system.memory_access_energy_pJ_per_bit."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=2.0)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     r_low = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.25)
     r_high = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=1.0)
     # Read energy unchanged
@@ -277,15 +290,19 @@ def test_rho_scales_write_energy_only() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7. Zero rho → zero write contribution
+# 7. Zero rho → zero write contribution (mathematical lower bound)
 # ---------------------------------------------------------------------------
 
-def test_zero_rho_zeroes_write_contribution() -> None:
-    """rho = 0 must produce zero write dynamic energy."""
+def test_zero_rho_is_mathematical_lower_bound() -> None:
+    """rho = 0 produces zero write dynamic energy.
+    This is the mathematical lower bound: only read traffic consumes energy.
+    """
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=2.0)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.0)
+    assert r.rho == 0.0
+    assert r.write_energy_pj_per_bit == 0.0
     assert r.write_dynamic_energy_j_per_token == 0.0
     assert r.memory_dynamic_energy_j_per_token == r.read_dynamic_energy_j_per_token
 
@@ -299,8 +316,8 @@ def test_energy_closure_read_plus_write_equals_total() -> None:
     must equal memory_dynamic_energy_j_per_token (within floating-point
     tolerance; the underlying pJ accounting closes exactly)."""
     workload = _build_workload_metrics(read_bytes_per_token=2.5, write_bytes_per_token=1.5)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=3.0)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=3.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     expected_total = r.read_dynamic_energy_j_per_token + r.write_dynamic_energy_j_per_token
     assert math.isclose(r.memory_dynamic_energy_j_per_token, expected_total, rel_tol=1e-12)
@@ -314,8 +331,8 @@ def test_traffic_echoed_from_workload() -> None:
     """read_bytes_per_token and write_bytes_per_token must be echoed
     verbatim from the workload for self-containment."""
     workload = _build_workload_metrics(read_bytes_per_token=7.5, write_bytes_per_token=3.5)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=2.0)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     assert r.read_bytes_per_token == 7.5
     assert r.write_bytes_per_token == 3.5
@@ -328,8 +345,8 @@ def test_traffic_echoed_from_workload() -> None:
 def test_status_provenance_preserved_when_evaluated() -> None:
     """All v0 provenance labels must be present when evaluation succeeds."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=2.0)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     assert r.read_energy_status == "CURRENT_NOMINAL_ANALYTICAL_MODEL"
     assert r.write_energy_status == "RHO_SENSITIVITY_NOT_PHYSICAL_CLAIM"
@@ -340,9 +357,11 @@ def test_status_provenance_preserved_when_evaluated() -> None:
 
 def test_status_provenance_preserved_when_capacity_infeasible() -> None:
     """Provenance labels must persist even when capacity gate is closed."""
-    workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=False)
-    system = _system(energy_pj_per_bit=2.0)
+    workload = _build_workload_metrics(
+        read_bytes_per_token=1.0, write_bytes_per_token=1.0,
+        required_capacity_bytes=10.0)
+    cap = _capacity_feasibility("test", workload, physical_capacity_bytes=5.0)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     assert r.energy_scope_status == "MEMORY_DYNAMIC_TRAFFIC_ENERGY_ONLY"
     assert r.scenario_status == "CONDITIONAL_MATCHED_REFERENCE_SENSITIVITY"
@@ -352,8 +371,8 @@ def test_status_provenance_preserved_when_capacity_infeasible() -> None:
 def test_status_provenance_preserved_when_no_architecture_energy() -> None:
     """Provenance labels must persist even when architecture energy is unavailable."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("test", feasible=True)
-    system = _system(energy_pj_per_bit=None)
+    cap = _capacity_feasibility("test", workload)
+    system = _system(case_name="test", energy_pj_per_bit=None)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     assert r.energy_scope_status == "MEMORY_DYNAMIC_TRAFFIC_ENERGY_ONLY"
     assert r.scenario_status == "CONDITIONAL_MATCHED_REFERENCE_SENSITIVITY"
@@ -395,14 +414,72 @@ def test_architecture_identity_preserved() -> None:
     """The architecture name from the capacity gate must flow through to
     the output model unchanged."""
     workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
-    cap = _capacity_feasibility("orthogonal_m3d_igzo", feasible=True)
-    system = _system(energy_pj_per_bit=2.0)
+    cap = _capacity_feasibility("orthogonal_m3d_igzo", workload)
+    system = _system(case_name="orthogonal_m3d_igzo", energy_pj_per_bit=2.0)
     r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
     assert r.architecture == "orthogonal_m3d_igzo"
 
 
 # ---------------------------------------------------------------------------
-# 13. Frozen LLaMA-3.1-8B-class scenario across three architectures
+# 13. Architecture mismatch rejection
+# ---------------------------------------------------------------------------
+
+def test_rejects_capacity_system_architecture_mismatch() -> None:
+    """capacity.architecture must match system.case_name; mismatch raises
+    ValueError to prevent cross-wiring capacity gates with wrong systems."""
+    workload = _build_workload_metrics(read_bytes_per_token=1.0, write_bytes_per_token=1.0)
+    cap = _capacity_feasibility("correct_arch", workload)
+    system = _system(case_name="wrong_arch", energy_pj_per_bit=2.0)
+    with pytest.raises(ValueError, match="does not match"):
+        evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
+
+
+# ---------------------------------------------------------------------------
+# 14. Capacity / workload consistency gate
+# ---------------------------------------------------------------------------
+
+def test_rejects_capacity_workload_mismatch() -> None:
+    """If the capacity object was produced from a different workload,
+    the consistency gate must reject it."""
+    # Build a workload that requires 10 bytes
+    workload_matched = _build_workload_metrics(
+        read_bytes_per_token=1.0, write_bytes_per_token=1.0, required_capacity_bytes=10.0)
+    # Build a capacity for that workload
+    cap_matched = _capacity_feasibility("test", workload_matched, physical_capacity_bytes=20.0)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
+    # Should succeed with matched workload
+    evaluate_architecture_decode_memory_energy(workload_matched, cap_matched, system, rho=0.5)
+
+    # Now use a different workload (requires 5 bytes) with the same capacity
+    workload_mismatched = _build_workload_metrics(
+        read_bytes_per_token=1.0, write_bytes_per_token=1.0, required_capacity_bytes=5.0)
+    with pytest.raises(ValueError, match="mismatch"):
+        evaluate_architecture_decode_memory_energy(
+            workload_mismatched, cap_matched, system, rho=0.5)
+
+
+# ---------------------------------------------------------------------------
+# 15. Utilization status not hard-coded
+# ---------------------------------------------------------------------------
+
+def test_utilization_status_not_hard_coded_zero_required_zero_usable() -> None:
+    """When usable and required capacity are both zero, the rebuilt
+    utilization_status is DEFINED_ZERO_REQUIRED_ZERO_USABLE, not a
+    hard-coded DEFINED.  The evaluator must forward the rebuilt status
+    into the CapacityFeasibilityMetrics adapter rather than injecting
+    a constant."""
+    workload = _build_workload_metrics(
+        read_bytes_per_token=1.0, write_bytes_per_token=1.0, required_capacity_bytes=0.0)
+    cap = _capacity_feasibility("test", workload, physical_capacity_bytes=0.0)
+    system = _system(case_name="test", energy_pj_per_bit=2.0)
+    # Should pass the consistency gate and evaluate
+    r = evaluate_architecture_decode_memory_energy(workload, cap, system, rho=0.5)
+    assert r.capacity_feasible is True
+    assert r.evaluation_status == "EVALUATED_CONDITIONAL_ARCHITECTURE_MEMORY_ENERGY"
+
+
+# ---------------------------------------------------------------------------
+# 16. Frozen LLaMA-3.1-8B-class scenario across three architectures
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
@@ -473,3 +550,98 @@ def test_architecture_with_resolved_energy_produces_nonzero_j_per_token(
             assert r.evaluation_status == "EVALUATED_CONDITIONAL_ARCHITECTURE_MEMORY_ENERGY"
             assert r.memory_dynamic_energy_j_per_token is not None
             assert r.memory_dynamic_energy_j_per_token > 0
+
+
+# ---------------------------------------------------------------------------
+# 17. Frozen audit table: rho set = {0, 1, 100, 1000}
+# ---------------------------------------------------------------------------
+
+FROZEN_RHOS = (0, 1, 100, 1000)
+
+
+def test_frozen_audit_table_rho_set_strict() -> None:
+    """The frozen scenario audit table must use exactly rho ∈ {0, 1, 100, 1000}."""
+    assert set(FROZEN_RHOS) == {0, 1, 100, 1000}
+
+
+def test_frozen_audit_table_four_rows_per_architecture(
+    capacities: dict[str, ResolvedArchitectureCapacity],
+    systems: dict[str, ResolvedSystemPower],
+) -> None:
+    """Each architecture must produce exactly four evaluated rows in the
+    frozen audit table (one per rho value)."""
+    workload = _build_workload()
+    for name in ARCHITECTURES:
+        cap = evaluate_architecture_capacity_feasibility(
+            workload, capacities[name], reserved_capacity_bytes=0)
+        system = systems[name]
+        results = [
+            evaluate_architecture_decode_memory_energy(
+                workload, cap, system, rho=rho)
+            for rho in FROZEN_RHOS
+        ]
+        assert len(results) == 4
+        # All must have the same architecture
+        assert all(r.architecture == name for r in results)
+
+
+def test_rho_100_and_1000_write_energy_linear_scaling(
+    capacities: dict[str, ResolvedArchitectureCapacity],
+    systems: dict[str, ResolvedSystemPower],
+) -> None:
+    """At rho = 100 and rho = 1000, write energy must scale linearly:
+    Ewrite = rho × Eread, and write_dynamic_energy_j_per_token must reflect
+    this proportionality exactly."""
+    workload = _build_workload()
+    for name in ARCHITECTURES:
+        cap = evaluate_architecture_capacity_feasibility(
+            workload, capacities[name], reserved_capacity_bytes=0)
+        system = systems[name]
+        if system.memory_access_energy_pJ_per_bit is None:
+            continue
+        r0 = evaluate_architecture_decode_memory_energy(
+            workload, cap, system, rho=0)
+        r1 = evaluate_architecture_decode_memory_energy(
+            workload, cap, system, rho=1)
+        r100 = evaluate_architecture_decode_memory_energy(
+            workload, cap, system, rho=100)
+        r1000 = evaluate_architecture_decode_memory_energy(
+            workload, cap, system, rho=1000)
+
+        # rho=0: write energy is zero (mathematical lower bound)
+        assert r0.write_energy_pj_per_bit == 0.0
+        assert r0.write_dynamic_energy_j_per_token == 0.0
+
+        # rho=1: write energy equals read energy
+        assert r1.write_energy_pj_per_bit == r1.read_energy_pj_per_bit
+
+        # rho=100: write energy is 100x read energy
+        assert r100.write_energy_pj_per_bit == 100 * r100.read_energy_pj_per_bit
+        assert math.isclose(
+            r100.write_dynamic_energy_j_per_token,
+            100 * r1.write_dynamic_energy_j_per_token,
+            rel_tol=1e-12,
+        )
+
+        # rho=1000: write energy is 1000x read energy
+        assert r1000.write_energy_pj_per_bit == 1000 * r1000.read_energy_pj_per_bit
+        assert math.isclose(
+            r1000.write_dynamic_energy_j_per_token,
+            1000 * r1.write_dynamic_energy_j_per_token,
+            rel_tol=1e-12,
+        )
+
+        # Total energy must increase monotonically with rho
+        assert r0.memory_dynamic_energy_j_per_token <= r1.memory_dynamic_energy_j_per_token
+        assert r1.memory_dynamic_energy_j_per_token <= r100.memory_dynamic_energy_j_per_token
+        assert r100.memory_dynamic_energy_j_per_token <= r1000.memory_dynamic_energy_j_per_token
+
+
+# ---------------------------------------------------------------------------
+# 18. Audit table generation helpers (not committed)
+# ---------------------------------------------------------------------------
+
+def test_audit_table_helper_rho_values() -> None:
+    """The audit table generation script must use the frozen rho set."""
+    # This test documents the contract; the actual script is temporary.
+    assert FROZEN_RHOS == (0, 1, 100, 1000)

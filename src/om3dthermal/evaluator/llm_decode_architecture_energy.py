@@ -25,7 +25,10 @@ from om3dthermal.power.system import ResolvedSystemPower
 from om3dthermal.workload.architecture_capacity import (
     ArchitectureCapacityFeasibility,
 )
-from om3dthermal.workload.capacity import CapacityFeasibilityMetrics
+from om3dthermal.workload.capacity import (
+    CapacityFeasibilityMetrics,
+    evaluate_capacity_feasibility,
+)
 from om3dthermal.workload.llm_decode import LLMDecodeMetrics
 
 from .llm_decode_energy import evaluate_llm_decode_memory_energy
@@ -152,6 +155,34 @@ def evaluate_architecture_decode_memory_energy(
     """
     rho_valid = _validate_rho("rho", rho)
 
+    # 1) Architecture identity gate: capacity and system must refer to the
+    #    same canonical architecture.
+    if capacity.architecture != system.case_name:
+        raise ValueError(
+            f"capacity.architecture ({capacity.architecture!r}) does not match "
+            f"system.case_name ({system.case_name!r})"
+        )
+
+    # 2) Capacity / workload consistency gate: recompute feasibility from the
+    #    workload and the architecture's physical capacity, then verify the
+    #    supplied capacity gate was produced from the *same* workload.
+    rebuilt = evaluate_capacity_feasibility(
+        workload,
+        physical_capacity_bytes=capacity.physical_capacity_bytes,
+        reserved_capacity_bytes=capacity.reserved_capacity_bytes,
+    )
+    if (
+        rebuilt.capacity_feasible != capacity.capacity_feasible
+        or rebuilt.usable_capacity_bytes != capacity.usable_capacity_bytes
+        or rebuilt.capacity_margin_bytes != capacity.capacity_margin_bytes
+        or rebuilt.capacity_utilization != capacity.capacity_utilization
+    ):
+        raise ValueError(
+            "capacity / workload mismatch: the supplied ArchitectureCapacityFeasibility "
+            "was not produced from the given workload. "
+            "Re-evaluate the workload against the architecture capacity."
+        )
+
     e_read = system.memory_access_energy_pJ_per_bit
     has_energy = e_read is not None
 
@@ -207,8 +238,8 @@ def evaluate_architecture_decode_memory_energy(
         )
 
     # Case: capacity feasible → delegate to existing energy primitive.
-    # Build a minimal CapacityFeasibilityMetrics adapter because
-    # evaluate_llm_decode_memory_energy expects that exact type.
+    # Build a minimal CapacityFeasibilityMetrics adapter, forwarding the
+    # rebuilt utilization_status so it is not hard-coded here.
     capacity_adapter = CapacityFeasibilityMetrics(
         physical_capacity_bytes=capacity.physical_capacity_bytes,
         reserved_capacity_bytes=capacity.reserved_capacity_bytes,
@@ -216,7 +247,7 @@ def evaluate_architecture_decode_memory_energy(
         required_capacity_bytes=capacity.required_capacity_bytes,
         capacity_margin_bytes=capacity.capacity_margin_bytes,
         capacity_utilization=capacity.capacity_utilization,
-        utilization_status="DEFINED",
+        utilization_status=rebuilt.utilization_status,
         capacity_feasible=capacity.capacity_feasible,
         scope_status="AGGREGATE_CAPACITY_FEASIBILITY_ONLY",
     )
