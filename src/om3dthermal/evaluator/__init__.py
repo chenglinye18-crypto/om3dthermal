@@ -1,3 +1,7 @@
+from om3dthermal.evaluator.llm_decode_architecture_energy import (
+    ArchitectureDecodeMemoryEnergyMetrics,
+    evaluate_architecture_decode_memory_energy,
+)
 from om3dthermal.evaluator.llm_decode_energy import (
     LLMDecodeMemoryEnergyMetrics,
     evaluate_llm_decode_memory_energy,
@@ -8,8 +12,10 @@ from om3dthermal.evaluator.llm_decode_performance import (
 )
 
 __all__ = [
+    "ArchitectureDecodeMemoryEnergyMetrics",
     "LLMDecodeMemoryEnergyMetrics",
     "LLMDecodePerformanceMetrics",
+    "evaluate_architecture_decode_memory_energy",
     "evaluate_llm_decode_memory_energy",
     "evaluate_llm_decode_performance",
 ]
