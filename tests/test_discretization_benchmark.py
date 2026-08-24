@@ -31,7 +31,7 @@ from om3dthermal.discretization import (
 from om3dthermal.geometry.horizontal_columns import HorizontalColumnsBuilder
 
 
-CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "legacy" / "exp_conv_2x2_g414_m160.yaml"
 
 
 # A reasonable tolerance for asserting "max cell size <= configured".

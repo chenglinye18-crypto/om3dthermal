@@ -15,14 +15,14 @@ from om3dthermal.thermal import build_conductance_table
 
 ROOT = Path(__file__).parents[1]
 CASES = {
-    ("2x2", 414): ROOT / "configs" / "exp_conv_2x2_nobase_g414_m128.yaml",
-    ("2x2", 300): ROOT / "configs" / "exp_conv_2x2_nobase_g300_m128.yaml",
-    ("2x1", 414): ROOT / "configs" / "exp_conv_2x1_nobase_g414_m128.yaml",
-    ("2x1", 300): ROOT / "configs" / "exp_conv_2x1_nobase_g300_m128.yaml",
+    ("2x2", 414): ROOT / "configs" / "legacy" / "exp_conv_2x2_nobase_g414_m128.yaml",
+    ("2x2", 300): ROOT / "configs" / "legacy" / "exp_conv_2x2_nobase_g300_m128.yaml",
+    ("2x1", 414): ROOT / "configs" / "legacy" / "exp_conv_2x1_nobase_g414_m128.yaml",
+    ("2x1", 300): ROOT / "configs" / "legacy" / "exp_conv_2x1_nobase_g300_m128.yaml",
 }
 BASE_PRESENT = {
-    "2x2": ROOT / "configs" / "exp_conv_2x2_g414_m160.yaml",
-    "2x1": ROOT / "configs" / "exp_conv_2x1_g414_m160.yaml",
+    "2x2": ROOT / "configs" / "legacy" / "exp_conv_2x2_g414_m160.yaml",
+    "2x1": ROOT / "configs" / "legacy" / "exp_conv_2x1_g414_m160.yaml",
 }
 
 

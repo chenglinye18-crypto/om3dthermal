@@ -1,0 +1,10 @@
+schema_version: 1
+architecture_id: conventional_hbm_2x1
+display_name: Conventional HBM
+role: baseline
+canonical_case: configs/cases/conventional_hbm_2x1.yaml
+provenance:
+  - record_id: conventional_hbm_canonical_case
+    classification: SOFTWARE_DERIVED
+    source: configs/cases/conventional_hbm_2x1.yaml
+    status: VALIDATED_CANONICAL_CASE_ADAPTER

@@ -25,6 +25,7 @@ from om3dthermal.evaluator.llm_decode_workload_thermal import (
 from om3dthermal.evaluator.llm_decode_e2e import (
     ConditionalLLMDecodeE2ERow,
     assemble_conditional_llm_decode_e2e_row,
+    validate_conditional_llm_decode_e2e_rows,
     validate_conditional_llm_decode_e2e_table,
 )
 
@@ -46,4 +47,5 @@ __all__ = [
     "map_workload_power_to_thermal",
     "run_llm_decode_workload_thermal",
     "validate_conditional_llm_decode_e2e_table",
+    "validate_conditional_llm_decode_e2e_rows",
 ]

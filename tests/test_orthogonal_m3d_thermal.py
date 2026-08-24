@@ -11,8 +11,8 @@ from om3dthermal.geometry.orthogonal_hbm import ORTHOGONAL_DIE_ROTATION
 
 ROOT = Path(__file__).parents[1]
 CASES = {
-    414: ROOT / "configs" / "exp_orth_m3d8_g414_bw39p2_all1read.yaml",
-    300: ROOT / "configs" / "exp_orth_m3d8_g300_bw39p2_all1read.yaml",
+    414: ROOT / "configs" / "legacy" / "exp_orth_m3d8_g414_bw39p2_all1read.yaml",
+    300: ROOT / "configs" / "legacy" / "exp_orth_m3d8_g300_bw39p2_all1read.yaml",
 }
 
 

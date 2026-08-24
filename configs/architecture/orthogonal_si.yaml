@@ -1,0 +1,10 @@
+schema_version: 1
+architecture_id: orthogonal_si
+display_name: Orthogonal Si
+role: ablation
+canonical_case: configs/cases/orthogonal_si.yaml
+provenance:
+  - record_id: orthogonal_si_canonical_case
+    classification: SOFTWARE_DERIVED
+    source: configs/cases/orthogonal_si.yaml
+    status: VALIDATED_CANONICAL_CASE_ADAPTER

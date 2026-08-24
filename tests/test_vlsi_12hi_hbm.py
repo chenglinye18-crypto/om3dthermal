@@ -9,8 +9,8 @@ from om3dthermal.config import load_config
 
 
 ROOT = Path(__file__).parents[1]
-BASELINE = ROOT / "configs" / "exp_conv_2x2_g414_m160.yaml"
-CHECK = ROOT / "configs" / "exp_conv_2x2_g300_m160.yaml"
+BASELINE = ROOT / "configs" / "legacy" / "exp_conv_2x2_g414_m160.yaml"
+CHECK = ROOT / "configs" / "legacy" / "exp_conv_2x2_g300_m160.yaml"
 
 
 @pytest.fixture(scope="module")

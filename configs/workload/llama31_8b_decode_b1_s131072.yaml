@@ -1,0 +1,25 @@
+schema_version: 1
+workload_id: LLaMA-3.1-8B-class-B1-S131072-v0
+workload_type: llm_autoregressive_decode
+decode:
+  n_param: 8000000000
+  n_layers: 32
+  n_heads_q: 32
+  n_heads_kv: 8
+  d_head: 128
+  d_model: 4096
+  d_ff: 14336
+  vocab_size: 128256
+  batch_size: 1
+  context_length: 131072
+  weight_bits: 16
+  kv_bits: 16
+  runtime_bytes: 0
+  weight_activity_model: full_footprint
+  weight_reuse_model: tile_reuse
+  kv_read_model: full_reread
+provenance:
+  - record_id: llm_decode_b1_r2
+    classification: MODELING_CHOICE
+    source: frozen B1-R2 analytical decode specification
+    status: PASS

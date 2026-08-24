@@ -74,8 +74,8 @@ REM Gate 8: project import + targeted tests
 python -c "import om3dthermal; print(om3dthermal.__file__)"
 python -m pytest tests/test_sweep.py -q
 
-REM Gate 9: one GPU thermal smoke (Conventional HBM baseline, backend=gpu)
-python -m om3dthermal.cli solve-steady configs\cases\conventional_hbm_2x1.yaml --out runs\_gpu_smoke --alpha 0.7 --backend gpu
+REM Gate 9: production GPU-PCG kernel/operator smoke
+python -m pytest tests/test_thermal_relaxation.py -q -k gpu_pcg
 ```
 
 If any gate fails, the failure must be diagnosed inside the `om3dthermal`
@@ -84,9 +84,11 @@ venv to "make it work".
 
 ## Project scope
 
-om3dthermal is a steady-state 3D thermal simulation framework for HBM-on-GPU
-and future M3D / orthogonal-M3D research. The consolidated baseline is the
-canonical Son23-powered Conventional 2x2 HBM case.
+om3dthermal is a workload-aware architecture/power/steady-state-thermal
+framework for HBM-on-GPU and M3D / orthogonal-memory research.  The canonical
+DAC E2E Conventional baseline is `configs/cases/conventional_hbm_2x1.yaml`.
+Conventional 2x2 cases under `configs/legacy/` are historical thermal
+validation benchmarks, not the main E2E baseline.
 
 ## Hard constraints
 
@@ -100,41 +102,33 @@ canonical Son23-powered Conventional 2x2 HBM case.
 
 ## Current numerical model
 
-Compact YAML -> geometry -> ThermalCell discretization -> face adjacency ->
-anisotropic face conductance -> boundary/power mapping -> matrix-free thermal
-operator -> thermal-resistance-network relaxation (CPU or GPU).
+Formal experiment YAML -> architecture/platform/workload descriptors ->
+capacity/traffic/FLOPs -> matched-reference performance -> conditional memory
+energy -> workload power -> existing thermal mapping -> FP64 matrix-free
+GPU-PCG with Jacobi preconditioning -> typed Tmax observations/result bundle.
 
-The CPU reference solver and the CuPy GPU backend are both matrix-free
-and both implement the same relaxation equation.
+The legacy standalone thermal CLI retains CPU/GPU relaxation paths for
+validation and historical commands.  It is not the production DAC E2E path.
 
-## Formal solver (do not change)
+## Formal solver (frozen; do not change)
 
-The only production steady-state thermal solver is the
-**thermal-resistance-network relaxation**:
+The production DAC E2E steady-state solver is the existing **FP64,
+matrix-free GPU-PCG solver with Jacobi diagonal preconditioning**.  It checks
+the true KCL residual and performs no full-vector device-to-host transfer
+during iteration.  Its physical operator, tolerances, mapping, and numerical
+implementation are frozen.
 
-```
-delta_Q_i = P_i - sum_j G_ij (T_i - T_j) - sum_b G_ib (T_i - T_b)
-R_eff_i  = 1 / ( sum_j G_ij + sum_b G_ib )
-delta_T_i = alpha * delta_Q_i * R_eff_i        alpha in (0, 1]
-T_new_i   = T_old_i + delta_T_i                (simultaneous update)
-```
-
-Convergence requires both `relative_heat_flow_residual < tol` and
-`max_abs_delta_T < tol` to be satisfied at the same `check_interval`
-boundary. CPU and GPU backends must implement the same relaxation
-equation (FP64 end-to-end; no fast-math, no mixed precision).
-
-Do not introduce PCG, CG, sparse linear solvers, matrix inversion,
-or alternative steady-state solvers unless explicitly requested by the
-user. The GPU and CPU relaxation kernels must produce numerically
-equivalent temperature fields.
+Do not optimize or replace GPU-PCG, change the thermal equations, or migrate
+additional public solver paths unless explicitly requested.  The historical
+relaxation implementations remain compatibility/reference code; their old
+policy is not the current production-solver policy.
 
 ## Configuration
 
-`configs/exp_conv_2x2_g414_m160.yaml` is the canonical Conventional 2x2
-reference configuration. Orthogonal MOSAIC and M3D experiments remain separate
-configs and must not overwrite it. Keep configs compact and hand-editable;
-paper provenance and modeling assumptions belong in `docs/benchmarks/`.
+Formal configuration is split across `configs/architecture/`,
+`configs/platform/`, `configs/workload/`, and `configs/experiment/`.  The
+architecture descriptors reference validated canonical cases instead of
+copying their physical values.  Keep provenance and claim status explicit.
 
 ## Research priorities
 
@@ -149,14 +143,11 @@ Do not add new physics merely because it is technically possible.
 
 ## Benchmark invariants
 
-For non-physics changes, verify the current canonical Conventional 2x2 case:
-
-- 859596 ThermalCells;
-- 2531340 internal edges;
-- total input power = 574 W;
-- rtol=1e-6 baseline Tmax approximately 122.9713 degC.
-
-Investigate unexpected changes; do not update expected values merely to make
+For E2E non-physics changes, preserve the validated Conventional 2x1 GPU-PCG
+baseline (859596 cells, 2531340 edges, analytical package input about
+355.58349 W, Tmax about 81.93349 degC at the canonical tolerances).  The
+574 W / ~122.97 degC Conventional 2x2 result is a legacy thermal benchmark.
+Investigate unexpected changes; never update expected values merely to make
 tests pass.
 
 ## Development workflow

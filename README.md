@@ -1,13 +1,18 @@
 # om3dthermal
 
-`om3dthermal` is an axis-aligned 3D thermal modelling and steady-state solving
-tool. It reads unit-aware YAML, builds conventional and orthogonal MOSAIC
-geometry, generates a boundary-preserving block mesh, maps uniform power,
-constructs conductance and boundary operators, and solves with the
-matrix-free **thermal-resistance-network relaxation** solver
-(`delta_T = alpha * delta_Q * R_eff`). It does not include transient
-solving, temperature-dependent materials, AMR, non-uniform power-map
-calibration, COMSOL/Icepak integration, or a GUI.
+`om3dthermal` is a workload-aware architecture, power, and steady-state
+thermal research framework for Conventional HBM and orthogonal-memory
+comparisons.  Its formal experiment path connects architecture and LLM decode
+descriptors to capacity, traffic/FLOPs, matched-reference performance,
+conditional memory energy, workload power, the validated GPU-PCG thermal
+pipeline, and reproducible result bundles.
+
+The original geometry/thermal CLI remains available as a compatibility and
+validation surface.  The project remains steady-state only; it does not
+include transient solving, AMR, dense matrix inversion, or a validated
+architecture bandwidth/write-energy/GPU-energy model.  See
+[`docs/architecture/E2E_ARCHITECTURE.md`](docs/architecture/E2E_ARCHITECTURE.md)
+for module boundaries and claim status.
 
 The current six-case experiment matrix and the authoritative mapping from
 configs to results are documented in
@@ -15,17 +20,25 @@ configs to results are documented in
 The result-first paper summary and figures are in
 [`docs/benchmarks/thermal_results_overview.md`](docs/benchmarks/thermal_results_overview.md).
 
-## Install and run
+## Canonical environment and formal experiment
 
-Python 3.10+ is required:
+All project Python commands use the native-Windows Conda environment described
+in `AGENTS.md`:
 
-```bash
-python -m pip install -e ".[test]"
-python -m pytest
-python -m om3dthermal.cli build configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_iedm2025
-python -m om3dthermal.cli discretize configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_mesh
-python -m om3dthermal.cli conductance configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_conductance
-python -m om3dthermal.cli solve-steady configs/legacy/exp_conv_2x2_g414_m160.yaml --out runs/hbm12_steady --alpha 0.7 --backend gpu
+```powershell
+conda activate om3dthermal
+python -m om3dthermal experiment configs\experiment\conditional_e2e_v0.yaml
+```
+
+The output is a checksummed, stage-separated bundle under `results/`.  A
+non-empty output directory is never overwritten.  The formal experiment uses
+`configs/cases/conventional_hbm_2x1.yaml` as the canonical Conventional HBM
+baseline; archived 2×2 configurations remain historical thermal benchmarks.
+
+Legacy geometry and thermal commands are still supported, for example:
+
+```powershell
+python -m om3dthermal.cli build configs\legacy\exp_conv_2x2_g414_m160.yaml --out runs\hbm12_geometry
 ```
 
 The `build` command writes (under the directory given by `--out`, which
@@ -597,7 +610,7 @@ YAML
   -> Internal Conductance
   -> BoundaryLink / PowerVector
   -> MatrixFreeThermalOperator
-  -> Thermal-resistance-network relaxation (CPU or GPU)
+  -> GPU-PCG (formal E2E) or legacy relaxation (standalone validation)
   -> Steady-State Temperature
 ```
 
@@ -616,8 +629,13 @@ trivial vector arithmetic.
 
 ### Solver
 
-The only production steady-state solver is the **thermal-resistance-
-network relaxation**:
+The formal DAC E2E production solver is the frozen FP64 matrix-free GPU-PCG
+implementation with Jacobi diagonal preconditioning.  It checks the true KCL
+residual, requires both residual and maximum-update convergence gates, and
+performs no full-vector device-to-host transfer during iteration.
+
+The standalone legacy CLI also retains the **thermal-resistance-network
+relaxation** reference path:
 
 ```
 delta_Q_i = P_i - sum_j G_ij (T_i - T_j) - sum_b G_ib (T_i - T_b)
@@ -636,14 +654,13 @@ separate ``T_new`` buffer) is enforced in the public relaxation
 function and in the GPU kernel: a relaxation step must not consume
 a temperature value that was written in the same step.
 
-The CPU and GPU implementations are required to produce
+The CPU and GPU relaxation implementations are required to produce
 numerically equivalent temperature fields. Both paths are FP64
 end-to-end (no fast-math, no mixed precision). The GPU path uses
 a CUDA RawKernel compiled once with NVRTC and cached; per-cell
 state (neighbour id / conductance, pre-summed boundary G, R_eff,
 two double-buffered temperature arrays) is uploaded once per
-topology and reused across sweep points that share the same
-thermal fingerprint.
+topology and reused across compatible legacy sweep points.
 
 Iteration count has **no time meaning**: it is the number of
 relaxation refinements, not seconds of physical time. A

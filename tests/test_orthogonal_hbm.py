@@ -15,7 +15,7 @@ from om3dthermal.geometry.orthogonal_hbm import ORTHOGONAL_DIE_ROTATION
 from om3dthermal.thermal import is_signed_axis_permutation
 
 
-CONFIG = Path(__file__).parents[1] / "configs" / "exp_orth_mosaic98_g414_m156p8_uniform.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "legacy" / "exp_orth_mosaic98_g414_m156p8_uniform.yaml"
 
 
 @pytest.fixture(scope="module")

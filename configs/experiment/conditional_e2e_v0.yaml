@@ -1,0 +1,30 @@
+schema_version: 1
+experiment_id: conditional_llm_decode_e2e_v0
+mode: conditional_llm_decode_e2e
+architecture_configs:
+  - configs/architecture/conventional_hbm_2x1.yaml
+  - configs/architecture/orthogonal_si.yaml
+  - configs/architecture/orthogonal_m3d_igzo.yaml
+platform_config: configs/platform/gpu_package_300w_reference.yaml
+workload_config: configs/workload/llama31_8b_decode_b1_s131072.yaml
+scenario:
+  matched_payload_bandwidth_bits_per_second: 3.92e13
+  bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
+  effective_compute_flops_per_second: 1.0e14
+  compute_status: NUMERICAL_CHOICE_NOT_HARDWARE_VALIDATED
+  reserved_capacity_bytes: 0
+  rho_values: [0, 1, 100, 1000]
+  unresolved_logic_background_policy:
+    conventional_hbm_2x1: REQUIRE_RESOLVED
+    orthogonal_si: REQUIRE_RESOLVED
+    orthogonal_m3d_igzo: EXISTING_PLACEHOLDER_ZERO
+  thermal:
+    enabled: true
+    backend: gpu_pcg
+    relative_residual_tolerance: 0.001
+    max_temperature_update_tolerance_K: 0.01
+    max_iterations: 100000
+    check_interval: 10
+    initial_temperature_K: 293.15
+output_dir: results/conditional_llm_decode_e2e_v0
+output_policy: ERROR_IF_EXISTS

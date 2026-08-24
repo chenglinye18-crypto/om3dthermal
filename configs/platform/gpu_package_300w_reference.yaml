@@ -1,0 +1,10 @@
+schema_version: 1
+platform_id: gpu_package_300w_reference
+fixed_gpu_power_W: 300.0
+gpu_power_status: FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL
+package_profile_status: EXISTING_CANONICAL_CASE_THERMAL_PACKAGE
+provenance:
+  - record_id: fixed_gpu_300w
+    classification: MATCHED_REFERENCE
+    source: existing canonical three-architecture baseline
+    status: NOT_A_WORKLOAD_GPU_ENERGY_MODEL

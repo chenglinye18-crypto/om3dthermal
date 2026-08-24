@@ -10,8 +10,8 @@ from om3dthermal.thermal.power import build_power_breakdown, map_power_sources
 
 
 ROOT = Path(__file__).parents[1]
-UNIFORM = ROOT / "configs" / "exp_conv_2x2_g414_m160_legacy_uniform.yaml"
-SON23 = ROOT / "configs" / "exp_conv_2x2_g414_m160.yaml"
+UNIFORM = ROOT / "configs" / "legacy" / "exp_conv_2x2_g414_m160_legacy_uniform.yaml"
+SON23 = ROOT / "configs" / "legacy" / "exp_conv_2x2_g414_m160.yaml"
 STACKS = (
     "hbm_left_top", "hbm_left_bottom",
     "hbm_right_top", "hbm_right_bottom",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from om3dthermal.architecture import ResolvedPacking
 from om3dthermal.architecture_capacity import ResolvedArchitectureCapacity
 from om3dthermal.workload.capacity import evaluate_capacity_feasibility
 from om3dthermal.workload.llm_decode import LLMDecodeMetrics
@@ -27,7 +28,7 @@ class ArchitectureCapacityFeasibility(BaseModel):
 
 def evaluate_architecture_capacity_feasibility(
     workload: LLMDecodeMetrics,
-    capacity: ResolvedArchitectureCapacity,
+    capacity: ResolvedArchitectureCapacity | ResolvedPacking,
     *,
     reserved_capacity_bytes: int | float,
 ) -> ArchitectureCapacityFeasibility:

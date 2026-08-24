@@ -36,7 +36,7 @@ from om3dthermal.thermal import build_conductance_table
 from om3dthermal.geometry.horizontal_columns import HorizontalColumnsBuilder
 
 
-CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "legacy" / "exp_conv_2x2_g414_m160.yaml"
 
 
 @pytest.fixture(scope="module")

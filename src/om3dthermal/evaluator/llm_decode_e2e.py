@@ -126,10 +126,13 @@ def assemble_conditional_llm_decode_e2e_row(
     thermal: LLMDecodeWorkloadThermalMetrics | None,
     *,
     workload_identifier: str,
+    architecture_display_name: str | None = None,
 ) -> ConditionalLLMDecodeE2ERow:
     """Validate cross-stage semantics and forward one conditional E2E row."""
     architecture = capacity.architecture
-    if architecture not in ARCHITECTURE_DISPLAY_NAMES:
+    display_name = architecture_display_name or ARCHITECTURE_DISPLAY_NAMES.get(
+        architecture)
+    if not display_name:
         raise ValueError("unsupported E7 architecture")
     if not workload_identifier or not workload_identifier.strip():
         raise ValueError("workload_identifier must be non-empty")
@@ -249,7 +252,7 @@ def assemble_conditional_llm_decode_e2e_row(
 
     return ConditionalLLMDecodeE2ERow(
         architecture=architecture,
-        architecture_display_name=ARCHITECTURE_DISPLAY_NAMES[architecture],
+        architecture_display_name=display_name,
         rho=energy.rho,
         workload_identifier=workload_identifier,
         batch_size=workload_input.batch_size,
@@ -308,17 +311,56 @@ def validate_conditional_llm_decode_e2e_table(
     rows: Sequence[ConditionalLLMDecodeE2ERow],
 ) -> tuple[ConditionalLLMDecodeE2ERow, ...]:
     """Require exactly the frozen 3x4 table and its semantic invariants."""
-    result = tuple(rows)
+    frozen = tuple(rows)
     expected_keys = [(architecture, rho) for architecture in ARCHITECTURE_ORDER
                      for rho in FROZEN_RHOS]
+    if [(row.architecture, row.rho) for row in frozen] != expected_keys:
+        raise ValueError(
+            "E7 rows must be the ordered frozen 3x4 architecture/rho set")
+    return validate_conditional_llm_decode_e2e_rows(
+        frozen,
+        expected_architecture_ids=ARCHITECTURE_ORDER,
+        expected_rhos=FROZEN_RHOS,
+    )
+
+
+def validate_conditional_llm_decode_e2e_rows(
+    rows: Sequence[ConditionalLLMDecodeE2ERow],
+    *,
+    expected_architecture_ids: Sequence[str],
+    expected_rhos: Sequence[float],
+) -> tuple[ConditionalLLMDecodeE2ERow, ...]:
+    """Validate a configured comparison without hard-coding its identities."""
+    result = tuple(rows)
+    architectures = tuple(expected_architecture_ids)
+    rhos = tuple(float(value) for value in expected_rhos)
+    if not architectures or not rhos:
+        raise ValueError("expected architectures and rho values must be non-empty")
+    if len(set(architectures)) != len(architectures):
+        raise ValueError("expected architecture identities must be unique")
+    if len(set(rhos)) != len(rhos):
+        raise ValueError("expected rho values must be unique")
+    expected_keys = [(architecture, rho) for architecture in architectures
+                     for rho in rhos]
     keys = [(row.architecture, row.rho) for row in result]
     if keys != expected_keys:
-        raise ValueError("E7 rows must be the ordered frozen 3x4 architecture/rho set")
+        raise ValueError("E2E rows must match the ordered configured architecture/rho set")
     if Counter(row.architecture for row in result) != Counter({
-            architecture: 4 for architecture in ARCHITECTURE_ORDER}):
-        raise ValueError("E7 requires exactly four rows per architecture")
+            architecture: len(rhos) for architecture in architectures}):
+        raise ValueError("E2E row count per architecture is incorrect")
 
-    for architecture in ARCHITECTURE_ORDER:
+    shared_fields = (
+        "workload_identifier", "batch_size", "context_length",
+        "required_capacity_bytes", "read_bytes_per_token",
+        "write_bytes_per_token", "flops_per_token",
+        "aggregate_tokens_per_second",
+    )
+    for field in shared_fields:
+        values = [getattr(row, field) for row in result]
+        if any(value != values[0] for value in values[1:]):
+            raise ValueError(f"{field} changed across architecture/rho comparison")
+
+    for architecture in architectures:
         group = [row for row in result if row.architecture == architecture]
         for field in ("write_energy_pj_per_bit",
                       "memory_dynamic_energy_j_per_token",
@@ -328,7 +370,7 @@ def validate_conditional_llm_decode_e2e_table(
             if any(value is None for value in values):
                 raise ValueError(f"{field} is unavailable in frozen feasible table")
             if any(float(values[index]) > float(values[index + 1])
-                   for index in range(3)):
+                   for index in range(len(values) - 1)):
                 raise ValueError(f"{field} is not monotonic for {architecture}")
         for field in ("workload_identifier", "batch_size", "context_length",
                       "required_capacity_bytes", "capacity_feasible",

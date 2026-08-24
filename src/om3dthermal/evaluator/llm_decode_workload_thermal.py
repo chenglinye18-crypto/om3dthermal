@@ -8,10 +8,6 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from om3dthermal.architecture_comparison import (
-    _temperature_maxima,
-    compile_case_thermal,
-)
 from om3dthermal.case_runner import run_steady_pipeline
 from om3dthermal.config import (
     PowerSourceConfig,
@@ -20,8 +16,17 @@ from om3dthermal.config import (
 )
 from om3dthermal.power.config import CanonicalCaseConfig
 from om3dthermal.power.system import ResolvedSystemPower
+from om3dthermal.thermal.case_adapter import (
+    compile_canonical_thermal_case,
+    extract_temperature_observables,
+)
 
 from .llm_decode_workload_power import LLMDecodeWorkloadPowerMetrics
+
+
+# Backward-compatible public name retained for existing tests/callers while
+# the implementation is now owned by the explicit thermal adapter boundary.
+compile_case_thermal = compile_canonical_thermal_case
 
 
 WRITE_SPATIAL_STATUS = (
@@ -269,7 +274,7 @@ def run_llm_decode_workload_thermal(
         mapped_actual - mapping.expected_package_total_power_W)
     if actual_error > POWER_CLOSURE_ABS_TOL_W:
         raise RuntimeError("discretized workload power does not close")
-    memory_t, gpu_t, package_t = _temperature_maxima(pipeline)
+    observables = extract_temperature_observables(pipeline)
     max_update = result.max_temperature_update
     if max_update is None:
         raise RuntimeError("GPU-PCG result did not report temperature update")
@@ -283,9 +288,9 @@ def run_llm_decode_workload_thermal(
         power_closure_relative_error=(
             actual_error / mapping.expected_package_total_power_W
             if mapping.expected_package_total_power_W > 0.0 else 0.0),
-        memory_Tmax_degC=memory_t,
-        gpu_Tmax_degC=gpu_t,
-        package_Tmax_degC=package_t,
+        memory_Tmax_degC=observables.memory_Tmax_degC,
+        gpu_Tmax_degC=observables.gpu_Tmax_degC,
+        package_Tmax_degC=observables.package_Tmax_degC,
         converged=bool(result.converged),
         iterations=int(result.iterations),
         final_relative_residual=float(result.final_relative_residual),

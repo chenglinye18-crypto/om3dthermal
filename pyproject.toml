@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "om3dthermal"
 version = "0.1.0"
-description = "Geometry front-end for axis-aligned 3D thermal models"
+description = "Workload-aware architecture, power, and steady-state thermal research framework"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

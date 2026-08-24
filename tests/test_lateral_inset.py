@@ -27,7 +27,7 @@ from om3dthermal.geometry.horizontal_columns import (
 )
 from om3dthermal.geometry.primitives import AxisAlignedBox, Footprint
 
-CONFIG = Path(__file__).parents[1] / "configs" / "exp_conv_2x2_g414_m160.yaml"
+CONFIG = Path(__file__).parents[1] / "configs" / "legacy" / "exp_conv_2x2_g414_m160.yaml"
 
 HBM_COLUMNS = ("hbm_left_top", "hbm_left_bottom", "hbm_right_top", "hbm_right_bottom")
 

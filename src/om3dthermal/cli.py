@@ -602,6 +602,13 @@ def main(argv: list[str] | None = None) -> int:
     sweep_parser.add_argument(
         "--output-dir", type=Path, default=None,
         help="override the sweep output directory")
+    experiment_parser = subparsers.add_parser(
+        "experiment",
+        help="run a formal workload-aware experiment and write a result bundle")
+    experiment_parser.add_argument("config", type=Path)
+    experiment_parser.add_argument(
+        "--output-dir", type=Path, default=None,
+        help="override the configured formal result-bundle directory")
     args = parser.parse_args(argv)
     if args.command == "build":
         scene = build(args.config, args.out)
@@ -678,6 +685,16 @@ def main(argv: list[str] | None = None) -> int:
             f"[sweep] metadata.json: {Path(result.output_dir) / 'metadata.json'}\n"
             f"[sweep] output_dir:   {result.output_dir}")
         return 0 if result.fail_count == 0 else 2
+    elif args.command == "experiment":
+        from .experiment import run_experiment
+        result = run_experiment(
+            args.config, output_dir_override=args.output_dir)
+        assert result.output_dir is not None
+        print(
+            f"[experiment] {result.experiment.experiment_id}: PASS\n"
+            f"[experiment] rows:       {len(result.rows)}\n"
+            f"[experiment] output_dir: {result.output_dir}\n"
+            f"[experiment] manifest:   {result.output_dir / 'manifest.json'}")
     return 0
 
 

@@ -1,0 +1,14 @@
+schema_version: 1
+architecture_id: orthogonal_m3d_igzo
+display_name: Orthogonal M3D-IGZO
+role: proposed
+canonical_case: configs/cases/orthogonal_m3d_igzo.yaml
+provenance:
+  - record_id: orthogonal_m3d_canonical_case
+    classification: SOFTWARE_DERIVED
+    source: configs/cases/orthogonal_m3d_igzo.yaml
+    status: VALIDATED_CANONICAL_CASE_ADAPTER
+  - record_id: zhu_64_to_8_transferability
+    classification: NOT_VALIDATED
+    source: Zhu 2026 IEDM operation-energy primitive
+    status: NOT_VALIDATED

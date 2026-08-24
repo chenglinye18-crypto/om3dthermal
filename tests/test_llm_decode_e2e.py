@@ -277,3 +277,14 @@ def test_monotonic_and_invariant_failures_rejected(frozen):
     broken[1] = broken[1].model_copy(update={"read_bytes_per_token": 1.0})
     with pytest.raises(ValueError, match="read_bytes"):
         validate_conditional_llm_decode_e2e_table(broken)
+
+
+def test_cross_architecture_workload_mismatch_is_rejected(frozen):
+    rows = [frozen[2][name][3][rho][3]
+            for name in ARCHITECTURES for rho in RHOS]
+    broken = list(rows)
+    for index in range(4, 8):
+        broken[index] = broken[index].model_copy(update={
+            "workload_identifier": "different-workload"})
+    with pytest.raises(ValueError, match="workload_identifier"):
+        validate_conditional_llm_decode_e2e_table(broken)

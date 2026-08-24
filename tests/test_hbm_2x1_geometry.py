@@ -10,8 +10,8 @@ from om3dthermal.geometry.horizontal_columns import _boxes_overlap_3d
 
 
 ROOT = Path(__file__).parents[1]
-CONFIG_414 = ROOT / "configs" / "exp_conv_2x1_g414_m160.yaml"
-CONFIG_300 = ROOT / "configs" / "exp_conv_2x1_g300_m160.yaml"
+CONFIG_414 = ROOT / "configs" / "legacy" / "exp_conv_2x1_g414_m160.yaml"
+CONFIG_300 = ROOT / "configs" / "legacy" / "exp_conv_2x1_g300_m160.yaml"
 GROUPS = ("hbm_left", "hbm_right")
 
 
