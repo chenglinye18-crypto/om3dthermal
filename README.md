@@ -14,6 +14,11 @@ architecture bandwidth/write-energy/GPU-energy model.  See
 [`docs/architecture/E2E_ARCHITECTURE.md`](docs/architecture/E2E_ARCHITECTURE.md)
 for module boundaries and claim status.
 
+The current research focus is end-to-end LLM decode inference for Orthogonal
+M3D-IGZO. Conventional HBM is the main comparison baseline and Orthogonal Si
+is retained as a mechanism/technology ablation, not as a co-equal proposed
+design.
+
 ## Repository layout
 
 ```text
@@ -47,7 +52,7 @@ in `AGENTS.md`:
 
 ```powershell
 conda activate om3dthermal
-python -m om3dthermal experiment configs\experiment\conditional_e2e_v0.yaml
+python -m om3dthermal experiment configs\experiment\m3d_igzo_llama31_8b_decode_conditional_v0.yaml
 ```
 
 The output is a checksummed, stage-separated bundle under `results/`.  A

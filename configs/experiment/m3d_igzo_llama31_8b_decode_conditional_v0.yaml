@@ -1,5 +1,5 @@
 schema_version: 1
-experiment_id: conditional_llm_decode_e2e_v0
+experiment_id: m3d_igzo_llama31_8b_decode_conditional_v0
 mode: conditional_llm_decode_e2e
 architecture_configs:
   - configs/architecture/conventional_hbm_2x1.yaml
@@ -26,5 +26,5 @@ scenario:
     max_iterations: 100000
     check_interval: 10
     initial_temperature_K: 293.15
-output_dir: results/conditional_llm_decode_e2e_v0
+output_dir: results/m3d_igzo_llama31_8b_decode_conditional_v0
 output_policy: ERROR_IF_EXISTS

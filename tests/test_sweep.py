@@ -1,13 +1,9 @@
 """Targeted unit tests for the memory sweep benchmark framework.
 
 The tests are deliberately small: each one pins down a single contract that
-the rest of the benchmark pipeline depends on. They do not exercise the
-full thermal solver; that work happens in the smoke runs in
-``.smoke*.py`` at the repository root.
-
-Run via:
-    cd /tmp/om3d_project
-    PYTHONPATH=src python3 -m pytest /tmp/om3d_project/tests/test_sweep.py -q
+the rest of the benchmark pipeline depends on. They do not exercise the full
+thermal solver. Use the canonical native-Windows environment documented in
+``AGENTS.md``.
 """
 
 from __future__ import annotations

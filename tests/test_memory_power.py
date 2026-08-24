@@ -1329,7 +1329,6 @@ def test_active_case_surface_is_minimal_and_single_file():
         "conventional_hbm_2x1.yaml",
         "orthogonal_si.yaml",
         "orthogonal_m3d_igzo.yaml",
-        "orthogonal_m3d_si.yaml",
     }
     assert {path.name for path in CASE_CONFIGS.glob("*.yaml")} == expected
     forbidden = {
@@ -1360,7 +1359,9 @@ def test_active_case_system_mapping_uses_resolved_power():
 
 
 def test_m3d_si_unresolved_is_na_not_zero():
-    path = CASE_CONFIGS / "orthogonal_m3d_si.yaml"
+    path = (
+        ROOT / "configs" / "legacy" / "unvalidated" /
+        "orthogonal_m3d_si.yaml")
     case = load_case_config(path)
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(case, project_root=ROOT, geometry=geometry)

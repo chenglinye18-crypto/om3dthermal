@@ -12,7 +12,9 @@ from om3dthermal.experiment import (
 
 
 ROOT = Path(__file__).parents[1]
-EXPERIMENT = ROOT / "configs" / "experiment" / "conditional_e2e_v0.yaml"
+EXPERIMENT = (
+    ROOT / "configs" / "experiment" /
+    "m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
 
 
 def test_formal_experiment_config_resolves_three_separate_layers() -> None:
@@ -34,6 +36,8 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
     assert platform.fixed_gpu_power_W == 300.0
     assert experiment.scenario.rho_values == (0.0, 1.0, 100.0, 1000.0)
     assert experiment.output_policy == "ERROR_IF_EXISTS"
+    assert experiment.experiment_id == (
+        "m3d_igzo_llama31_8b_decode_conditional_v0")
 
 
 def test_architecture_descriptors_do_not_duplicate_workload_or_scenario() -> None:

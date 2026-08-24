@@ -9,7 +9,9 @@ from om3dthermal.experiment import RESULT_FILES, run_experiment
 
 
 ROOT = Path(__file__).parents[1]
-CONFIG = ROOT / "configs" / "experiment" / "conditional_e2e_v0.yaml"
+CONFIG = (
+    ROOT / "configs" / "experiment" /
+    "m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
 
 
 def _fake_thermal(mapping):
