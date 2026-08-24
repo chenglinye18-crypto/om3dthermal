@@ -14,6 +14,26 @@ architecture bandwidth/write-energy/GPU-energy model.  See
 [`docs/architecture/E2E_ARCHITECTURE.md`](docs/architecture/E2E_ARCHITECTURE.md)
 for module boundaries and claim status.
 
+## Repository layout
+
+```text
+configs/       Versioned architecture, platform, workload, experiment, and legacy YAML
+docs/          Current architecture/audit/benchmark records and marked historical archive
+src/           Installable om3dthermal package
+tests/         Scientific semantics and regression gates
+third_party/   External-code declarations; pinned DreamRAM remains locally ignored
+ref/           Local papers/reference material (ignored; never committed)
+runs/          Legacy simulation outputs (ignored)
+results/       Formal E2E result bundles (ignored, created on demand)
+tools/         Local audit/conversion utilities (ignored unless deliberately promoted)
+```
+
+The repository root is reserved for project-level entry files only:
+`README.md`, `AGENTS.md`, `pyproject.toml`, `LICENSE`, and `.gitignore`.
+One-off probes, debug scripts, draft status files, and generated outputs must
+not be placed at the root. Superseded but scientifically useful text belongs
+under `docs/archive/` with an explicit historical warning.
+
 The current six-case experiment matrix and the authoritative mapping from
 configs to results are documented in
 [`docs/benchmarks/experiment_matrix.md`](docs/benchmarks/experiment_matrix.md).

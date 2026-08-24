@@ -11,6 +11,7 @@ dist/
 .venv/
 venv/
 runs/
+results/
 third_party/DreamRAM/
 
 # Local debug / scratch scripts (hidden dot-files at repo root)
