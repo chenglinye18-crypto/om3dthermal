@@ -55,6 +55,10 @@ conda activate om3dthermal
 python -m om3dthermal experiment configs\experiment\m3d_igzo_llama31_8b_decode_conditional_v0.yaml
 ```
 
+GPU dependencies are supplied by that Conda environment.  The project does
+not provide a pip GPU extra because installing separate CuPy/CUDA wheels over
+the canonical Conda stack creates a duplicate and unsupported runtime.
+
 The output is a checksummed, stage-separated bundle under `results/`.  A
 non-empty output directory is never overwritten.  The formal experiment uses
 `configs/cases/conventional_hbm_2x1.yaml` as the canonical Conventional HBM

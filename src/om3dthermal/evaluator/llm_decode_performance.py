@@ -52,7 +52,7 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from om3dthermal.workload.architecture_capacity import (
+from om3dthermal.evaluation import (
     ArchitectureCapacityFeasibility,
 )
 from om3dthermal.workload.llm_decode import LLMDecodeMetrics

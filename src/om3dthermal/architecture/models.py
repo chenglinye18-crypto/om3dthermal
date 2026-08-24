@@ -57,6 +57,53 @@ class ResolvedPacking(BaseModel):
         return self.architecture_id
 
 
+class ResolvedEnergyPrimitives(BaseModel):
+    """Architecture energy facts exposed without workload semantics."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    read_access_energy_pj_per_bit: float | None = Field(ge=0.0)
+    memory_internal_pj_per_bit: float | None = Field(ge=0.0)
+    vertical_pj_per_bit: float | None = Field(ge=0.0)
+    feol_route_pj_per_bit: float | None = Field(ge=0.0)
+    base_route_pj_per_bit: float | None = Field(ge=0.0)
+    interface_pj_per_bit: float | None = Field(ge=0.0)
+    source_status: str = Field(min_length=1)
+
+
+class ResolvedStaticPower(BaseModel):
+    """Static/reference power components before workload-rate composition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    refresh_power_W: float | None = Field(ge=0.0)
+    memory_background_power_W: float | None = Field(ge=0.0)
+    logic_background_power_W: float | None = Field(ge=0.0)
+    fixed_gpu_power_W: float = Field(ge=0.0)
+    source_status: str = Field(min_length=1)
+    completeness_status: Literal[
+        "RESOLVED",
+        "UNRESOLVED_LOGIC_BACKGROUND",
+    ]
+
+
+class ResolvedArchitectureFacts(BaseModel):
+    """Stable hardware facts consumed by workload-aware evaluation stages."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    architecture_id: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    role: Literal["baseline", "proposed", "ablation"]
+    canonical_case: Path
+    geometry_type: str = Field(min_length=1)
+    packing: ResolvedPacking
+    energy_primitives: ResolvedEnergyPrimitives
+    static_power: ResolvedStaticPower
+    provenance: tuple[ProvenanceRecord, ...] = ()
+
+
 @dataclass(frozen=True)
 class ResolvedArchitecture:
     """Compatibility aggregate around existing validated resolution objects."""

@@ -23,10 +23,12 @@ from om3dthermal.evaluator import (
     run_llm_decode_workload_thermal,
     validate_conditional_llm_decode_e2e_rows,
 )
+from om3dthermal.evaluation import evaluate_architecture_capacity_feasibility
 from om3dthermal.provenance import RunProvenance
+from om3dthermal.result import write_result_bundle
 from om3dthermal.workload import (
-    evaluate_architecture_capacity_feasibility,
     evaluate_llm_decode,
+    resolve_llm_decode_demand,
 )
 
 from .config import (
@@ -36,7 +38,6 @@ from .config import (
     load_platform_spec,
     load_workload_spec,
 )
-from .result_bundle import write_result_bundle
 
 
 @dataclass(frozen=True)
@@ -129,6 +130,7 @@ def run_experiment(
             "conditional_llm_decode_e2e requires thermal.enabled=true")
 
     workload = evaluate_llm_decode(workload_spec.decode)
+    workload_demand = resolve_llm_decode_demand(workload_spec, workload)
     resolved_architectures = tuple(
         resolve_architecture_spec(spec, project_root=root)
         for spec in architecture_specs
@@ -145,7 +147,7 @@ def run_experiment(
         if system.gpu_power_W != platform.fixed_gpu_power_W:
             raise ValueError("canonical case GPU power does not match platform")
         capacity = evaluate_architecture_capacity_feasibility(
-            workload,
+            workload_demand,
             resolved.packing,
             reserved_capacity_bytes=experiment.scenario.reserved_capacity_bytes,
         )
@@ -246,7 +248,11 @@ def run_experiment(
             architecture=[
                 _resolved_architecture_payload(item)
                 for item in resolved_architectures],
-            workload={"spec": workload_spec, "metrics": workload},
+            workload={
+                "spec": workload_spec,
+                "metrics": workload,
+                "demand": workload_demand,
+            },
             capacity=capacities,
             performance=performances,
             energy=energies,

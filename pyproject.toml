@@ -19,12 +19,6 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
-gpu = [
-  "cupy-cuda12x>=13,<14",
-  "nvidia-cuda-runtime-cu12>=12,<13; platform_system == 'Windows'",
-  "nvidia-cuda-nvrtc-cu12>=12,<13; platform_system == 'Windows'",
-  "nvidia-cublas-cu12>=12,<13; platform_system == 'Windows'",
-]
 
 [project.scripts]
 om3dthermal = "om3dthermal.cli:main"

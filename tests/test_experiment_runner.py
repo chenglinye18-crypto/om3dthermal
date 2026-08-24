@@ -104,6 +104,21 @@ def test_result_bundle_preserves_conditional_claim_boundaries(formal_run) -> Non
     assert all(row["write_energy_model_status"] == "NOT_VALIDATED" for row in rows)
 
 
+def test_result_bundle_persists_workload_demand_boundary(formal_run) -> None:
+    output = formal_run.output_dir
+    assert output is not None
+    workload = json.loads(
+        (output / "workload.json").read_text(encoding="utf-8")
+    )
+    demand = workload["demand"]
+    metrics = workload["metrics"]
+    assert demand["required_capacity_bytes"] == metrics["required_capacity_bytes"]
+    assert demand["read_bytes_per_output"] == metrics["read_bytes_per_token"]
+    assert demand["traffic_scope_status"] == (
+        "ALGORITHMIC_WORKLOAD_TRAFFIC_NOT_PHYSICAL_DRAM_TRAFFIC"
+    )
+
+
 def test_formal_runner_rejects_nonempty_output_before_evaluation(
         tmp_path: Path, monkeypatch) -> None:
     output = tmp_path / "existing"

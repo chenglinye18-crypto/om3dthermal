@@ -17,7 +17,7 @@ from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from om3dthermal.workload.capacity import CapacityFeasibilityMetrics
+from om3dthermal.evaluation import CapacityFeasibilityMetrics
 from om3dthermal.workload.llm_decode import LLMDecodeMetrics
 
 

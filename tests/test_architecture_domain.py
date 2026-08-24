@@ -2,8 +2,13 @@ from pathlib import Path
 
 import pytest
 
+from om3dthermal.adapters import (
+    extract_architecture_facts,
+    resolve_architecture_spec,
+)
 from om3dthermal.architecture import resolve_packing_from_legacy_power_result
 from om3dthermal.architecture_capacity import resolve_architecture_capacity
+from om3dthermal.experiment.config import load_architecture_spec
 from om3dthermal.power import (
     load_case_config,
     resolve_case_geometry,
@@ -39,3 +44,43 @@ def test_resolved_packing_is_bit_exact_with_existing_capacity(name: str) -> None
     assert packing.memory_plane_area_mm2 == legacy.memory_plane_area_mm2
     assert (packing.architecture_footprint_area_mm2
             == legacy.architecture_footprint_area_mm2)
+
+
+@pytest.mark.parametrize("name", CASES)
+def test_resolved_architecture_facts_are_exact_adapter_views(name: str) -> None:
+    spec = load_architecture_spec(
+        ROOT / "configs" / "architecture" / f"{name}.yaml",
+        project_root=ROOT,
+    )
+    resolved = resolve_architecture_spec(spec, project_root=ROOT)
+
+    facts = extract_architecture_facts(resolved)
+
+    assert facts.architecture_id == spec.architecture_id
+    assert facts.packing == resolved.packing
+    assert facts.energy_primitives.read_access_energy_pj_per_bit == (
+        resolved.system_power.memory_access_energy_pJ_per_bit
+    )
+    assert facts.energy_primitives.memory_internal_pj_per_bit == (
+        resolved.system_power.memory_result.E_memory_internal_pj_bit
+    )
+    assert facts.provenance == spec.provenance
+    assert facts.static_power.fixed_gpu_power_W == resolved.system_power.gpu_power_W
+    assert facts.static_power.refresh_power_W == (
+        resolved.system_power.memory_result.P_refresh_W
+    )
+
+
+def test_m3d_architecture_facts_preserve_unresolved_logic_background() -> None:
+    spec = load_architecture_spec(
+        ROOT / "configs" / "architecture" / "orthogonal_m3d_igzo.yaml",
+        project_root=ROOT,
+    )
+    facts = extract_architecture_facts(
+        resolve_architecture_spec(spec, project_root=ROOT)
+    )
+
+    assert facts.static_power.logic_background_power_W is None
+    assert facts.static_power.completeness_status == (
+        "UNRESOLVED_LOGIC_BACKGROUND"
+    )

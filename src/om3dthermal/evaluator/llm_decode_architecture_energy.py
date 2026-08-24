@@ -21,14 +21,12 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
-from om3dthermal.power.system import ResolvedSystemPower
-from om3dthermal.workload.architecture_capacity import (
+from om3dthermal.evaluation import (
     ArchitectureCapacityFeasibility,
-)
-from om3dthermal.workload.capacity import (
     CapacityFeasibilityMetrics,
     evaluate_capacity_feasibility,
 )
+from om3dthermal.power.system import ResolvedSystemPower
 from om3dthermal.workload.llm_decode import LLMDecodeMetrics
 
 from .llm_decode_energy import evaluate_llm_decode_memory_energy

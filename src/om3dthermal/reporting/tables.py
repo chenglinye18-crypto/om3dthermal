@@ -6,7 +6,7 @@ import csv
 from pathlib import Path
 from typing import Any, Sequence
 
-from om3dthermal.experiment.result_bundle import to_jsonable
+from om3dthermal.result.serialization import to_jsonable
 
 
 def write_e2e_summary_csv(rows: Sequence[Any], path: Path) -> None:

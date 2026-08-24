@@ -8,7 +8,7 @@ from typing import Literal, Sequence
 
 from pydantic import BaseModel
 
-from om3dthermal.workload.architecture_capacity import (
+from om3dthermal.evaluation import (
     ArchitectureCapacityFeasibility,
 )
 from om3dthermal.workload.llm_decode import LLMDecodeInput, LLMDecodeMetrics

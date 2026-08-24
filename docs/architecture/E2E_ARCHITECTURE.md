@@ -16,7 +16,8 @@ ArchitectureSpec + PlatformSpec + WorkloadSpec
        existing canonical case resolution
                   |
                   v
-capacity -> performance -> conditional memory energy -> workload power
+workload demand -> capacity -> performance -> conditional memory energy
+                                      -> workload power
                   |
                   v
      public compatibility thermal adapter -> frozen GPU-PCG -> Tmax
@@ -29,12 +30,14 @@ capacity -> performance -> conditional memory energy -> workload power
 
 | Package | Owns | Must not own |
 |---|---|---|
-| `architecture/` | architecture identity and resolved packing facts | workload or sweep choices |
+| `architecture/` | architecture identity, packing, energy/static fact contracts | workload or sweep choices |
 | `platform/` | shared package/GPU facts | memory-architecture primitives |
-| `workload/` | model shape, precision, batch/context, traffic/FLOPs | hardware feasibility or thermal semantics |
-| `evaluator/` | typed cross-domain calculations and consistency gates | YAML loading or report formatting |
+| `workload/` | model shape, precision, batch/context, architecture-independent demand | hardware feasibility or thermal semantics |
+| `evaluation/` | generic workload-to-hardware gates, beginning with capacity | application formulas or thermal solving |
+| `evaluator/` | compatibility home for conditional decode stage calculators during migration | YAML loading or report formatting |
 | `thermal/` | mesh/operator/solver and public case adapter | LLM accounting |
-| `experiment/` | configuration composition, orchestration, result bundle | scientific formulas |
+| `experiment/` | configuration composition and orchestration | scientific formulas or serialization |
+| `result/` | serialization, checksummed bundles, and manifests | scientific calculation |
 | `provenance/` | source/status and run-environment records | inferred scientific claims |
 | `reporting/` | presentation-only tables | recalculation |
 
@@ -94,7 +97,12 @@ No directory structure or PASS status upgrades those scientific claims.
 
 ## Compatibility and migration rule
 
-New work should enter through the domain specs and formal experiment runner.
+New work should enter through the domain specs, workload-demand contract, and
+formal experiment runner.  `workload.capacity` and
+`workload.architecture_capacity` remain compatibility import locations; new
+callers use `evaluation`.  Result serialization is owned by `result/`, while
+`experiment.result_bundle` remains a compatibility import.
+
 Validated legacy calculators remain in place until a replacement produces
 bit-equivalent typed outputs and passes the existing regression gates.  Remove
 compatibility adapters only in a separately reviewed cleanup after callers and
