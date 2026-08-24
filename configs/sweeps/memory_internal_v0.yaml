@@ -64,6 +64,6 @@ sweeps:
     parameter: m3d_subarray_cols
     values: [256, 512, 1024]
 
-# Output directory is created if missing. Stable across runs so the
-# benchmark can be appended/re-run.
-output_dir: runs/sweeps/memory_internal_v0_pcg_gpu
+# Generated sensitivity results are separate from retired legacy thermal runs.
+# The directory is created if missing and remains ignored by Git.
+output_dir: results/sensitivity/memory_internal_v0_pcg_gpu
