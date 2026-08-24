@@ -39,9 +39,12 @@ and a standalone log were not counted as thermal outcomes.
 - M3D 8-layer matched-39.2-Tb/s all-read, GPU 414 W and 300 W.
 - CPU/GPU backend comparison for the legacy Conventional 2x2 case.
 
-These outputs were generated artifacts and were ignored by Git. They cannot be
-recovered from Git after deletion; reproduction requires rerunning a selected,
-versioned experiment under the current environment.
+The bulk temperature/power fields were generated artifacts ignored by Git and
+cannot be recovered from Git after deletion. Twenty small legacy
+`solver_history.csv` / `steady_state_summary.json` files had been tracked; the
+retirement commit removes them from the active tree, so those summaries remain
+recoverable from Git history. Reproducing full fields requires rerunning a
+selected, versioned experiment under the current environment.
 
 ## Preserved MAT/sensitivity question
 
