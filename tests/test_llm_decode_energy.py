@@ -163,7 +163,6 @@ def test_per_token_traffic_is_not_batch_scaled_again() -> None:
         n_layers=2,
         n_heads_q=2,
         n_heads_kv=1,
-        d_head=2,
         d_model=4,
         d_ff=8,
         vocab_size=16,

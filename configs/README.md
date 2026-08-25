@@ -37,6 +37,9 @@ The files under `cases/` predate the new layered experiment interface. Their
 top-level `workload` block is an analytical memory-activity operating point
 used by the existing power backend; it is not the LLM workload definition.
 The LLM workload source of truth is `workload/llama31_8b_decode_b1_s131072.yaml`.
+For the supported standard attention decomposition, users provide `d_model`
+and `n_heads_q`; `d_head = d_model / n_heads_q` is an exact software-derived
+field persisted in resolved results, not a duplicate YAML input.
 
 Do not copy the 39.2 Tb/s value from a case into an architecture capability
 claim. In the formal experiment it remains an explicit matched-reference

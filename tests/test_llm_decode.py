@@ -24,7 +24,6 @@ def _make_input(**overrides) -> LLMDecodeInput:
         "n_layers": 32,
         "n_heads_q": 32,
         "n_heads_kv": 8,
-        "d_head": 128,
         "d_model": 4096,
         "d_ff": 14336,
         "vocab_size": 128_256,
@@ -214,7 +213,6 @@ def test_llama_31_8b_hand_check() -> None:
         n_layers=32,
         n_heads_q=32,
         n_heads_kv=8,
-        d_head=128,
         d_model=4096,
         d_ff=14336,
         vocab_size=128_256,
@@ -263,9 +261,20 @@ def test_n_heads_kv_must_not_exceed_n_heads_q() -> None:
         _make_input(n_heads_q=8, n_heads_kv=16)
 
 
-def test_d_model_must_equal_hq_times_dhead() -> None:
+def test_d_model_must_be_divisible_by_n_heads_q() -> None:
     with pytest.raises(ValueError):
-        _make_input(d_model=4096, n_heads_q=32, d_head=64)  # 32*64=2048 != 4096
+        _make_input(d_model=4095, n_heads_q=32)
+
+
+def test_d_head_is_derived_and_serialized() -> None:
+    inp = _make_input(d_model=4096, n_heads_q=32)
+    assert inp.d_head == 128
+    assert inp.model_dump()["d_head"] == 128
+
+
+def test_explicit_d_head_input_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        _make_input(d_head=128)
 
 
 def test_runtime_bytes_may_be_zero() -> None:
@@ -353,8 +362,7 @@ def test_sub_byte_kv_accounting_is_not_truncated() -> None:
         context_length=1,
         n_heads_q=1,
         n_heads_kv=1,
-        d_head=1,
-        d_model=1,  # 1 * 1 == 1
+        d_model=1,
         d_ff=1,
         vocab_size=1,
         weight_bits=8,
@@ -374,12 +382,11 @@ def test_nonuniform_gqa_grouping_rejected() -> None:
     """Hq=6, Hkv=4 with consistent d_model must raise ValidationError.
 
     v0 supports only uniform GQA/MQA/MHA, so ``Hq % Hkv != 0`` is
-    rejected.  The d_model consistency check must also pass
-    (d_model = Hq * Dhead = 6 * 64 = 384).
+    rejected.  The derived head dimension remains integral: 384 / 6 = 64.
     """
     with pytest.raises(ValidationError):
         _make_input(
-            n_heads_q=6, n_heads_kv=4, d_head=64, d_model=384,
+            n_heads_q=6, n_heads_kv=4, d_model=384,
         )
 
 
@@ -398,16 +405,12 @@ def test_uniform_gqa_mqa_mha_accepted(hkv: int, hq: int) -> None:
     """All standard uniform-grouped head configurations must be
     accepted by the input validators.
 
-    For each pair, d_head is set so that d_model = Hq * d_head is
-    consistent with the default 4096.  d_head=128 is the LLaMA-3.1
-    head dimension, so Hq must be 32 for d_model=4096.  For the
-    non-default Hq values used in this matrix, d_head and d_model
-    are recomputed to satisfy d_model = Hq * d_head.
+    For each pair, d_model is selected so the derived head dimension is 64.
     """
     d_head = 64  # fits any Hq in the parametrize set with d_model = Hq*64
     d_model = hq * d_head
     inp = _make_input(
-        n_heads_q=hq, n_heads_kv=hkv, d_head=d_head, d_model=d_model,
+        n_heads_q=hq, n_heads_kv=hkv, d_model=d_model,
     )
     # If construction succeeded, evaluation must also succeed.
     m = evaluate_llm_decode(inp)

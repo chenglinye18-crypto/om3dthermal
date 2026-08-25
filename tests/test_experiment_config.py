@@ -33,6 +33,13 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
     assert workload.workload_id == "LLaMA-3.1-8B-class-B1-S131072-v0"
     assert workload.decode.batch_size == 1
     assert workload.decode.context_length == 131072
+    assert workload.decode.d_head == 128
+    assert workload.decode.model_dump()["d_head"] == 128
+    assert any(
+        item.record_id == "derived_attention_head_dimension"
+        and item.classification == "SOFTWARE_DERIVED"
+        for item in workload.provenance
+    )
     assert platform.fixed_gpu_power_W == 300.0
     assert experiment.scenario.rho_values == (0.0, 1.0, 100.0, 1000.0)
     assert not hasattr(experiment.scenario, "thermal")
@@ -56,6 +63,7 @@ def test_workload_config_does_not_contain_hardware_or_thermal_fields() -> None:
         "llama31_8b_decode_b1_s131072.yaml").read_text(encoding="utf-8"))
     assert not set(raw).intersection({"architecture", "power", "thermal"})
     assert "matched_payload_bandwidth_bits_per_second" not in raw["decode"]
+    assert "d_head" not in raw["decode"]
 
 
 def test_duplicate_or_negative_rho_is_rejected(tmp_path: Path) -> None:

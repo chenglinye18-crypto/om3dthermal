@@ -6,7 +6,6 @@ decode:
   n_layers: 32
   n_heads_q: 32
   n_heads_kv: 8
-  d_head: 128
   d_model: 4096
   d_ff: 14336
   vocab_size: 128256
@@ -23,3 +22,8 @@ provenance:
     classification: MODELING_CHOICE
     source: frozen B1-R2 analytical decode specification
     status: PASS
+  - record_id: derived_attention_head_dimension
+    classification: SOFTWARE_DERIVED
+    source: LLM decode workload dimensions
+    status: EXACT_INTEGER_DERIVATION
+    transformation: d_head = d_model / n_heads_q

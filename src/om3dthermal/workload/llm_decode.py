@@ -30,7 +30,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -40,17 +47,19 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class LLMDecodeInput(BaseModel):
     """Input specification for a single LLM autoregressive decode workload.
 
-    All dimensional fields are positive scalars.  No silent inference of
-    missing dimensions is performed; the caller must supply every field.
+    All user-supplied dimensional fields are positive scalars.  The attention
+    head dimension is derived exactly as ``d_model / n_heads_q`` and remains
+    present in serialized resolved inputs.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # Model architecture
     n_param: int = Field(gt=0, description="Total trainable parameters")
     n_layers: int = Field(gt=0, description="Transformer decoder layers (L)")
     n_heads_q: int = Field(gt=0, description="Query heads (Hq)")
     n_heads_kv: int = Field(gt=0, description="Key/Value heads (Hkv)")
-    d_head: int = Field(gt=0, description="Attention head dimension")
-    d_model: int = Field(gt=0, description="Hidden dimension (Hq * Dhead)")
+    d_model: int = Field(gt=0, description="Transformer hidden dimension")
     d_ff: int = Field(gt=0, description="MLP intermediate dimension")
     vocab_size: int = Field(gt=0, description="Vocabulary size (V)")
 
@@ -88,7 +97,7 @@ class LLMDecodeInput(BaseModel):
         ),
     )
 
-    @field_validator("n_layers", "n_heads_q", "n_heads_kv", "d_head", "d_model",
+    @field_validator("n_layers", "n_heads_q", "n_heads_kv", "d_model",
                      "d_ff", "vocab_size", "batch_size", "weight_bits", "kv_bits")
     @classmethod
     def _positive_ints(cls, v: int) -> int:
@@ -124,15 +133,20 @@ class LLMDecodeInput(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _dmodel_consistency(self) -> "LLMDecodeInput":
-        """d_model must equal Hq * Dhead for the standard decomposition."""
-        expected = self.n_heads_q * self.d_head
-        if expected != self.d_model:
+    def _head_dimension_is_integral(self) -> "LLMDecodeInput":
+        """The standard v0 attention head dimension must be integral."""
+        if self.d_model % self.n_heads_q != 0:
             raise ValueError(
-                f"d_model ({self.d_model}) must equal n_heads_q * d_head "
-                f"({expected})"
+                f"d_model ({self.d_model}) must be evenly divisible by "
+                f"n_heads_q ({self.n_heads_q})"
             )
         return self
+
+    @computed_field(return_type=int)
+    @property
+    def d_head(self) -> int:
+        """SOFTWARE_DERIVED attention head dimension."""
+        return self.d_model // self.n_heads_q
 
 
 # ---------------------------------------------------------------------------

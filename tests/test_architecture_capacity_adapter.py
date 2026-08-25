@@ -53,7 +53,6 @@ def _frozen_workload():
         n_layers=32,
         n_heads_q=32,
         n_heads_kv=8,
-        d_head=128,
         d_model=4096,
         d_ff=14336,
         vocab_size=128_256,
