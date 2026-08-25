@@ -52,7 +52,12 @@ wrap them through explicit adapters while migration is in progress.
 - `configs/platform/`: facts shared across the compared memory architectures.
 - `configs/workload/`: application/model semantics only.
 - `configs/experiment/`: references to the above plus matched scenario,
-  sweep, policy, thermal execution, and output choices.
+  sweep, policy, and output choices.
+
+The formal GPU-PCG backend, convergence tolerances, iteration limit, check
+interval, and fresh initial temperature are a frozen internal solver contract,
+not experiment inputs.  They are persisted in typed thermal results for
+reproducibility but intentionally omitted from user-facing YAML.
 
 Architecture configs must not contain batch/context or matched bandwidth.
 Workload configs must not contain capacity, pJ/bit, power, or thermal fields.

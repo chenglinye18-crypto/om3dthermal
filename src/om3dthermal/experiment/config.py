@@ -18,16 +18,6 @@ class _StrictFrozenModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-class ThermalExecutionSpec(_StrictFrozenModel):
-    enabled: bool = True
-    backend: Literal["gpu_pcg"] = "gpu_pcg"
-    relative_residual_tolerance: Literal[0.001] = 0.001
-    max_temperature_update_tolerance_K: Literal[0.01] = 0.01
-    max_iterations: Literal[100000] = 100000
-    check_interval: Literal[10] = 10
-    initial_temperature_K: Literal[293.15] = 293.15
-
-
 class ExperimentScenarioSpec(_StrictFrozenModel):
     matched_payload_bandwidth_bits_per_second: float = Field(gt=0.0)
     bandwidth_status: Literal[
@@ -40,7 +30,6 @@ class ExperimentScenarioSpec(_StrictFrozenModel):
     unresolved_logic_background_policy: dict[
         str, Literal["REQUIRE_RESOLVED", "EXISTING_PLACEHOLDER_ZERO"]
     ]
-    thermal: ThermalExecutionSpec = ThermalExecutionSpec()
 
     @field_validator("rho_values")
     @classmethod

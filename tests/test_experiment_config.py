@@ -35,6 +35,7 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
     assert workload.decode.context_length == 131072
     assert platform.fixed_gpu_power_W == 300.0
     assert experiment.scenario.rho_values == (0.0, 1.0, 100.0, 1000.0)
+    assert not hasattr(experiment.scenario, "thermal")
     assert experiment.output_policy == "ERROR_IF_EXISTS"
     assert experiment.experiment_id == (
         "m3d_igzo_llama31_8b_decode_conditional_v0")
@@ -68,4 +69,16 @@ def test_duplicate_or_negative_rho_is_rejected(tmp_path: Path) -> None:
     raw["scenario"]["rho_values"] = [-1]
     path.write_text(yaml.safe_dump(raw), encoding="utf-8")
     with pytest.raises(ValueError, match="non-negative"):
+        load_experiment_spec(path, project_root=ROOT)
+
+
+def test_frozen_thermal_execution_cannot_be_overridden_in_experiment(
+        tmp_path: Path) -> None:
+    raw = yaml.safe_load(EXPERIMENT.read_text(encoding="utf-8"))
+    assert "thermal" not in raw["scenario"]
+    raw["scenario"]["thermal"] = {"backend": "gpu_pcg"}
+    path = tmp_path / "thermal_override.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="thermal"):
         load_experiment_spec(path, project_root=ROOT)

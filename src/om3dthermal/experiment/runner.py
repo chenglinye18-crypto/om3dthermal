@@ -125,10 +125,6 @@ def run_experiment(
     if set(policies) != set(architecture_ids):
         raise ValueError(
             "unresolved logic-background policies must exactly match architectures")
-    if not experiment.scenario.thermal.enabled:
-        raise ValueError(
-            "conditional_llm_decode_e2e requires thermal.enabled=true")
-
     workload = evaluate_llm_decode(workload_spec.decode)
     workload_demand = resolve_llm_decode_demand(workload_spec, workload)
     resolved_architectures = tuple(
@@ -228,7 +224,7 @@ def run_experiment(
         execution_started_utc=started,
         execution_finished_utc=datetime.now(timezone.utc).isoformat(),
         environment={
-            "thermal_backend": experiment.scenario.thermal.backend,
+            "thermal_backend": thermals[0].thermal_backend,
             "bandwidth_capability_status": "NOT_VALIDATED",
             "write_energy_model_status": "NOT_VALIDATED",
             "gpu_energy_model_status": "NOT_AVAILABLE",

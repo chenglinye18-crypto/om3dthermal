@@ -3,7 +3,6 @@
 from .config import (
     ExperimentScenarioSpec,
     ExperimentSpec,
-    ThermalExecutionSpec,
     load_architecture_spec,
     load_experiment_spec,
     load_platform_spec,
@@ -17,7 +16,6 @@ __all__ = [
     "ExperimentSpec",
     "ExperimentRunResult",
     "RESULT_FILES",
-    "ThermalExecutionSpec",
     "load_architecture_spec",
     "load_experiment_spec",
     "load_platform_spec",
