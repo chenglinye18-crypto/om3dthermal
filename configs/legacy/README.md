@@ -11,3 +11,7 @@ rather than analytical memory-power sources.
 members of the active comparison. In particular, `orthogonal_m3d_si.yaml`
 has no validated memory-power primitive and must not be presented as the
 Orthogonal M3D-IGZO proposed design or as a fourth canonical case.
+
+`sweeps/` contains retired sensitivity question definitions. They are not
+formal E2E inputs and must be run only through an explicit legacy sweep command
+against a documented current baseline.

@@ -39,7 +39,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def test_load_sweep_config_basic():
     cfg = load_sweep_config(
-        REPO_ROOT / "configs" / "sweeps" / "memory_internal_v0.yaml")
+        REPO_ROOT / "configs" / "legacy" / "sweeps" /
+        "memory_internal_v0.yaml")
     assert cfg.name == "memory_internal_v0"
     assert cfg.mode == "ofat"
     assert cfg.thermal is True
@@ -107,7 +108,8 @@ def test_run_sweep_applies_backend_and_output_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(sweep_module, "_enum_axes", lambda config: iter(()))
     destination = tmp_path / "pcg_results"
     result = sweep_module.run_sweep(
-        REPO_ROOT / "configs" / "sweeps" / "memory_internal_v0.yaml",
+        REPO_ROOT / "configs" / "legacy" / "sweeps" /
+        "memory_internal_v0.yaml",
         repo_root=REPO_ROOT,
         thermal_backend_override="gpu_pcg",
         output_dir_override=destination,
@@ -260,7 +262,8 @@ def test_system_metrics_extracts_energy_and_power_from_memory_result(
 
 def test_enum_axes_total_point_count_is_34():
     cfg = load_sweep_config(
-        REPO_ROOT / "configs" / "sweeps" / "memory_internal_v0.yaml")
+        REPO_ROOT / "configs" / "legacy" / "sweeps" /
+        "memory_internal_v0.yaml")
     points = list(_enum_axes(cfg))
     assert len(points) == 34
     cases_seen = {p[0] for p in points}

@@ -1,5 +1,9 @@
-﻿name: memory_internal_v0
+name: memory_internal_v0
 
+# RETIRED QUESTION DEFINITION. This OFAT configuration is not part of the
+# formal workload-aware E2E input surface. Run it only as an explicitly
+# authorized legacy sensitivity study against a stated current baseline.
+#
 # OFAT = One Factor At A Time. The canonical case is loaded fresh for every
 # point; only one parameter is overridden per point. Do not add Cartesian
 # product entries.

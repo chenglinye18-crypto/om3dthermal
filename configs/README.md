@@ -28,7 +28,6 @@ priority.
 | `workload/` | LLM model/decode semantics such as batch, context, precision, and runtime footprint | yes for workload studies |
 | `platform/` | facts shared across architecture comparisons, currently fixed GPU/package policy | yes when platform changes |
 | `cases/` | three validated compatibility cases supplying existing geometry/power/thermal physics | internal source of truth |
-| `sweeps/` | targeted primitive sensitivity definitions; not automatically current E2E evidence | only for authorized sensitivity work |
 | `legacy/` | historical, fixed-power, fixture, or explicitly unvalidated configs | no |
 
 ## Important compatibility boundary
@@ -60,7 +59,8 @@ The active M3D case is `cases/orthogonal_m3d_igzo.yaml`. It retains:
 
 ## Sensitivity policy
 
-`sweeps/memory_internal_v0.yaml` preserves the old OFAT question definition.
-Its retired numerical results must not be reused as current paper data. Any
-future MAT/RD-per-ACT study should write to `results/sensitivity/` and be rerun
-against a stated current baseline after the E2E claim target is fixed.
+`legacy/sweeps/memory_internal_v0.yaml` preserves the retired OFAT question
+definition outside the formal input surface. Its old numerical results must
+not be reused as current paper data. Any future MAT/RD-per-ACT study should
+write to `results/sensitivity/` and be rerun against a stated current baseline
+after the E2E claim target is fixed.

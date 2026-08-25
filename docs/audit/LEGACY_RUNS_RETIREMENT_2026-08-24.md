@@ -49,7 +49,7 @@ selected, versioned experiment under the current environment.
 ## Preserved MAT/sensitivity question
 
 The sweep definition remains versioned at
-`configs/sweeps/memory_internal_v0.yaml`.  It is an OFAT design, not a
+`configs/legacy/sweeps/memory_internal_v0.yaml`.  It is an OFAT design, not a
 Cartesian sweep:
 
 - Conventional HBM: 8 RD-per-ACT points, 3 MAT-row points, 3 MAT-column points.
