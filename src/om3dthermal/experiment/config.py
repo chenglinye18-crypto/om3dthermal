@@ -10,7 +10,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from om3dthermal.architecture import ArchitectureSpec
-from om3dthermal.platform import PlatformSpec
+from om3dthermal.platform import HostOffloadSpec, PlatformSpec
 from om3dthermal.workload import WorkloadSpec
 from om3dthermal.provenance import ProvenanceRecord
 from om3dthermal.serving import MeasuredBatchCurvePoint
@@ -131,6 +131,29 @@ class ServingGPUPerformanceSpec(_StrictFrozenModel):
         return self
 
 
+class ServingSensitivityPointSpec(_StrictFrozenModel):
+    sensitivity_id: str = Field(min_length=1)
+    host_offload: HostOffloadSpec
+    host_overlap_policy: Literal[
+        "NO_OVERLAP", "FULL_OVERLAP", "PARTIAL_OVERLAP"]
+    host_overlap_fraction: float = Field(ge=0.0, le=1.0)
+    status: Literal[
+        "MEASURED_CROSS_SYSTEM_SENSITIVITY",
+        "PARAMETRIC_SENSITIVITY",
+        "ANALYTICAL_UPPER_BOUND",
+    ]
+
+    @model_validator(mode="after")
+    def _resolved_host_and_overlap(self) -> "ServingSensitivityPointSpec":
+        if self.host_offload.status != "RESOLVED":
+            raise ValueError("serving sensitivity host offload must be RESOLVED")
+        if self.host_overlap_policy == "NO_OVERLAP" and self.host_overlap_fraction != 0:
+            raise ValueError("NO_OVERLAP requires zero overlap fraction")
+        if self.host_overlap_policy == "FULL_OVERLAP" and self.host_overlap_fraction != 1:
+            raise ValueError("FULL_OVERLAP requires overlap fraction one")
+        return self
+
+
 class ServingScenarioSpec(_StrictFrozenModel):
     requested_requests: tuple[int, ...]
     reserved_capacity_bytes: int | float = Field(ge=0)
@@ -139,6 +162,7 @@ class ServingScenarioSpec(_StrictFrozenModel):
     host_overlap_fraction: float = Field(ge=0.0, le=1.0)
     gpu_performance: ServingGPUPerformanceSpec
     capacity_references: tuple[CapacityReferenceSpec, ...] = ()
+    sensitivity_points: tuple[ServingSensitivityPointSpec, ...] = ()
 
     @field_validator("requested_requests")
     @classmethod
@@ -160,6 +184,9 @@ class ServingScenarioSpec(_StrictFrozenModel):
         ids = [reference.reference_id for reference in self.capacity_references]
         if len(set(ids)) != len(ids):
             raise ValueError("capacity reference IDs must be unique")
+        sensitivity_ids = [point.sensitivity_id for point in self.sensitivity_points]
+        if len(set(sensitivity_ids)) != len(sensitivity_ids):
+            raise ValueError("serving sensitivity IDs must be unique")
         return self
 
 
@@ -172,7 +199,7 @@ class ServingExperimentSpec(_StrictFrozenModel):
     workload_config: Path
     serving: ServingScenarioSpec
     output_dir: Path
-    output_policy: Literal["ERROR_IF_EXISTS"] = "ERROR_IF_EXISTS"
+    output_policy: Literal["ERROR_IF_EXISTS", "OVERWRITE"] = "ERROR_IF_EXISTS"
 
     @field_validator("architecture_configs")
     @classmethod

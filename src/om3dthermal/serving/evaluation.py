@@ -47,6 +47,9 @@ class CapacityAwareServingResult(BaseModel):
     host_read_bytes_per_step: float
     host_write_bytes_per_step: float
     host_transfer_bytes_per_step: float
+    host_memory_bandwidth_GBps: float | None
+    host_device_link_bandwidth_GBps: float | None
+    host_offload_efficiency: float | None
     host_effective_bandwidth_bytes_per_second: float | None
     host_transfer_time_ms: float | None
     host_penalty_time_ms: float | None
@@ -252,6 +255,11 @@ def _common(
         "local_capacity_utilization": residency.local_capacity_utilization,
         "host_effective_bandwidth_bytes_per_second": (
             host_offload.effective_bandwidth_bytes_per_second),
+        "host_memory_bandwidth_GBps": (
+            host_offload.host_memory_bandwidth_GBps),
+        "host_device_link_bandwidth_GBps": (
+            host_offload.host_device_link_bandwidth_GBps),
+        "host_offload_efficiency": host_offload.host_offload_efficiency,
         "host_overlap_policy": overlap.policy,
         "host_overlap_fraction": overlap.overlap_fraction,
         "capacity_status": residency.capacity_status,

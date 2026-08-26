@@ -121,6 +121,21 @@ def test_spill_read_write_close_and_cannot_improve_performance() -> None:
     assert spilled.aggregate_tokens_per_s <= local.aggregate_tokens_per_s
 
 
+def test_increasing_effective_host_bandwidth_cannot_worsen_performance() -> None:
+    kwargs = dict(
+        architecture="test", workload_id="w", workload=_input(),
+        capacity=_capacity(8), requested_requests=2,
+        overlap=HostOverlapSpec(policy="NO_OVERLAP", overlap_fraction=0),
+        gpu_model=_gpu(),
+    )
+    slow = evaluate_capacity_aware_serving(
+        **kwargs, host_offload=_host(1, 1, 0.5))
+    fast = evaluate_capacity_aware_serving(
+        **kwargs, host_offload=_host(1, 1, 1.0))
+    assert fast.host_transfer_time_ms <= slow.host_transfer_time_ms
+    assert fast.aggregate_tokens_per_s >= slow.aggregate_tokens_per_s
+
+
 def test_overlap_penalty_ordering() -> None:
     kwargs = dict(
         architecture="test", workload_id="w", workload=_input(),

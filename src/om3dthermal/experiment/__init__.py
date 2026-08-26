@@ -19,7 +19,12 @@ from .m3d_sensitivity import (
     M3DParameterSensitivityResult,
     run_m3d_parameter_sensitivity,
 )
-from .serving_runner import ServingExperimentRunResult, run_serving_experiment
+from .serving_runner import (
+    ServingExperimentRunResult,
+    ServingSensitivityRunResult,
+    run_serving_experiment,
+    write_serving_experiment_csvs,
+)
 
 __all__ = [
     "ExperimentScenarioSpec",
@@ -28,6 +33,7 @@ __all__ = [
     "CapacityReferenceSpec",
     "ServingExperimentSpec",
     "ServingExperimentRunResult",
+    "ServingSensitivityRunResult",
     "ServingGPUPerformanceSpec",
     "ServingScenarioSpec",
     "RESULT_FILES",
@@ -38,6 +44,7 @@ __all__ = [
     "load_workload_spec",
     "run_experiment",
     "run_serving_experiment",
+    "write_serving_experiment_csvs",
     "M3DParameterSensitivityResult",
     "run_m3d_parameter_sensitivity",
     "write_result_bundle",

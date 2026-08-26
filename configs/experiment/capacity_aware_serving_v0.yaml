@@ -19,12 +19,78 @@ serving:
     measured_points: []
   capacity_references:
     - reference_id: modern_high_capacity_hbm
-      status: UNRESOLVED
-      usable_capacity_bytes: null
+      status: RESOLVED
+      usable_capacity_bytes: 288000000000
       provenance:
-        - record_id: modern_hbm_capacity_reference_unresolved_v0
-          classification: NOT_VALIDATED
-          source: no capacity value selected for the formal v0 experiment
-          status: UNRESOLVED_REQUIRES_EXPLICIT_EXTERNAL_SOURCE
+        - record_id: nvidia_b300_288gb_hbm3e_capacity_v0
+          classification: MATCHED_REFERENCE
+          source: https://docs.nvidia.com/enterprise-reference-architectures/hgx-ai-factory/latest/components.html
+          source_location: Table 1, NVIDIA B300 SXM memory per GPU
+          status: CAPACITY_ONLY_REFERENCE_VENDOR_REPORTED_2026_PRODUCT
+          transformation: 288 vendor decimal GB = 288000000000 bytes; experiment reserve remains zero
+          notes: NVIDIA B300, 288 GB HBM3e per GPU. Bandwidth, power, compute, and thermal properties are not imported.
+  sensitivity_points:
+    - sensitivity_id: published_h100_h2d_51_32_no_overlap
+      status: MEASURED_CROSS_SYSTEM_SENSITIVITY
+      host_overlap_policy: NO_OVERLAP
+      host_overlap_fraction: 0.0
+      host_offload:
+        status: RESOLVED
+        host_memory_bandwidth_GBps: 460.8
+        host_device_link_bandwidth_GBps: 64.0
+        host_offload_efficiency: 0.801875
+        provenance:
+          - record_id: published_h100_h2d_51_32_gbps_v0
+            classification: PAPER_REPORTED
+            source: https://d-nb.info/1383883793/34
+            source_location: Toubkal paper, Table 23 and discussion, H100 host-device bandwidth
+            status: MEASURED_CROSS_SYSTEM_SENSITIVITY_NOT_PLATFORM_NOMINAL
+            transformation: eta = 51.32 / min(460.8, 64.0) = 0.801875
+            notes: Dell XE8640 with H100-SXM5; used only as a nearby measured effective-bandwidth sensitivity.
+    - sensitivity_id: pcie5_one_direction_upper_no_overlap
+      status: ANALYTICAL_UPPER_BOUND
+      host_overlap_policy: NO_OVERLAP
+      host_overlap_fraction: 0.0
+      host_offload:
+        status: RESOLVED
+        host_memory_bandwidth_GBps: 460.8
+        host_device_link_bandwidth_GBps: 64.0
+        host_offload_efficiency: 1.0
+        provenance:
+          - record_id: pcie5_one_direction_zero_overhead_upper_v0
+            classification: MODELING_CHOICE
+            source: NVIDIA H100 PCIe Gen5 128 GB/s bidirectional vendor capability
+            status: ANALYTICAL_UPPER_BOUND_NOT_REALISTIC_NOMINAL
+            transformation: 128 / 2 = 64 GB/s one direction and eta = 1
+    - sensitivity_id: nominal_h2d_partial_overlap_0_5
+      status: PARAMETRIC_SENSITIVITY
+      host_overlap_policy: PARTIAL_OVERLAP
+      host_overlap_fraction: 0.5
+      host_offload:
+        status: RESOLVED
+        host_memory_bandwidth_GBps: 460.8
+        host_device_link_bandwidth_GBps: 64.0
+        host_offload_efficiency: 0.878125
+        provenance:
+          - record_id: nominal_h2d_partial_overlap_v0
+            classification: MODELING_CHOICE
+            source: formal 56.2 GB/s host-offload anchor
+            status: PARAMETRIC_OVERLAP_SENSITIVITY_NOT_NOMINAL
+            transformation: retain nominal bandwidth and set overlap fraction to 0.5
+    - sensitivity_id: nominal_h2d_full_overlap_upper
+      status: ANALYTICAL_UPPER_BOUND
+      host_overlap_policy: FULL_OVERLAP
+      host_overlap_fraction: 1.0
+      host_offload:
+        status: RESOLVED
+        host_memory_bandwidth_GBps: 460.8
+        host_device_link_bandwidth_GBps: 64.0
+        host_offload_efficiency: 0.878125
+        provenance:
+          - record_id: nominal_h2d_full_overlap_upper_v0
+            classification: MODELING_CHOICE
+            source: formal 56.2 GB/s host-offload anchor
+            status: MATHEMATICAL_OVERLAP_UPPER_BOUND_NOT_REALISTIC_NOMINAL
+            transformation: retain nominal bandwidth and set overlap fraction to 1.0
 output_dir: results/capacity_aware_serving_v0
-output_policy: ERROR_IF_EXISTS
+output_policy: OVERWRITE
