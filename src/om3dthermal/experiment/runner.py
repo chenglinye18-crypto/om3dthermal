@@ -38,6 +38,10 @@ from .config import (
     load_platform_spec,
     load_workload_spec,
 )
+from .m3d_sensitivity import (
+    M3DParameterSensitivityResult,
+    run_m3d_parameter_sensitivity,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,7 @@ class ExperimentRunResult:
     rows: tuple[ConditionalLLMDecodeE2ERow, ...]
     output_dir: Path | None
     provenance: RunProvenance
+    m3d_parameter_sensitivity: M3DParameterSensitivityResult | None = None
 
 
 def _project_root(path: Path) -> Path:
@@ -194,6 +199,25 @@ def run_experiment(
         expected_architecture_ids=architecture_ids,
         expected_rhos=experiment.scenario.rho_values,
     )
+    sensitivity_result = None
+    sensitivity = experiment.scenario.m3d_parameter_sensitivity
+    if sensitivity is not None:
+        if sensitivity.architecture_id not in architecture_ids:
+            raise ValueError(
+                "M3D sensitivity architecture is absent from experiment")
+        index = architecture_ids.index(sensitivity.architecture_id)
+        resolved = resolved_architectures[index]
+        sensitivity_result = run_m3d_parameter_sensitivity(
+            case=resolved.case,
+            system=resolved.system_power,
+            workload=workload,
+            capacity=capacities[index],
+            performance=performances[index],
+            interface_energy_values_pj_per_bit=(
+                sensitivity.interface_energy_pj_per_bit),
+            logic_background_values_W=sensitivity.logic_background_w,
+            thermal_runner=run_llm_decode_workload_thermal,
+        )
 
     input_paths = {
         "experiment": path,
@@ -259,6 +283,7 @@ def run_experiment(
                 "experiment_id": experiment.experiment_id,
                 "status": "PASS",
                 "rows": validated_rows,
+                "m3d_parameter_sensitivity": sensitivity_result,
             },
         )
     else:
@@ -268,4 +293,5 @@ def run_experiment(
         rows=validated_rows,
         output_dir=output_dir,
         provenance=provenance,
+        m3d_parameter_sensitivity=sensitivity_result,
     )

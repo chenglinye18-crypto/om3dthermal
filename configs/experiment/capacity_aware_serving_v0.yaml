@@ -1,0 +1,30 @@
+schema_version: 1
+experiment_id: capacity_aware_serving_v0
+mode: capacity_aware_serving
+architecture_configs:
+  - configs/architecture/conventional_hbm_2x1.yaml
+  - configs/architecture/orthogonal_si.yaml
+  - configs/architecture/orthogonal_m3d_igzo.yaml
+platform_config: configs/platform/gpu_package_300w_reference.yaml
+workload_config: configs/workload/llama31_8b_decode_b1_s131072.yaml
+serving:
+  requested_requests: [1, 2, 4, 8, 16, 32]
+  reserved_capacity_bytes: 0
+  host_overlap_policy: NO_OVERLAP
+  host_overlap_fraction: 0.0
+  gpu_performance:
+    backend: ANALYTICAL_CONDITIONAL
+    matched_payload_bandwidth_bits_per_second: 3.92e13
+    effective_compute_flops_per_second: 1.0e14
+    measured_points: []
+  capacity_references:
+    - reference_id: modern_high_capacity_hbm
+      status: UNRESOLVED
+      usable_capacity_bytes: null
+      provenance:
+        - record_id: modern_hbm_capacity_reference_unresolved_v0
+          classification: NOT_VALIDATED
+          source: no capacity value selected for the formal v0 experiment
+          status: UNRESOLVED_REQUIRES_EXPLICIT_EXTERNAL_SOURCE
+output_dir: results/capacity_aware_serving_v0
+output_policy: ERROR_IF_EXISTS

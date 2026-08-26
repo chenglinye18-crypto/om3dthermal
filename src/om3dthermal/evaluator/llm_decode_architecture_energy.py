@@ -37,6 +37,7 @@ from .llm_decode_energy import evaluate_llm_decode_memory_energy
 # ---------------------------------------------------------------------------
 
 READ_ENERGY_STATUS = "CURRENT_NOMINAL_ANALYTICAL_MODEL"
+READ_ENERGY_SENSITIVITY_STATUS = "PARAMETRIC_INTERFACE_SENSITIVITY"
 WRITE_ENERGY_STATUS = "RHO_SENSITIVITY_NOT_PHYSICAL_CLAIM"
 ENERGY_SCOPE_STATUS = "MEMORY_DYNAMIC_TRAFFIC_ENERGY_ONLY"
 SCENARIO_STATUS = "CONDITIONAL_MATCHED_REFERENCE_SENSITIVITY"
@@ -93,6 +94,7 @@ class ArchitectureDecodeMemoryEnergyMetrics(BaseModel):
     # Provenance / status
     read_energy_status: Literal[
         "CURRENT_NOMINAL_ANALYTICAL_MODEL",
+        "PARAMETRIC_INTERFACE_SENSITIVITY",
         "NO_ARCHITECTURE_ENERGY_RESOLVED",
     ]
     write_energy_status: Literal[
@@ -104,6 +106,12 @@ class ArchitectureDecodeMemoryEnergyMetrics(BaseModel):
         "CONDITIONAL_MATCHED_REFERENCE_SENSITIVITY",
     ]
     zhu_transferability_status: Literal["NOT_VALIDATED"]
+    interface_energy_pj_per_bit: float | None = None
+    interface_energy_status: Literal[
+        "NOT_APPLICABLE",
+        "CONDITIONAL_ASSUMPTION",
+        "PARAMETRIC_SENSITIVITY",
+    ] = "NOT_APPLICABLE"
     evaluation_status: Literal[
         "EVALUATED_CONDITIONAL_ARCHITECTURE_MEMORY_ENERGY",
         "CAPACITY_INFEASIBLE",
@@ -126,6 +134,7 @@ def evaluate_architecture_decode_memory_energy(
     system: ResolvedSystemPower,
     *,
     rho: float,
+    interface_energy_sensitivity_pj_per_bit: float | None = None,
 ) -> ArchitectureDecodeMemoryEnergyMetrics:
     """Evaluate conditional architecture decode memory energy.
 
@@ -182,6 +191,26 @@ def evaluate_architecture_decode_memory_energy(
         )
 
     e_read = system.memory_access_energy_pJ_per_bit
+    interface_energy = None
+    interface_status = "NOT_APPLICABLE"
+    if interface_energy_sensitivity_pj_per_bit is not None:
+        if system.architecture_type != "orthogonal_m3d":
+            raise ValueError(
+                "interface-energy sensitivity is limited to orthogonal_m3d")
+        if system.memory_result is None or e_read is None:
+            raise ValueError(
+                "interface-energy sensitivity requires resolved component energy")
+        interface_energy = _validate_rho(
+            "interface_energy_sensitivity_pj_per_bit",
+            interface_energy_sensitivity_pj_per_bit)
+        e_read = (
+            float(e_read) - system.memory_result.E_interface_pj_bit
+            + interface_energy)
+        interface_status = "PARAMETRIC_SENSITIVITY"
+    elif (system.architecture_type == "orthogonal_m3d"
+          and system.memory_result is not None):
+        interface_energy = system.memory_result.E_interface_pj_bit
+        interface_status = "CONDITIONAL_ASSUMPTION"
     has_energy = e_read is not None
 
     # Common fields always populated
@@ -194,6 +223,8 @@ def evaluate_architecture_decode_memory_energy(
         "energy_scope_status": ENERGY_SCOPE_STATUS,
         "scenario_status": SCENARIO_STATUS,
         "zhu_transferability_status": ZHU_TRANSFERABILITY_STATUS,
+        "interface_energy_pj_per_bit": interface_energy,
+        "interface_energy_status": interface_status,
     }
 
     # Case: no architecture energy resolved (unresolved / reference_fixed)
@@ -230,7 +261,10 @@ def evaluate_architecture_decode_memory_energy(
             read_dynamic_energy_j_per_token=None,
             write_dynamic_energy_j_per_token=None,
             memory_dynamic_energy_j_per_token=None,
-            read_energy_status=READ_ENERGY_STATUS,
+            read_energy_status=(
+                READ_ENERGY_SENSITIVITY_STATUS
+                if interface_energy_sensitivity_pj_per_bit is not None
+                else READ_ENERGY_STATUS),
             write_energy_status=WRITE_ENERGY_STATUS,
             evaluation_status=STATUS_CAPACITY_INFEASIBLE,
         )
@@ -268,7 +302,10 @@ def evaluate_architecture_decode_memory_energy(
         read_dynamic_energy_j_per_token=read_j,
         write_dynamic_energy_j_per_token=write_j,
         memory_dynamic_energy_j_per_token=total_j,
-        read_energy_status=READ_ENERGY_STATUS,
+        read_energy_status=(
+            READ_ENERGY_SENSITIVITY_STATUS
+            if interface_energy_sensitivity_pj_per_bit is not None
+            else READ_ENERGY_STATUS),
         write_energy_status=WRITE_ENERGY_STATUS,
         evaluation_status=STATUS_EVALUATED,
     )

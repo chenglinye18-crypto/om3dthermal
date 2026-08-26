@@ -3,6 +3,16 @@ platform_id: gpu_package_300w_reference
 fixed_gpu_power_W: 300.0
 gpu_power_status: FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL
 package_profile_status: EXISTING_CANONICAL_CASE_THERMAL_PACKAGE
+host_offload:
+  status: UNRESOLVED
+  host_memory_bandwidth_GBps: null
+  host_device_link_bandwidth_GBps: null
+  host_offload_efficiency: null
+  provenance:
+    - record_id: host_offload_unresolved_v0
+      classification: NOT_VALIDATED
+      source: no repository-local measured host-offload baseline
+      status: UNRESOLVED_REQUIRES_PLATFORM_MEASUREMENT_OR_SENSITIVITY
 provenance:
   - record_id: fixed_gpu_300w
     classification: MATCHED_REFERENCE

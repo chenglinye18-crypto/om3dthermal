@@ -1,5 +1,5 @@
 """Shared GPU/package platform specifications."""
 
-from .models import PlatformSpec
+from .models import HostOffloadSpec, PlatformSpec
 
-__all__ = ["PlatformSpec"]
+__all__ = ["HostOffloadSpec", "PlatformSpec"]

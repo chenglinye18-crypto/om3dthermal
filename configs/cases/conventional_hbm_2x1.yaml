@@ -3,12 +3,13 @@
 geometry:
   type: dreamram_hbm
   memory_region: {width_mm: 10.8, height_mm: 21.8}
+  capacity_instance_region: {width_mm: 10.8, height_mm: 10.8}
   layout:
     arrangement: 2x1_hbm
     visible_group_count: 2
     visible_group_footprint_mm: [11.0, 22.0]
-    physical_stack_equivalents_per_group: 1
-    total_physical_stack_equivalents: 2
+    physical_stack_equivalents_per_group: 2
+    total_physical_stack_equivalents: 4
     dram_dies_per_stack: 12
     group_centers_mm: [[-9.5, 0.0], [9.5, 0.0]]
     merged_axis: y
@@ -90,7 +91,9 @@ thermal:
 
 provenance:
   geometry_starting_reference: configs/legacy/exp_conv_2x1_g300_m160.yaml
-  two_by_one_semantics: TWO_VISIBLE_11X22_STACKS_TWO_PHYSICAL_STACKS
+  two_by_one_semantics: TWO_VISIBLE_11X22_GROUPS_FOUR_PHYSICAL_STACK_EQUIVALENTS
+  capacity_instance_footprint_mm: [10.8, 10.8]
+  capacity_instance_footprint_provenance: INHERITED_2X2_PHYSICAL_STACK_DRAM_DIE
   physical_stack_organization: CANONICAL_12HI_GEOMETRY
   base_present_geometry: INHERITED_EXISTING_PAPER_ALIGNED_BASE_STACK
   access_energy_organization: DREAMRAM_HBM3_REFERENCE_ANALYTICAL

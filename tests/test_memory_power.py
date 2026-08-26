@@ -1292,16 +1292,16 @@ def test_active_cases_parse_and_resolve_system_power():
     hbm = hbm_system.memory_result
     assert hbm.diagnostics["activated_row_data_utilization"] == 0.10
     assert hbm.diagnostics["effective_rd_per_act"] == 6.4
-    assert hbm.P_refresh_W == pytest.approx(0.8172465768010997)
-    assert hbm.diagnostics["total_stored_bits"] == 985694994432
+    assert hbm.P_refresh_W == pytest.approx(0.7691732487539762)
+    assert hbm.diagnostics["total_stored_bits"] == 927712935936
     assert hbm.E_base_route_pj_bit == pytest.approx(
         0.109992140663163, abs=0.0)
     assert hbm.E_vertical_pj_bit > 0.0
     assert hbm_case.architecture.geometry_source is None
     assert hbm.diagnostics["dies_stacked"] == 8
-    assert hbm.diagnostics["physical_stack_count"] == 2
+    assert hbm.diagnostics["physical_stack_count"] == 4
     assert hbm.diagnostics["dram_dies_per_stack"] == 12
-    assert hbm.diagnostics["packed_banks_per_die"] == 306
+    assert hbm.diagnostics["packed_banks_per_die"] == 144
     assert hbm.E_memory_internal_pj_bit == pytest.approx(
         0.8676557831180526, abs=0.0)
     assert hbm.E_vertical_pj_bit == pytest.approx(
@@ -1499,7 +1499,7 @@ def test_conventional_full_row_same_boundary_remains_stable():
         + result.E_base_route_pj_bit + result.E_interface_pj_bit)
     # Refresh is deliberately enabled in the active case; the old split
     # logic-removed power input predated refresh accounting.
-    assert result.P_refresh_W == pytest.approx(0.8172465768010997)
+    assert result.P_refresh_W == pytest.approx(0.7691732487539762)
 
 
 def test_conventional_12hi_scales_only_dreamram_vertical_path():
@@ -1513,8 +1513,8 @@ def test_conventional_12hi_scales_only_dreamram_vertical_path():
         case, project_root=ROOT, geometry=geometry_12hi)
 
     assert geometry_12hi.memory_dies_per_region == 12
-    assert result_12hi.diagnostics["total_stored_bits"] == 985694994432
-    assert result_12hi.P_refresh_W == pytest.approx(0.8172465768010997)
+    assert result_12hi.diagnostics["total_stored_bits"] == 927712935936
+    assert result_12hi.P_refresh_W == pytest.approx(0.7691732487539762)
     assert result_12hi.E_memory_internal_pj_bit == pytest.approx(
         result_8hi.E_memory_internal_pj_bit, abs=0.0)
     assert result_12hi.E_base_route_pj_bit == pytest.approx(

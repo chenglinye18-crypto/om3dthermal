@@ -1,0 +1,23 @@
+schema_version: 1
+experiment_id: m3d_semantic_boundary_audit_v0
+mode: conditional_llm_decode_e2e
+architecture_configs:
+  - configs/architecture/orthogonal_m3d_igzo.yaml
+platform_config: configs/platform/gpu_package_300w_reference.yaml
+workload_config: configs/workload/llama31_8b_decode_b1_s131072.yaml
+scenario:
+  matched_payload_bandwidth_bits_per_second: 3.92e13
+  bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
+  effective_compute_flops_per_second: 1.0e14
+  compute_status: NUMERICAL_CHOICE_NOT_HARDWARE_VALIDATED
+  reserved_capacity_bytes: 0
+  rho_values: [1]
+  unresolved_logic_background_policy:
+    orthogonal_m3d_igzo: EXISTING_PLACEHOLDER_ZERO
+  m3d_parameter_sensitivity:
+    architecture_id: orthogonal_m3d_igzo
+    interface_energy_pj_per_bit: [0.25, 0.5, 1.0]
+    logic_background_w: [0, 5, 10, 20]
+    status: PARAMETRIC_SENSITIVITY
+output_dir: results/m3d_semantic_boundary_audit_v0
+output_policy: ERROR_IF_EXISTS

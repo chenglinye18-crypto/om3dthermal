@@ -75,8 +75,10 @@ def resolve_case_geometry(case: CanonicalCaseConfig) -> ResolvedGeometry:
             region = "orthogonal_memory_slab"
     else:
         assert geometry.memory_region is not None
-        x_mm = geometry.memory_region.width_mm
-        y_mm = geometry.memory_region.height_mm
+        capacity_region = (
+            geometry.capacity_instance_region or geometry.memory_region)
+        x_mm = capacity_region.width_mm
+        y_mm = capacity_region.height_mm
         region = "hbm_dram_die"
         region_count = int(
             geometry.layout.get("total_physical_stack_equivalents", 1))

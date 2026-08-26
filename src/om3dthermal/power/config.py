@@ -340,6 +340,11 @@ class InterfaceInput(StrictModel):
     type: Literal["hbm_dq", "contactless", "direct"]
     source: Literal["dreamram", "constant", "none"]
     energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
+    energy_status: Literal["CONDITIONAL_ASSUMPTION"] | None = None
+    included_components: tuple[str, ...] = ()
+    excluded_components: tuple[str, ...] = ()
+    unconfirmed_components: tuple[str, ...] = ()
+    source_boundary: str | None = None
 
 
 class GeometrySourceInput(StrictModel):
@@ -449,7 +454,9 @@ class GPUCasePowerInput(StrictModel):
 
 class MemoryCasePowerInput(StrictModel):
     model: Literal["analytical", "reference_fixed", "unresolved"]
-    status: Literal["VALIDATED", "NOT_ANALYTICAL", "NOT_VALIDATED"]
+    status: Literal[
+        "VALIDATED", "CONDITIONAL_ASSUMPTION",
+        "NOT_ANALYTICAL", "NOT_VALIDATED"]
     total_power_W: float | None = Field(default=None, ge=0.0)
     source: str | None = None
     provenance: str | None = None
@@ -458,9 +465,11 @@ class MemoryCasePowerInput(StrictModel):
     @model_validator(mode="after")
     def mode_fields(self) -> "MemoryCasePowerInput":
         if self.model == "analytical":
-            if self.status != "VALIDATED" or self.total_power_W is not None:
+            if (self.status not in {"VALIDATED", "CONDITIONAL_ASSUMPTION"}
+                    or self.total_power_W is not None):
                 raise ValueError(
-                    "analytical memory power must be VALIDATED and derived")
+                    "analytical memory power must be derived and explicitly "
+                    "VALIDATED or CONDITIONAL_ASSUMPTION")
         elif self.model == "reference_fixed":
             if (self.status != "NOT_ANALYTICAL"
                     or self.total_power_W is None
@@ -543,6 +552,7 @@ class CaseM3DStackGeometryInput(StrictModel):
 class CaseGeometryInput(StrictModel):
     type: Literal["dreamram_hbm", "orthogonal_si", "orthogonal_m3d"]
     memory_region: CaseMemoryRegionInput | None = None
+    capacity_instance_region: CaseMemoryRegionInput | None = None
     orthogonal: CaseOrthogonalGeometryInput | None = None
     m3d_stack: CaseM3DStackGeometryInput | None = None
     orthogonal_si_stack: CaseOrthogonalSiStackGeometryInput | None = None
@@ -556,6 +566,9 @@ class CaseGeometryInput(StrictModel):
             if self.memory_region is not None:
                 raise ValueError(
                     "orthogonal memory region is derived from slab geometry")
+            if self.capacity_instance_region is not None:
+                raise ValueError(
+                    "orthogonal capacity is derived from slab geometry")
         if self.type == "orthogonal_m3d":
             if self.orthogonal is None or self.m3d_stack is None:
                 raise ValueError(

@@ -77,6 +77,22 @@ class LLMDecodeInput(BaseModel):
     runtime_bytes: int = Field(
         ge=0, default=0, description="Activation workspace / scheduler metadata bytes"
     )
+    runtime_fixed_bytes: int | None = Field(
+        ge=0,
+        default=None,
+        description=(
+            "Optional explicit fixed runtime/workspace capacity. When omitted, "
+            "legacy runtime_bytes is preserved and treated as fixed capacity."
+        ),
+    )
+    runtime_per_request_bytes: int = Field(
+        ge=0,
+        default=0,
+        description=(
+            "MODELING_CHOICE: additional runtime/workspace capacity per active "
+            "request; zero preserves the legacy workload semantics."
+        ),
+    )
 
     # Modeling choices (frozen for v0)
     weight_activity_model: Literal["full_footprint"] = Field(
@@ -142,11 +158,37 @@ class LLMDecodeInput(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _runtime_capacity_semantics(self) -> "LLMDecodeInput":
+        if self.runtime_fixed_bytes is not None and self.runtime_bytes != 0:
+            raise ValueError(
+                "explicit runtime_fixed_bytes requires legacy runtime_bytes=0 "
+                "to avoid double counting"
+            )
+        return self
+
     @computed_field(return_type=int)
     @property
     def d_head(self) -> int:
         """SOFTWARE_DERIVED attention head dimension."""
         return self.d_model // self.n_heads_q
+
+    @property
+    def resolved_runtime_fixed_bytes(self) -> int:
+        """Resolve legacy runtime as fixed without changing its old meaning."""
+        return (
+            self.runtime_bytes
+            if self.runtime_fixed_bytes is None
+            else self.runtime_fixed_bytes
+        )
+
+    @property
+    def runtime_capacity_semantics_status(self) -> str:
+        return (
+            "LEGACY_RUNTIME_BYTES_AS_FIXED_MODELING_CHOICE"
+            if self.runtime_fixed_bytes is None
+            else "EXPLICIT_FIXED_PLUS_PER_REQUEST_MODELING_CHOICE"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +211,13 @@ class LLMDecodeMetrics(BaseModel):
     weight_footprint_bytes: float
     weight_active_per_step_bytes: float
     kv_footprint_bytes: float
+    kv_bytes_per_request: float = 0.0
     runtime_bytes: float
+    runtime_fixed_bytes: float = 0.0
+    runtime_per_request_bytes: float = 0.0
+    runtime_capacity_semantics_status: str = (
+        "LEGACY_RUNTIME_BYTES_AS_FIXED_MODELING_CHOICE"
+    )
     required_capacity_bytes: float
 
     # Traffic per generated token (exact analytical byte-equivalents; may be fractional)
@@ -216,7 +264,9 @@ def evaluate_llm_decode(inp: LLMDecodeInput) -> LLMDecodeMetrics:
     Nparam = inp.n_param
     bw = inp.weight_bits
     bkv = inp.kv_bits
-    runtime = inp.runtime_bytes
+    runtime_fixed = inp.resolved_runtime_fixed_bytes
+    runtime_per_request = inp.runtime_per_request_bytes
+    runtime = runtime_fixed + B * runtime_per_request
 
     # -------------------------------------------------------------
     # 4. Weight footprint (resident)
@@ -231,7 +281,8 @@ def evaluate_llm_decode(inp: LLMDecodeInput) -> LLMDecodeMetrics:
     # 5. KV footprint
     # -------------------------------------------------------------
     # Formula: 2 * L * B * S * Hkv * Dhead * bkv / 8  (true division)
-    bytes_kv_footprint = 2 * L * B * S * Hkv * Dhead * bkv / 8
+    kv_bytes_per_request = 2 * L * S * Hkv * Dhead * bkv / 8
+    bytes_kv_footprint = B * kv_bytes_per_request
 
     # -------------------------------------------------------------
     # 6. Required capacity on the workload side
@@ -295,7 +346,12 @@ def evaluate_llm_decode(inp: LLMDecodeInput) -> LLMDecodeMetrics:
         weight_footprint_bytes=bytes_weight_footprint,
         weight_active_per_step_bytes=bytes_weight_active_per_step,
         kv_footprint_bytes=bytes_kv_footprint,
+        kv_bytes_per_request=kv_bytes_per_request,
         runtime_bytes=float(runtime),
+        runtime_fixed_bytes=float(runtime_fixed),
+        runtime_per_request_bytes=float(runtime_per_request),
+        runtime_capacity_semantics_status=(
+            inp.runtime_capacity_semantics_status),
         required_capacity_bytes=bytes_required,
         weight_read_bytes_per_token=weight_read_per_token,
         kv_read_bytes_per_token=kv_read_per_token,

@@ -78,11 +78,11 @@ reported total         33.5604 W conditional lower bound
 1. contactless interface 0.5 pJ/bit是否包含完整TX/RX/coil/clock/serialization；
 2. logic/background power的nominal或至少0/5/10/20 W sensitivity。
 
-## 5. Conventional HBM仍有一个窄语义问题
+## 5. Conventional HBM窄语义问题已由Gate A关闭
 
-当前114.75 GiB系统容量数值闭合，但canonical配置把两个11x22 mm热区域解释为两个物理stack；其legacy来源则明确为每个热区域合并两个11x11 mm stack-equivalent。当前57.375 GiB/stack不是商品HBM事实。
+canonical现按2个11x22 mm thermal-visible groups、每组2个11x11 mm physical stack equivalents解释，并以10.8x10.8 mm physical die做capacity packing：4 stacks x 12 dies/stack x 27 GiB/stack = 108 GiB/system。旧114.75 GiB与57.375 GiB/group口径已退役。
 
-在正式容量优势图表之前应独立审计：
+审计闭合字段：
 
 ```text
 thermal visible groups

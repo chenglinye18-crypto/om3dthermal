@@ -94,7 +94,10 @@ The formal scenario remains conditional:
 
 - bandwidth is `MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED`;
 - write energy is a rho sensitivity, not a validated physical model;
-- M3D logic-background power is a conditional lower bound;
+- the 0.5 pJ/bit M3D contactless-interface term is a conditional assumption,
+  not a complete-PHY or capability validation;
+- M3D logic-background power is either an explicit conditional lower bound or
+  a `PARAMETRIC_SENSITIVITY` value, never a validated nominal;
 - GPU energy and complete system J/token are unavailable;
 - the read-shaped write spatial distribution is sensitivity-only.
 

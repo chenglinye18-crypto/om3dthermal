@@ -34,7 +34,14 @@ class WorkloadDemand(BaseModel):
 
     weight_footprint_bytes: float = Field(ge=0.0)
     persistent_state_footprint_bytes: float = Field(ge=0.0)
+    persistent_state_bytes_per_request: float = Field(default=0.0, ge=0.0)
     runtime_footprint_bytes: float = Field(ge=0.0)
+    runtime_fixed_bytes: float = Field(default=0.0, ge=0.0)
+    runtime_per_request_bytes: float = Field(default=0.0, ge=0.0)
+    runtime_capacity_semantics_status: str = Field(
+        default="LEGACY_RUNTIME_BYTES_AS_FIXED_MODELING_CHOICE",
+        min_length=1,
+    )
     required_capacity_bytes: float = Field(ge=0.0)
 
     weight_read_bytes_per_output: float = Field(ge=0.0)
@@ -67,6 +74,15 @@ class WorkloadDemand(BaseModel):
         )
         if self.required_capacity_bytes != footprint_total:
             raise ValueError("workload footprint does not close")
+        if self.persistent_state_footprint_bytes != (
+            self.batch_size * self.persistent_state_bytes_per_request
+        ):
+            raise ValueError("persistent state per-request footprint does not close")
+        if self.runtime_footprint_bytes != (
+            self.runtime_fixed_bytes
+            + self.batch_size * self.runtime_per_request_bytes
+        ):
+            raise ValueError("runtime fixed/per-request footprint does not close")
         read_total = (
             self.weight_read_bytes_per_output
             + self.persistent_state_read_bytes_per_output
@@ -97,7 +113,12 @@ def resolve_llm_decode_demand(
         context_length=spec.decode.context_length,
         weight_footprint_bytes=metrics.weight_footprint_bytes,
         persistent_state_footprint_bytes=metrics.kv_footprint_bytes,
+        persistent_state_bytes_per_request=metrics.kv_bytes_per_request,
         runtime_footprint_bytes=metrics.runtime_bytes,
+        runtime_fixed_bytes=metrics.runtime_fixed_bytes,
+        runtime_per_request_bytes=metrics.runtime_per_request_bytes,
+        runtime_capacity_semantics_status=(
+            metrics.runtime_capacity_semantics_status),
         required_capacity_bytes=metrics.required_capacity_bytes,
         weight_read_bytes_per_output=metrics.weight_read_bytes_per_token,
         persistent_state_read_bytes_per_output=metrics.kv_read_bytes_per_token,

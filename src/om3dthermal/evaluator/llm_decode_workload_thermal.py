@@ -33,6 +33,7 @@ WRITE_SPATIAL_STATUS = (
     "WRITE_SPATIAL_DISTRIBUTION_READ_SHAPE_SENSITIVITY_ONLY")
 M3D_LOWER_BOUND_STATUS = (
     "CONDITIONAL_LOWER_BOUND_UNRESOLVED_LOGIC_BACKGROUND")
+M3D_PARAMETRIC_STATUS = "PARAMETRIC_SENSITIVITY"
 THERMAL_SCENARIO_STATUS = "CONDITIONAL_MATCHED_REFERENCE_SENSITIVITY"
 THERMAL_BACKEND = "gpu_pcg"
 POWER_CLOSURE_ABS_TOL_W = 1e-9
@@ -214,13 +215,17 @@ def map_workload_power_to_thermal(
             "orthogonal_si_memory", memory_total,
             "E5_COMPLETE_MEMORY_WORKLOAD_TOTAL_TO_EXISTING_ORTHOGONAL_BEOL")
     elif case.geometry.type == "orthogonal_m3d":
-        if power.memory_total_completeness_status != M3D_LOWER_BOUND_STATUS:
-            raise ValueError("M3D conditional lower-bound status was not preserved")
+        if power.memory_total_completeness_status not in {
+                M3D_LOWER_BOUND_STATUS, M3D_PARAMETRIC_STATUS}:
+            raise ValueError(
+                "M3D logic-background boundary status was not preserved")
         memory_total = _finite_nonnegative(
             "memory_workload_total_W", power.memory_workload_total_W)
         add(
             "m3d_memory_bitcell_beol", memory_total,
-            "E5_CONDITIONAL_MEMORY_TOTAL_TO_EXISTING_MERGED_M3D_REGION")
+            ("E5_PARAMETRIC_MEMORY_TOTAL_TO_EXISTING_MERGED_M3D_REGION"
+             if power.memory_total_completeness_status == M3D_PARAMETRIC_STATUS
+             else "E5_CONDITIONAL_MEMORY_TOTAL_TO_EXISTING_MERGED_M3D_REGION"))
     else:
         raise ValueError(f"unsupported architecture type {case.geometry.type!r}")
 

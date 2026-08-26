@@ -122,7 +122,17 @@ architecture:
     fixed_load_pF: 0.006
     fixed_load_provenance: MODELING_CHOICE
   base_route: {enabled: false, source: none}
-  interface: {type: contactless, source: constant, energy_pj_per_bit: 0.5}
+  interface:
+    type: contactless
+    source: constant
+    energy_pj_per_bit: 0.5
+    energy_status: CONDITIONAL_ASSUMPTION
+    included_components: [inductive_coupling_interface_aggregate]
+    excluded_components: []
+    unconfirmed_components: [tx, rx, coil_or_coupling_path, clock, serialization_deserialization, driver_control]
+    source_boundary: >-
+      Existing 0.5 pJ/bit inductive-interface reference; repository evidence
+      does not establish a complete TX/RX/coil/clock/SerDes/driver boundary.
   logic_background_w: null
 
 workload:
@@ -134,7 +144,7 @@ workload:
 
 power:
   gpu: {model: fixed, power_W: 300.0}
-  memory: {model: analytical, status: VALIDATED}
+  memory: {model: analytical, status: CONDITIONAL_ASSUMPTION}
   refresh:
     enabled: true
     model: operation_table_retention

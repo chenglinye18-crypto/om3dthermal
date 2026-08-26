@@ -38,12 +38,12 @@ def test_system_scope_capacity_and_refresh_close():
     orth_si = _resolved(NAMES[1])
     m3d = _resolved(NAMES[2])
     capacity = _resolved_capacity(*conventional)
-    assert capacity["system_capacity_GiB"] == 114.75
-    assert capacity["capacity_per_instance_GiB"] == 57.375
+    assert capacity["system_capacity_GiB"] == 108.0
+    assert capacity["capacity_per_instance_GiB"] == 27.0
     assert _resolved_capacity(*orth_si)["system_capacity_GiB"] == 234.28125
     assert _resolved_capacity(*m3d)["system_capacity_GiB"] == 428.75
     assert conventional[2].refresh_power_W == pytest.approx(
-        0.8172465768010997)
+        0.7691732487539762)
     assert orth_si[2].refresh_power_W == pytest.approx(1.6685450943022453)
     assert m3d[2].refresh_power_W == 98 * 0.0003484694872064
 
@@ -83,14 +83,14 @@ def test_orthogonal_adhesive_thickness_comes_from_canonical_case(name):
 def test_conventional_physical_geometry_drives_capacity_and_thermal_stack():
     case, geometry, system = _resolved(NAMES[0])
     diagnostics = system.diagnostics
-    assert geometry.memory_region_count == 2
+    assert geometry.memory_region_count == 4
     assert geometry.memory_dies_per_region == 12
-    assert (geometry.configured_x_mm, geometry.configured_y_mm) == (10.8, 21.8)
+    assert (geometry.configured_x_mm, geometry.configured_y_mm) == (10.8, 10.8)
     assert case.geometry.layout["visible_group_footprint_mm"] == [11.0, 22.0]
-    assert diagnostics["packed_banks_per_die"] == 306
-    assert diagnostics["rotated_90_deg"] is True
+    assert diagnostics["packed_banks_per_die"] == 144
+    assert diagnostics["rotated_90_deg"] is False
     assert diagnostics["bits_per_stack"] == diagnostics["bits_per_die"] * 12
-    assert diagnostics["total_stored_bits"] == diagnostics["bits_per_stack"] * 2
+    assert diagnostics["total_stored_bits"] == diagnostics["bits_per_stack"] * 4
     thermal = compile_case_thermal(case, system)
     hbm = thermal.stack_templates["hbm_12hi"].model_dump()
     repeated = next(item for item in hbm["items"] if item["kind"] == "repeat")
@@ -211,7 +211,7 @@ def test_density_denominators_are_geometry_derived():
     conventional = _resolved_capacity(*_resolved(NAMES[0]))
     orth_si = _resolved_capacity(*_resolved(NAMES[1]))
     m3d = _resolved_capacity(*_resolved(NAMES[2]))
-    assert conventional["memory_plane_area_mm2"] == 10.8 * 21.8
+    assert conventional["memory_plane_area_mm2"] == 10.8 * 10.8
     assert conventional["architecture_footprint_area_mm2"] == 2 * 11 * 22
     assert orth_si["memory_plane_area_mm2"] == 22 * 5.5
     assert orth_si["architecture_footprint_area_mm2"] == 30 * 22

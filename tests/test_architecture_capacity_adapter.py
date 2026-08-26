@@ -33,7 +33,7 @@ ARCHITECTURES = (
     "orthogonal_m3d_igzo",
 )
 EXPECTED_GIB = {
-    "conventional_hbm_2x1": 114.75,
+    "conventional_hbm_2x1": 108.0,
     "orthogonal_si": 234.28125,
     "orthogonal_m3d_igzo": 428.75,
 }
@@ -116,7 +116,7 @@ def test_architecture_comparison_compatibility_uses_public_resolver(
     compatibility = architecture_comparison._resolved_capacity(
         case, geometry, system)
     assert called is True
-    assert compatibility["system_capacity_GiB"] == 114.75
+    assert compatibility["system_capacity_GiB"] == 108.0
 
 
 def test_same_workload_and_first_table_are_feasible(

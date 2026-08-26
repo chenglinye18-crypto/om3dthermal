@@ -28,6 +28,7 @@ PowerScalar: TypeAlias = int | float
 
 POLICY_REQUIRE_RESOLVED = "REQUIRE_RESOLVED"
 POLICY_EXISTING_PLACEHOLDER_ZERO = "EXISTING_PLACEHOLDER_ZERO"
+POLICY_PARAMETRIC_SENSITIVITY = "PARAMETRIC_SENSITIVITY"
 
 STATUS_EVALUATED = "EVALUATED_WORKLOAD_DEPENDENT_MEMORY_POWER"
 STATUS_BLOCKED = "BLOCKED_BY_CAPACITY_OR_UPSTREAM_EVALUATION"
@@ -45,11 +46,13 @@ LOGIC_STATUS_RESOLVED_NUMERIC = "RESOLVED_EXPLICIT_NUMERIC"
 LOGIC_STATUS_PLACEHOLDER_ZERO = (
     "EXISTING_PLACEHOLDER_ZERO_NOT_SEPARATELY_MODELED")
 LOGIC_STATUS_UNRESOLVED = "UNRESOLVED_LOGIC_BACKGROUND"
+LOGIC_STATUS_PARAMETRIC = "PARAMETRIC_SENSITIVITY_NOT_VALIDATED"
 
 COMPLETENESS_RESOLVED = "RESOLVED_EXISTING_STATIC_COMPONENTS"
 COMPLETENESS_CONDITIONAL = (
     "CONDITIONAL_LOWER_BOUND_UNRESOLVED_LOGIC_BACKGROUND")
 COMPLETENESS_UNRESOLVED = "UNRESOLVED_STATIC_POWER"
+COMPLETENESS_PARAMETRIC = "PARAMETRIC_SENSITIVITY"
 
 _OLD_TOTAL_ABS_TOL_W = 1e-10
 
@@ -85,17 +88,20 @@ class LLMDecodeWorkloadPowerMetrics(BaseModel):
     package_workload_total_W: float | None
 
     unresolved_logic_background_policy: Literal[
-        "REQUIRE_RESOLVED", "EXISTING_PLACEHOLDER_ZERO"]
+        "REQUIRE_RESOLVED", "EXISTING_PLACEHOLDER_ZERO",
+        "PARAMETRIC_SENSITIVITY"]
     logic_background_status: Literal[
         "RESOLVED_EXPLICIT_ZERO",
         "RESOLVED_EXPLICIT_NUMERIC",
         "EXISTING_PLACEHOLDER_ZERO_NOT_SEPARATELY_MODELED",
         "UNRESOLVED_LOGIC_BACKGROUND",
+        "PARAMETRIC_SENSITIVITY_NOT_VALIDATED",
     ]
     memory_total_completeness_status: Literal[
         "RESOLVED_EXISTING_STATIC_COMPONENTS",
         "CONDITIONAL_LOWER_BOUND_UNRESOLVED_LOGIC_BACKGROUND",
         "UNRESOLVED_STATIC_POWER",
+        "PARAMETRIC_SENSITIVITY",
     ]
     evaluation_status: Literal[
         "EVALUATED_WORKLOAD_DEPENDENT_MEMORY_POWER",
@@ -174,7 +180,9 @@ def evaluate_llm_decode_workload_power(
     system: ResolvedSystemPower,
     *,
     unresolved_logic_background_policy: Literal[
-        "REQUIRE_RESOLVED", "EXISTING_PLACEHOLDER_ZERO"],
+        "REQUIRE_RESOLVED", "EXISTING_PLACEHOLDER_ZERO",
+        "PARAMETRIC_SENSITIVITY"],
+    logic_background_sensitivity_W: float | None = None,
 ) -> LLMDecodeWorkloadPowerMetrics:
     """Combine per-token memory energy, throughput, and static components.
 
@@ -184,7 +192,8 @@ def evaluate_llm_decode_workload_power(
     """
     policy = unresolved_logic_background_policy
     if policy not in (POLICY_REQUIRE_RESOLVED,
-                      POLICY_EXISTING_PLACEHOLDER_ZERO):
+                      POLICY_EXISTING_PLACEHOLDER_ZERO,
+                      POLICY_PARAMETRIC_SENSITIVITY):
         raise ValueError("unsupported unresolved_logic_background_policy")
 
     if energy.architecture != system.case_name:
@@ -246,6 +255,16 @@ def evaluate_llm_decode_workload_power(
         )
 
     raw_logic = memory.P_logic_background_W
+    if policy == POLICY_PARAMETRIC_SENSITIVITY:
+        if raw_logic is not None:
+            raise ValueError(
+                "logic-background sensitivity requires unresolved nominal logic")
+        if logic_background_sensitivity_W is None:
+            raise ValueError(
+                "PARAMETRIC_SENSITIVITY requires logic_background_sensitivity_W")
+    elif logic_background_sensitivity_W is not None:
+        raise ValueError(
+            "logic_background_sensitivity_W requires PARAMETRIC_SENSITIVITY")
     if policy == POLICY_REQUIRE_RESOLVED and raw_logic is None:
         return LLMDecodeWorkloadPowerMetrics(
             **common,
@@ -279,7 +298,13 @@ def evaluate_llm_decode_workload_power(
         "memory.P_memory_background_W", memory.P_memory_background_W)
     gpu = _finite_nonnegative("system.gpu_power_W", system.gpu_power_W)
 
-    if raw_logic is None:
+    if policy == POLICY_PARAMETRIC_SENSITIVITY:
+        effective_logic = _finite_nonnegative(
+            "logic_background_sensitivity_W",
+            logic_background_sensitivity_W)
+        logic_status = LOGIC_STATUS_PARAMETRIC
+        completeness = COMPLETENESS_PARAMETRIC
+    elif raw_logic is None:
         # The only permitted unresolved path: preserve raw None and use the
         # pre-existing zero placeholder iff the old resolved total closes.
         old_total = system.resolved_total_memory_power_W

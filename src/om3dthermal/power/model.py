@@ -357,6 +357,16 @@ def calculate_memory_power(
                 ]
             ),
             "interface_energy_pj_per_bit": interface,
+            "interface_energy_status": (
+                config.architecture.interface.energy_status),
+            "interface_included_components": list(
+                config.architecture.interface.included_components),
+            "interface_excluded_components": list(
+                config.architecture.interface.excluded_components),
+            "interface_unconfirmed_components": list(
+                config.architecture.interface.unconfirmed_components),
+            "interface_source_boundary": (
+                config.architecture.interface.source_boundary),
             "P_memory_dynamic_W": access_W + refresh_W + background_W,
         },
     )

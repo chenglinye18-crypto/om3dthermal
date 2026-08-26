@@ -12,6 +12,8 @@ ROOT = Path(__file__).parents[1]
 CONFIG = (
     ROOT / "configs" / "experiment" /
     "m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
+AUDIT_CONFIG = (
+    ROOT / "configs" / "experiment" / "m3d_semantic_boundary_audit_v0.yaml")
 
 
 def _fake_thermal(mapping):
@@ -137,3 +139,17 @@ def test_formal_runner_rejects_nonempty_output_before_evaluation(
             output_dir_override=output,
         )
     assert (output / "keep.txt").read_text(encoding="utf-8") == "existing result"
+
+
+def test_runner_executes_configured_m3d_parameter_sensitivity(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runner_module, "run_llm_decode_workload_thermal", _fake_thermal)
+    result = run_experiment(
+        AUDIT_CONFIG, project_root=ROOT, write_bundle=False)
+    sensitivity = result.m3d_parameter_sensitivity
+    assert sensitivity is not None
+    assert len(result.rows) == 1
+    assert [row.interface_energy_pj_per_bit
+            for row in sensitivity.interface_rows] == [0.25, 0.5, 1.0]
+    assert [row.logic_background_power_W
+            for row in sensitivity.logic_background_rows] == [0.0, 5.0, 10.0, 20.0]

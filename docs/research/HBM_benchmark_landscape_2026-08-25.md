@@ -160,22 +160,23 @@ validated silicon read energy
 当前软件配置解析为：
 
 ```text
-2 physical stack equivalents
-total capacity = 114.75 GiB = 123.2119 GB
+2 thermal-visible merged groups
+4 physical stack equivalents
+total capacity = 108 GiB = 115.9641 GB
 matched bandwidth = 4.9 TB/s
 GPU power = 300 W
 ```
 
-若忠实按当前配置做算术反推，每个equivalent stack约为：
+每个physical stack的geometry-driven analytical capacity为：
 
 ```text
-61.606 GB
-2.45 TB/s
+27 GiB = 28.991 GB
+aggregate matched bandwidth is not allocated as a validated per-stack capability
 ```
 
-但是，当前case继承的legacy thermal配置将两个11x22 mm可见区域分别标记为两个沿y合并的11x11 mm stack-equivalent，即2 visible groups、4 physical stack equivalents。后续canonical配置把它改成2 physical stacks，同时仍将10.8x21.8 mm完整区域作为一片DRAM die进行DreamRAM bank-tile repacking。这使thermal grouping与capacity instance发生语义耦合：114.75 GiB的系统级算术闭合，但57.375 GiB/stack并未获得商品或物理组织验证。
+Gate A审计确认legacy语义有来源支持：两个11x22 mm可见区域分别合并两个11x11 mm stack-equivalent，即2 visible groups、4 physical stack equivalents。canonical现在将10.8x21.8 mm thermal-visible group与10.8x10.8 mm capacity instance解耦；114.75 GiB/57.375 GiB-per-group旧口径已退役。
 
-若把10.8x21.8 mm区域重新拆成两个约10.8x10.8 mm die，并沿用当前12H integer packing，估算约为4x27 GiB=108 GiB/system；若使用DreamRAM原生16 GiB HBM3组织，则4 stack为64 GiB。正式baseline需要独立关闭这一口径，而不是从当前thermal可见区域反推物理stack。
+沿用当前12H integer packing的正式结果为4x27 GiB=108 GiB/system；若使用DreamRAM原生16 GiB HBM3组织，则4 stack为64 GiB。当前108 GiB仍是geometry-driven analytical matched reference，不是commodity SKU。
 
 公开HBM3E 12H通常为36 GB和约1.2-1.28 TB/s；Micron HBM4 12H为36 GB、>2.8 TB/s，16H sample为48 GB。因此当前2x1不是一个现成commodity HBM SKU，而是继承MOSAIC/IEDM几何和聚合带宽的matched-reference baseline。
 

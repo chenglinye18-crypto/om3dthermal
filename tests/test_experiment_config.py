@@ -15,6 +15,8 @@ ROOT = Path(__file__).parents[1]
 EXPERIMENT = (
     ROOT / "configs" / "experiment" /
     "m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
+AUDIT_EXPERIMENT = (
+    ROOT / "configs" / "experiment" / "m3d_semantic_boundary_audit_v0.yaml")
 
 
 def test_formal_experiment_config_resolves_three_separate_layers() -> None:
@@ -90,3 +92,12 @@ def test_frozen_thermal_execution_cannot_be_overridden_in_experiment(
 
     with pytest.raises(ValueError, match="thermal"):
         load_experiment_spec(path, project_root=ROOT)
+
+
+def test_m3d_semantic_audit_declares_only_parametric_sensitivities() -> None:
+    experiment = load_experiment_spec(AUDIT_EXPERIMENT, project_root=ROOT)
+    sensitivity = experiment.scenario.m3d_parameter_sensitivity
+    assert sensitivity is not None
+    assert sensitivity.interface_energy_pj_per_bit == (0.25, 0.5, 1.0)
+    assert sensitivity.logic_background_w == (0.0, 5.0, 10.0, 20.0)
+    assert sensitivity.status == "PARAMETRIC_SENSITIVITY"
