@@ -17,6 +17,11 @@ from .model import (
     run_memory_power,
 )
 from .result import EnergyDecomposition, MemoryPowerResult
+from .physical_latency import (
+    PhysicalAccessLatency,
+    PhysicalLocationLatency,
+    calculate_physical_access_latency,
+)
 from .system import (
     ResolvedSystemPower,
     ResolvedThermalPowerMapping,
@@ -31,10 +36,13 @@ __all__ = [
     "CanonicalCaseConfig",
     "ResolvedGeometry",
     "MemoryPowerResult",
+    "PhysicalAccessLatency",
+    "PhysicalLocationLatency",
     "MissingCellReplacementError",
     "UnresolvedMIVEnergyError",
     "apply_component_replacements",
     "calculate_memory_power",
+    "calculate_physical_access_latency",
     "load_power_config",
     "load_case_config",
     "resolve_case_geometry",

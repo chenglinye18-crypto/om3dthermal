@@ -25,6 +25,7 @@ from .geometry import (
 )
 from .feol_route import calculate_feol_route
 from .m3d_subarray import calculate_m3d_subarray
+from .physical_latency import calculate_physical_access_latency
 from .refresh import calculate_refresh_power
 from .result import BackendEnergyResult, EnergyDecomposition, MemoryPowerResult
 
@@ -253,6 +254,29 @@ def calculate_memory_power(
     feol_route = (
         0.0 if feol_route_result is None
         else feol_route_result.feol_route_energy_pj_per_bit)
+    physical_latency_result = None
+    physical_latency_spec = config.architecture.physical_access_latency
+    if physical_latency_spec is not None:
+        if feol_route_result is None:
+            raise ValueError("physical access latency requires FEOL latency")
+        raw_miv_lengths = backend.metadata.get("miv_length_per_layer_um")
+        raw_miv_delays = backend.metadata.get("miv_delay_per_layer_ns")
+        if (not isinstance(raw_miv_lengths, (tuple, list))
+                or not isinstance(raw_miv_delays, (tuple, list))):
+            raise ValueError("physical access latency requires MIV latency")
+        physical_latency_result = calculate_physical_access_latency(
+            physical_latency_spec,
+            feol_route=feol_route_result,
+            miv_length_per_layer_um=tuple(
+                float(value) for value in raw_miv_lengths),
+            miv_delay_per_layer_ns=tuple(
+                float(value) for value in raw_miv_delays),
+            miv_status=str(backend.metadata.get("miv_latency_status")),
+            miv_parameter_status=str(backend.metadata.get(
+                "miv_resistance_parameter_status")),
+            miv_provenance=str(backend.metadata.get(
+                "miv_resistance_provenance")),
+        )
     read_total = (
         memory_internal + vertical + feol_route + base_route + interface)
 
@@ -339,6 +363,8 @@ def calculate_memory_power(
             **backend.metadata,
             **({} if m3d_subarray is None else m3d_subarray.as_dict()),
             **({} if feol_route_result is None else feol_route_result.as_dict()),
+            **({} if physical_latency_result is None
+               else physical_latency_result.as_dict()),
             **({} if m3d_subarray is None else zhu_scaling_diagnostics),
             **refresh_result.diagnostics,
             **electrical_access_comparison,

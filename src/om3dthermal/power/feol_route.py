@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import math
+import statistics
 
 from .config import FEOLRouteInput
 from .m3d_subarray import M3DSubarrayResult
@@ -23,6 +25,8 @@ class FEOLRouteResult:
     feol_route_lateral_component_per_cluster_um: tuple[float, ...]
     feol_route_perpendicular_component_per_cluster_um: tuple[float, ...]
     feol_route_min_length_um: float
+    feol_route_median_length_um: float
+    feol_route_p90_length_um: float
     feol_route_max_length_um: float
     feol_route_average_length_um: float
     feol_route_average_lateral_component_um: float
@@ -32,8 +36,39 @@ class FEOLRouteResult:
     feol_wire_voltage_V: float
     feol_wire_activity_factor: float
     feol_wire_provenance: str
+    feol_wire_capacitance_per_cluster_pF: tuple[float, ...]
     feol_average_wire_capacitance_fF: float
     feol_route_energy_pj_per_bit: float
+    feol_wire_resistance_per_cluster_ohm: tuple[float, ...] | None
+    feol_driver_cap_time_constant_component_per_cluster_ps: (
+        tuple[float, ...] | None)
+    feol_wire_load_time_constant_component_per_cluster_ps: (
+        tuple[float, ...] | None)
+    feol_distributed_wire_time_constant_component_per_cluster_ps: (
+        tuple[float, ...] | None)
+    feol_time_constant_per_cluster_ps: tuple[float, ...] | None
+    feol_driver_cap_delay_component_ns: tuple[float, ...] | None
+    feol_wire_load_delay_component_ns: tuple[float, ...] | None
+    feol_distributed_wire_delay_component_ns: tuple[float, ...] | None
+    feol_delay_per_cluster_ns: tuple[float, ...] | None
+    feol_min_delay_ns: float | None
+    feol_median_delay_ns: float | None
+    feol_p90_delay_ns: float | None
+    feol_max_delay_ns: float | None
+    feol_uniform_average_delay_ns: float | None
+    feol_delay_spread_ns: float | None
+    feol_far_near_ratio: float | None
+    feol_resistance_ohm_per_um: float | None
+    feol_capacitance_pF_per_um: float | None
+    feol_fixed_driver_resistance_ohm: float | None
+    feol_fixed_load_pF: float | None
+    feol_rise_target_fraction: float | None
+    feol_latency_model_name: str | None
+    feol_latency_provenance: dict[str, dict[str, str]] | None
+    feol_latency_status: str | None
+    feol_latency_unit_conversion: str | None
+    feol_latency_workload_weighted: bool
+    feol_latency_serialization_included: bool
     feol_route_start: str
     feol_route_end: str
     interface_boundary: str
@@ -76,10 +111,23 @@ def _edge_ports(
     return pitch, ports
 
 
+def _percentile(values: tuple[float, ...], fraction: float) -> float:
+    """Return a linearly interpolated percentile of a non-empty sample."""
+    ordered = sorted(values)
+    position = fraction * (len(ordered) - 1)
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
 def calculate_feol_route(
         spec: FEOLRouteInput, topology: M3DSubarrayResult,
         ) -> FEOLRouteResult:
     """Map every cluster center to its nearest centered-bin edge channel."""
+    if (not math.isfinite(spec.wire.capacitance_fF_per_um)
+            or spec.wire.capacitance_fF_per_um <= 0.0):
+        raise ValueError("FEOL capacitance per length must be positive")
     centers = _cluster_centers(topology)
     pitch, ports = _edge_ports(
         edge=spec.edge,
@@ -105,12 +153,107 @@ def calculate_feol_route(
     average_length = sum(lengths) / len(lengths)
     average_capacitance = (
         spec.wire.capacitance_fF_per_um * average_length)
+    wire_capacitances_pF = tuple(
+        spec.wire.capacitance_fF_per_um * length * 1e-3
+        for length in lengths)
     # Framework convention: supply energy is alpha*C*V^2. fJ -> pJ is 1e-3.
     energy = (
         spec.wire.activity_factor
         * average_capacitance
         * spec.wire.voltage_V ** 2
         * 1e-3)
+
+    wire_resistances = None
+    driver_cap_terms = None
+    wire_load_terms = None
+    distributed_wire_terms = None
+    time_constants = None
+    driver_cap_delays = None
+    wire_load_delays = None
+    distributed_wire_delays = None
+    delays = None
+    min_delay = None
+    median_delay = None
+    p90_delay = None
+    max_delay = None
+    average_delay = None
+    delay_spread = None
+    far_near_ratio = None
+    capacitance_pF_per_um = None
+    model_name = None
+    latency_provenance = None
+    latency_status = None
+    unit_conversion = None
+    rise_target = None
+    resistance_per_um = spec.wire.resistance_ohm_per_um
+    driver_resistance = spec.wire.fixed_driver_resistance_ohm
+    fixed_load = spec.wire.fixed_load_pF
+    if resistance_per_um is not None:
+        if (not math.isfinite(resistance_per_um)
+                or resistance_per_um <= 0.0):
+            raise ValueError("FEOL resistance per length must be positive")
+        if (driver_resistance is None
+                or not math.isfinite(driver_resistance)
+                or driver_resistance <= 0.0):
+            raise ValueError("FEOL fixed driver resistance must be positive")
+        if (fixed_load is None
+                or not math.isfinite(fixed_load)
+                or fixed_load <= 0.0):
+            raise ValueError("FEOL fixed load capacitance must be positive")
+        provenance_inputs = (
+            spec.wire.resistance_provenance,
+            spec.wire.driver_resistance_provenance,
+            spec.wire.load_capacitance_provenance,
+        )
+        if any(value is None for value in provenance_inputs):
+            raise ValueError("FEOL latency parameter provenance is required")
+        capacitance_pF_per_um = spec.wire.capacitance_fF_per_um * 1e-3
+        wire_resistances = tuple(
+            resistance_per_um * length for length in lengths)
+        driver_cap_terms = tuple(
+            driver_resistance * (wire_capacitance + fixed_load)
+            for wire_capacitance in wire_capacitances_pF)
+        wire_load_terms = tuple(
+            wire_resistance * fixed_load
+            for wire_resistance in wire_resistances)
+        distributed_wire_terms = tuple(
+            0.5 * wire_resistance * wire_capacitance
+            for wire_resistance, wire_capacitance in zip(
+                wire_resistances, wire_capacitances_pF, strict=True))
+        time_constants = tuple(
+            driver + wire_load + distributed
+            for driver, wire_load, distributed in zip(
+                driver_cap_terms, wire_load_terms, distributed_wire_terms,
+                strict=True))
+        rise_target = 0.8
+        rise_coefficient = -math.log(1.0 - rise_target)
+        to_delay_ns = rise_coefficient * 1e-3
+        driver_cap_delays = tuple(
+            value * to_delay_ns for value in driver_cap_terms)
+        wire_load_delays = tuple(
+            value * to_delay_ns for value in wire_load_terms)
+        distributed_wire_delays = tuple(
+            value * to_delay_ns for value in distributed_wire_terms)
+        delays = tuple(value * to_delay_ns for value in time_constants)
+        min_delay = min(delays)
+        median_delay = statistics.median(delays)
+        p90_delay = _percentile(delays, 0.9)
+        max_delay = max(delays)
+        average_delay = sum(delays) / len(delays)
+        delay_spread = max_delay - min_delay
+        far_near_ratio = max_delay / min_delay
+        model_name = "FIRST_ORDER_DISTRIBUTED_RC_ELMORE"
+        latency_provenance = {
+            "resistance": spec.wire.resistance_provenance.model_dump(),
+            "driver_resistance": (
+                spec.wire.driver_resistance_provenance.model_dump()),
+            "load_capacitance": (
+                spec.wire.load_capacitance_provenance.model_dump()),
+        }
+        latency_status = "CONDITIONAL_MODELING_CHOICE"
+        unit_conversion = (
+            "FF_PER_UM_TO_PF_PER_UM_BY_1E-3__"
+            "OHM_TIMES_PF_EQUALS_PS__PS_TO_NS_BY_1E-3")
     return FEOLRouteResult(
         feol_route_type=spec.type,
         feol_io_edge=spec.edge,
@@ -126,6 +269,8 @@ def calculate_feol_route(
         feol_route_perpendicular_component_per_cluster_um=(
             tuple(perpendicular_components)),
         feol_route_min_length_um=min(lengths),
+        feol_route_median_length_um=statistics.median(lengths),
+        feol_route_p90_length_um=_percentile(tuple(lengths), 0.9),
         feol_route_max_length_um=max(lengths),
         feol_route_average_length_um=average_length,
         feol_route_average_lateral_component_um=(
@@ -137,8 +282,39 @@ def calculate_feol_route(
         feol_wire_voltage_V=spec.wire.voltage_V,
         feol_wire_activity_factor=spec.wire.activity_factor,
         feol_wire_provenance=spec.wire.provenance,
+        feol_wire_capacitance_per_cluster_pF=wire_capacitances_pF,
         feol_average_wire_capacitance_fF=average_capacitance,
         feol_route_energy_pj_per_bit=energy,
+        feol_wire_resistance_per_cluster_ohm=wire_resistances,
+        feol_driver_cap_time_constant_component_per_cluster_ps=(
+            driver_cap_terms),
+        feol_wire_load_time_constant_component_per_cluster_ps=(
+            wire_load_terms),
+        feol_distributed_wire_time_constant_component_per_cluster_ps=(
+            distributed_wire_terms),
+        feol_time_constant_per_cluster_ps=time_constants,
+        feol_driver_cap_delay_component_ns=driver_cap_delays,
+        feol_wire_load_delay_component_ns=wire_load_delays,
+        feol_distributed_wire_delay_component_ns=distributed_wire_delays,
+        feol_delay_per_cluster_ns=delays,
+        feol_min_delay_ns=min_delay,
+        feol_median_delay_ns=median_delay,
+        feol_p90_delay_ns=p90_delay,
+        feol_max_delay_ns=max_delay,
+        feol_uniform_average_delay_ns=average_delay,
+        feol_delay_spread_ns=delay_spread,
+        feol_far_near_ratio=far_near_ratio,
+        feol_resistance_ohm_per_um=resistance_per_um,
+        feol_capacitance_pF_per_um=capacitance_pF_per_um,
+        feol_fixed_driver_resistance_ohm=driver_resistance,
+        feol_fixed_load_pF=fixed_load,
+        feol_rise_target_fraction=rise_target,
+        feol_latency_model_name=model_name,
+        feol_latency_provenance=latency_provenance,
+        feol_latency_status=latency_status,
+        feol_latency_unit_conversion=unit_conversion,
+        feol_latency_workload_weighted=False,
+        feol_latency_serialization_included=False,
         feol_route_start="MIV_FEOL_LANDING",
         feol_route_end="EDGE_IO_INTERFACE_INPUT",
         interface_boundary="EDGE_IO_INTERFACE_INPUT_TO_GPU_RECEIVER",

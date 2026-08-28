@@ -19,7 +19,11 @@ from ..geometry import (
     evaluate_geometry_fit,
     resolve_legacy_geometry,
 )
-from ..miv import build_miv_topology, calculate_length_scaled_miv_energy
+from ..miv import (
+    build_miv_topology,
+    calculate_length_scaled_miv_energy,
+    calculate_miv_propagation_latency,
+)
 from ..m3d_subarray import M3DSubarrayResult
 from ..result import BackendEnergyResult, EnergyDecomposition
 from ..si_packing import pack_si_primitive
@@ -438,6 +442,64 @@ class DreamRAMBackend:
                 )
                 miv_access_energy = miv_energy.miv_access_energy_pJ_per_bit
                 miv_metadata.update(miv_energy.as_dict())
+                miv_resistance_per_length = (
+                    vertical.miv_resistance_ohm_per_um)
+                if (vertical.miv_load_resistance_ohm is not None
+                        and isinstance(
+                            miv_resistance_per_length, (int, float))):
+                    resistance_provenance = (
+                        vertical.miv_resistance_provenance)
+                    if resistance_provenance is None:
+                        raise RuntimeError(
+                            "resolved MIV resistance requires provenance")
+                    miv_latency = calculate_miv_propagation_latency(
+                        topology,
+                        vertical_capacitance_pF_per_um=(
+                            miv_vertical_capacitance_pF_per_um),
+                        fixed_load_pF=vertical.fixed_load_pF,
+                        miv_load_resistance_ohm=(
+                            vertical.miv_load_resistance_ohm),
+                        miv_resistance_ohm_per_um=(
+                            miv_resistance_per_length),
+                        parameter_status=resistance_provenance.status,
+                        provenance=resistance_provenance.classification,
+                    )
+                    miv_metadata.update(miv_latency.as_dict())
+                    miv_metadata.update({
+                        "miv_latency_model": miv_latency.model_name,
+                        "miv_latency_status": "RESOLVED",
+                        "miv_resistance_ohm_per_um": (
+                            miv_resistance_per_length),
+                        "miv_resistance_parameter_status": (
+                            resistance_provenance.status),
+                        "miv_resistance_provenance": (
+                            resistance_provenance.classification),
+                        "miv_resistance_note": resistance_provenance.note,
+                        "miv_fixed_driver_resistance_ohm": (
+                            vertical.miv_load_resistance_ohm),
+                        "miv_fixed_driver_resistance_provenance": (
+                            miv_latency.fixed_driver_resistance_provenance),
+                        "miv_latency_serialization_included": (
+                            miv_latency.serialization_included),
+                    })
+                elif vertical.miv_load_resistance_ohm is not None:
+                    miv_metadata.update({
+                        "miv_latency_model": (
+                            "FIRST_ORDER_DISTRIBUTED_RC_ELMORE"),
+                        "miv_latency_status": (
+                            "UNRESOLVED_MIV_RESISTANCE_PER_LENGTH"),
+                        "miv_resistance_ohm_per_um": (
+                            miv_resistance_per_length),
+                        "miv_resistance_per_length_parameter_status": (
+                            "UNRESOLVED"),
+                        "miv_resistance_per_length_provenance": (
+                            "NO_MIV_SPECIFIC_SOURCE_FOUND"),
+                        "miv_fixed_driver_resistance_ohm": (
+                            vertical.miv_load_resistance_ohm),
+                        "miv_fixed_driver_resistance_provenance": (
+                            "DREAMRAM_REFERENCE_PLACEHOLDER"),
+                        "miv_latency_serialization_included": False,
+                    })
                 miv_metadata.update({
                     **dreamram_reference,
                     "miv_electrical_model": (

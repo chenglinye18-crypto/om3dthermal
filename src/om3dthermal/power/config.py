@@ -189,11 +189,41 @@ class M3DSubarrayInput(StrictModel):
     topology_provenance: Literal["MODELING_CHOICE"]
 
 
+class FEOLParameterProvenance(StrictModel):
+    classification: Literal[
+        "MODELING_CHOICE", "MODELING_CHOICE_PLACEHOLDER"]
+    status: Literal["CONDITIONAL_MODELING_CHOICE"]
+    source_note: str
+
+
 class FEOLWireInput(StrictModel):
     capacitance_fF_per_um: float = Field(gt=0.0)
     voltage_V: float = Field(gt=0.0)
     activity_factor: float = Field(ge=0.0, le=1.0)
     provenance: Literal["MODELING_CHOICE"]
+    resistance_ohm_per_um: float | None = Field(default=None, gt=0.0)
+    fixed_driver_resistance_ohm: float | None = Field(default=None, gt=0.0)
+    fixed_load_pF: float | None = Field(default=None, gt=0.0)
+    resistance_provenance: FEOLParameterProvenance | None = None
+    driver_resistance_provenance: FEOLParameterProvenance | None = None
+    load_capacitance_provenance: FEOLParameterProvenance | None = None
+
+    @model_validator(mode="after")
+    def latency_inputs_close(self) -> "FEOLWireInput":
+        values = (
+            self.resistance_ohm_per_um,
+            self.fixed_driver_resistance_ohm,
+            self.fixed_load_pF,
+            self.resistance_provenance,
+            self.driver_resistance_provenance,
+            self.load_capacitance_provenance,
+        )
+        if any(value is not None for value in values) and any(
+                value is None for value in values):
+            raise ValueError(
+                "FEOL latency requires complete resistance, driver, load, "
+                "and provenance inputs")
+        return self
 
 
 class FEOLRouteInput(StrictModel):
@@ -266,6 +296,14 @@ class CellModelInput(StrictModel):
                     "validated operation_table replacement must use "
                     "energy_source: operation_table")
         return self
+
+
+class MIVResistanceProvenance(StrictModel):
+    classification: Literal["MODELING_CHOICE"]
+    status: Literal["CONDITIONAL_MODELING_CHOICE"]
+    note: str
+
+
 class MemoryInput(StrictModel):
     technology: str
     backend: Literal["dreamram", "unresolved"]
@@ -290,9 +328,27 @@ class TransportInput(StrictModel):
     capacitance_fF: float | Literal["unresolved"] | None = None
     fixed_load_pF: float | None = Field(default=None, gt=0.0)
     fixed_load_provenance: Literal["MODELING_CHOICE"] | None = None
+    miv_load_resistance_ohm: float | None = Field(default=None, gt=0.0)
+    miv_resistance_ohm_per_um: float | Literal["unresolved"] | None = None
+    miv_resistance_provenance: MIVResistanceProvenance | None = None
 
     @model_validator(mode="after")
     def miv_inputs(self) -> "TransportInput":
+        if (self.type != "miv"
+                and (self.miv_load_resistance_ohm is not None
+                     or self.miv_resistance_ohm_per_um is not None
+                     or self.miv_resistance_provenance is not None)):
+            raise ValueError(
+                "MIV resistance inputs are only valid for MIV transport")
+        if isinstance(self.miv_resistance_ohm_per_um, (int, float)):
+            if (not math.isfinite(self.miv_resistance_ohm_per_um)
+                    or self.miv_resistance_ohm_per_um < 0.0):
+                raise ValueError(
+                    "miv_resistance_ohm_per_um must be finite, non-negative, "
+                    "or unresolved")
+            if self.miv_resistance_provenance is None:
+                raise ValueError(
+                    "resolved MIV resistance per length requires provenance")
         if self.source == "miv_topology":
             if self.type != "miv":
                 raise ValueError("miv_topology source requires type: miv")
@@ -347,6 +403,18 @@ class InterfaceInput(StrictModel):
     source_boundary: str | None = None
 
 
+class PhysicalAccessLatencyInput(StrictModel):
+    mat_latency_ns: float = Field(gt=0.0)
+    mat_classification: Literal["MODELING_CHOICE_PLACEHOLDER"]
+    mat_status: Literal["NOT_CAPABILITY_VALIDATED"]
+    mat_note: str
+    interface_latency_ns: float = Field(ge=0.0)
+    interface_classification: Literal["MODELING_PLACEHOLDER"]
+    interface_status: Literal["NOT_YET_CALIBRATED"]
+    interface_included_in_total: Literal[True]
+    interface_note: str
+
+
 class GeometrySourceInput(StrictModel):
     """Existing thermal-geometry source for memory footprint constraints."""
 
@@ -365,6 +433,7 @@ class ArchitectureInput(StrictModel):
     vertical: TransportInput
     base_route: BaseRouteInput
     interface: InterfaceInput
+    physical_access_latency: PhysicalAccessLatencyInput | None = None
     logic_background_w: float | None = Field(default=None, ge=0.0)
 
     @model_validator(mode="after")
@@ -374,6 +443,10 @@ class ArchitectureInput(StrictModel):
                 "MIV architecture requires architecture.m3d_subarray")
         if self.feol_route is not None and self.m3d_subarray is None:
             raise ValueError("FEOL route requires architecture.m3d_subarray")
+        if self.physical_access_latency is not None:
+            if self.vertical.type != "miv" or self.feol_route is None:
+                raise ValueError(
+                    "physical access latency requires MIV and FEOL routes")
         return self
 
 

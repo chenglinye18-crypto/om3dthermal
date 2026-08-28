@@ -112,6 +112,25 @@ architecture:
       voltage_V: 0.80
       activity_factor: 0.50
       provenance: MODELING_CHOICE
+      resistance_ohm_per_um: 2.0
+      fixed_driver_resistance_ohm: 100.0
+      fixed_load_pF: 0.006
+      resistance_provenance:
+        classification: MODELING_CHOICE
+        status: CONDITIONAL_MODELING_CHOICE
+        source_note: >-
+          2 ohm/um is the current nominal effective distributed FEOL
+          interconnect resistance for architecture-level latency modeling. It
+          is not a measured FEOL value and is not derived from explicit metal
+          geometry.
+      driver_resistance_provenance:
+        classification: MODELING_CHOICE
+        status: CONDITIONAL_MODELING_CHOICE
+        source_note: fixed endpoint effective resistance placeholder
+      load_capacitance_provenance:
+        classification: MODELING_CHOICE_PLACEHOLDER
+        status: CONDITIONAL_MODELING_CHOICE
+        source_note: independent FEOL endpoint load placeholder; not measured
     access_assumption: UNIFORM_CLUSTER_ACCESS
     topology_provenance: MODELING_CHOICE
     io_channel_count_source: EXISTING_INDUCTIVE_INTERFACE_REFERENCE
@@ -121,6 +140,16 @@ architecture:
     electrical_model: dreamram_length_scaled_reference
     fixed_load_pF: 0.006
     fixed_load_provenance: MODELING_CHOICE
+    miv_load_resistance_ohm: 100.0
+    miv_resistance_ohm_per_um: 10.0
+    miv_resistance_provenance:
+      classification: MODELING_CHOICE
+      status: CONDITIONAL_MODELING_CHOICE
+      note: >-
+        10 ohm/um is selected as the nominal effective distributed MIV
+        resistance for the current analytical latency model. It is not a
+        measured MIV value and is not derived from an explicitly modeled MIV
+        cross section.
   base_route: {enabled: false, source: none}
   interface:
     type: contactless
@@ -133,6 +162,19 @@ architecture:
     source_boundary: >-
       Existing 0.5 pJ/bit inductive-interface reference; repository evidence
       does not establish a complete TX/RX/coil/clock/SerDes/driver boundary.
+  physical_access_latency:
+    mat_latency_ns: 10.0
+    mat_classification: MODELING_CHOICE_PLACEHOLDER
+    mat_status: NOT_CAPABILITY_VALIDATED
+    mat_note: Fixed MAT read-latency placeholder; no layer/position dependence.
+    interface_latency_ns: 0.0
+    interface_classification: MODELING_PLACEHOLDER
+    interface_status: NOT_YET_CALIBRATED
+    interface_included_in_total: true
+    interface_note: >-
+      0 ns means no additional calibrated interface latency is currently
+      available. It is not a claim that the physical interface has zero
+      latency.
   logic_background_w: null
 
 workload:
