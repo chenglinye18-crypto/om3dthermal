@@ -13,6 +13,15 @@ from om3dthermal.workload.llm_decode import (
     LLMDecodeMetrics,
     evaluate_llm_decode,
 )
+from om3dthermal.workload.m3d_page_demand import (
+    M3DOnlyCapacityError,
+    M3DWorkloadPageDemand,
+    M3DWorkloadPhysicalPackingError,
+    PageAccessDemandTrafficMismatchError,
+    ResidentPageAccessDemand,
+    build_m3d_only_workload_objects,
+    build_m3d_workload_page_demand,
+)
 from om3dthermal.workload.spec import WorkloadSpec
 
 __all__ = [
@@ -20,10 +29,17 @@ __all__ = [
     "CapacityFeasibilityMetrics",
     "LLMDecodeInput",
     "LLMDecodeMetrics",
+    "M3DOnlyCapacityError",
+    "M3DWorkloadPageDemand",
+    "M3DWorkloadPhysicalPackingError",
+    "PageAccessDemandTrafficMismatchError",
+    "ResidentPageAccessDemand",
     "WorkloadSpec",
     "WorkloadDemand",
     "evaluate_architecture_capacity_feasibility",
     "evaluate_capacity_feasibility",
     "evaluate_llm_decode",
+    "build_m3d_only_workload_objects",
+    "build_m3d_workload_page_demand",
     "resolve_llm_decode_demand",
 ]

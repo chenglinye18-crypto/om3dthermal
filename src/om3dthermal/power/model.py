@@ -26,6 +26,7 @@ from .geometry import (
 from .feol_route import calculate_feol_route
 from .m3d_subarray import calculate_m3d_subarray
 from .physical_latency import calculate_physical_access_latency
+from .physical_capacity import calculate_physical_capacity_layout
 from .refresh import calculate_refresh_power
 from .result import BackendEnergyResult, EnergyDecomposition, MemoryPowerResult
 
@@ -298,6 +299,20 @@ def calculate_memory_power(
             None if m3d_geometry is None else m3d_geometry.layers),
         memory_region_count=geometry.memory_region_count,
     )
+    physical_capacity_result = None
+    if physical_latency_result is not None:
+        if m3d_subarray is None:
+            raise ValueError("physical capacity layout requires M3D topology")
+        raw_total_bits = refresh_result.diagnostics.get("total_stored_bits")
+        if not isinstance(raw_total_bits, int):
+            raise ValueError(
+                "physical capacity layout requires resolved total stored bits")
+        physical_capacity_result = calculate_physical_capacity_layout(
+            m3d_subarray,
+            physical_latency_result,
+            slab_count=geometry.memory_region_count,
+            expected_total_bits=raw_total_bits,
+        )
     refresh_W = refresh_result.power_W
     background_W = _background_power(device, config)
     logic_W = config.architecture.logic_background_w
@@ -365,6 +380,8 @@ def calculate_memory_power(
             **({} if feol_route_result is None else feol_route_result.as_dict()),
             **({} if physical_latency_result is None
                else physical_latency_result.as_dict()),
+            **({} if physical_capacity_result is None
+               else physical_capacity_result.as_dict()),
             **({} if m3d_subarray is None else zhu_scaling_diagnostics),
             **refresh_result.diagnostics,
             **electrical_access_comparison,

@@ -22,6 +22,14 @@ from .physical_latency import (
     PhysicalLocationLatency,
     calculate_physical_access_latency,
 )
+from .physical_capacity import (
+    CapacityLatencyCutoff,
+    PhysicalCapacityLayout,
+    PhysicalSlot,
+    PhysicalSlotClass,
+    calculate_physical_capacity_layout,
+    iter_physical_slots,
+)
 from .system import (
     ResolvedSystemPower,
     ResolvedThermalPowerMapping,
@@ -38,11 +46,17 @@ __all__ = [
     "MemoryPowerResult",
     "PhysicalAccessLatency",
     "PhysicalLocationLatency",
+    "CapacityLatencyCutoff",
+    "PhysicalCapacityLayout",
+    "PhysicalSlot",
+    "PhysicalSlotClass",
     "MissingCellReplacementError",
     "UnresolvedMIVEnergyError",
     "apply_component_replacements",
     "calculate_memory_power",
     "calculate_physical_access_latency",
+    "calculate_physical_capacity_layout",
+    "iter_physical_slots",
     "load_power_config",
     "load_case_config",
     "resolve_case_geometry",
