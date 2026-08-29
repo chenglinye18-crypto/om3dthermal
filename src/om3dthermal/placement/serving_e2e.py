@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Sequence
+from typing import Protocol, Sequence
 
 from om3dthermal.evaluation import ArchitectureCapacityFeasibility
 from om3dthermal.evaluator import evaluate_llm_decode_performance
@@ -71,6 +71,15 @@ class OccupancyServingClosurePoint:
     tokens_per_s_gain: float
 
 
+class PlacementDecodeMetrics(Protocol):
+    """Minimal existing-evaluator input shared by dense and MoE decode."""
+
+    required_capacity_bytes: float
+    read_bytes_per_token: float
+    write_bytes_per_token: float
+    flops_per_token: int
+
+
 def evaluate_placement_serving_timing(
     workload: LLMDecodeInput,
     demand: M3DWorkloadPageDemand,
@@ -86,6 +95,37 @@ def evaluate_placement_serving_timing(
     """Add page-scan startup latency inside the existing memory boundary."""
     if workload.batch_size != demand.requested_requests:
         raise ValueError("workload batch and page demand request count differ")
+    return evaluate_metrics_placement_serving_timing(
+        evaluate_llm_decode(workload),
+        demand,
+        physical_layout,
+        requested_requests=workload.batch_size,
+        strategy=strategy,
+        physical_access_latency_avg_ns=physical_access_latency_avg_ns,
+        physical_access_latency_max_ns=physical_access_latency_max_ns,
+        matched_payload_bandwidth_bits_per_second=(
+            matched_payload_bandwidth_bits_per_second),
+        effective_compute_flops_per_second=effective_compute_flops_per_second,
+        host_penalty_step_time_ms=host_penalty_step_time_ms,
+    )
+
+
+def evaluate_metrics_placement_serving_timing(
+    metrics: PlacementDecodeMetrics,
+    demand: M3DWorkloadPageDemand,
+    physical_layout: PhysicalCapacityLayout,
+    *,
+    requested_requests: int,
+    strategy: str,
+    physical_access_latency_avg_ns: float,
+    physical_access_latency_max_ns: float,
+    matched_payload_bandwidth_bits_per_second: float,
+    effective_compute_flops_per_second: float,
+    host_penalty_step_time_ms: float = 0.0,
+) -> PlacementServingTimingResult:
+    """Apply the frozen placement service equation to existing metrics."""
+    if requested_requests != demand.requested_requests:
+        raise ValueError("metrics batch and page demand request count differ")
     average_latency = _finite_nonnegative(
         physical_access_latency_avg_ns, "physical_access_latency_avg_ns")
     maximum_latency = _finite_nonnegative(
@@ -94,7 +134,6 @@ def evaluate_placement_serving_timing(
         raise ValueError("maximum physical latency cannot be below average")
     host_penalty_ms = _finite_nonnegative(
         host_penalty_step_time_ms, "host_penalty_step_time_ms")
-    metrics = evaluate_llm_decode(workload)
     page_size = demand.page_layout.page_size_bytes
     if page_size <= 0:
         raise ValueError("page size must be positive")
@@ -102,7 +141,7 @@ def evaluate_placement_serving_timing(
         demand.total_read_bytes_per_decode_step / page_size)
     access_latency_step_s = page_equivalents * average_latency * 1e-9
     access_latency_per_token_equivalent_s = (
-        access_latency_step_s / workload.batch_size)
+        access_latency_step_s / requested_requests)
     required = metrics.required_capacity_bytes
     capacity = ArchitectureCapacityFeasibility(
         architecture="orthogonal_m3d_igzo_placement_timing",
@@ -120,7 +159,7 @@ def evaluate_placement_serving_timing(
     performance = evaluate_llm_decode_performance(
         metrics,
         capacity,
-        batch_size=workload.batch_size,
+        batch_size=requested_requests,
         matched_payload_bandwidth_bits_per_second=(
             matched_payload_bandwidth_bits_per_second),
         effective_compute_flops_per_second=(
@@ -133,7 +172,7 @@ def evaluate_placement_serving_timing(
     assert performance.memory_time_per_token_equivalent_s is not None
     assert performance.compute_time_per_token_equivalent_s is not None
     assert performance.aggregate_step_time_s is not None
-    batch = workload.batch_size
+    batch = requested_requests
     bandwidth_step_ms = (
         batch
         * performance.memory_bandwidth_time_per_token_equivalent_s

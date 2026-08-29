@@ -44,6 +44,12 @@ from om3dthermal.workload.moe_published_profile import (
     build_published_expert_demand,
     load_fiddler_published_profile,
 )
+from om3dthermal.workload.moe_published_page_demand import (
+    MoEPublishedPageDemand,
+    PageDemandView,
+    build_published_moe_page_demand,
+    expert_only_page_demand_view,
+)
 from om3dthermal.workload.spec import MoEWorkloadSpec, WorkloadSpec
 
 __all__ = [
@@ -67,6 +73,8 @@ __all__ = [
     "PublishedExpertDemand",
     "PublishedExpertObjectDemand",
     "RelativePopularityStatistics",
+    "MoEPublishedPageDemand",
+    "PageDemandView",
     "WorkloadSpec",
     "WorkloadDemand",
     "evaluate_architecture_capacity_feasibility",
@@ -80,5 +88,7 @@ __all__ = [
     "build_moe_resident_objects",
     "build_published_expert_demand",
     "load_fiddler_published_profile",
+    "build_published_moe_page_demand",
+    "expert_only_page_demand_view",
     "resolve_llm_decode_demand",
 ]
