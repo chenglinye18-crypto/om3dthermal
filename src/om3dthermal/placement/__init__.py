@@ -33,6 +33,15 @@ from .moe_published_e2e import (
     evaluate_published_moe_placement_e2e,
     evaluate_published_moe_hierarchical_e2e,
 )
+from .nmp_feasibility import (
+    GPUOnlyPlacementBaseline,
+    NMPFeasibilityPoint,
+    NMPPlacementPoint,
+    NMPSweepSummary,
+    NMPWorkloadClosure,
+    evaluate_nmp_feasibility,
+    sweep_nmp_feasibility,
+)
 
 __all__ = [
     "FastRegionCapacityError",
@@ -51,6 +60,11 @@ __all__ = [
     "PhysicalPlacementComparison",
     "PhysicalPlacementPoint",
     "TrafficClassLatency",
+    "GPUOnlyPlacementBaseline",
+    "NMPFeasibilityPoint",
+    "NMPPlacementPoint",
+    "NMPSweepSummary",
+    "NMPWorkloadClosure",
     "compare_fast_region_placements",
     "evaluate_fast_region_occupancy_sweep",
     "place_pages_on_slots",
@@ -61,5 +75,7 @@ __all__ = [
     "evaluate_hierarchical_placement_serving_timing",
     "evaluate_published_moe_placement_e2e",
     "evaluate_published_moe_hierarchical_e2e",
+    "evaluate_nmp_feasibility",
+    "sweep_nmp_feasibility",
     "propagate_occupancy_sweep_to_serving",
 ]
