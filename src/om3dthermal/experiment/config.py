@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from om3dthermal.architecture import ArchitectureSpec
 from om3dthermal.platform import HostOffloadSpec, PlatformSpec
-from om3dthermal.workload import WorkloadSpec
+from om3dthermal.workload import MoEWorkloadSpec, WorkloadSpec
 from om3dthermal.provenance import ProvenanceRecord
 from om3dthermal.serving import MeasuredBatchCurvePoint
 
@@ -236,6 +236,13 @@ def load_platform_spec(path: str | Path, *, project_root: Path) -> PlatformSpec:
 
 def load_workload_spec(path: str | Path, *, project_root: Path) -> WorkloadSpec:
     return WorkloadSpec.model_validate(
+        _load_mapping(_resolve_path(project_root, Path(path))))
+
+
+def load_moe_workload_spec(
+    path: str | Path, *, project_root: Path
+) -> MoEWorkloadSpec:
+    return MoEWorkloadSpec.model_validate(
         _load_mapping(_resolve_path(project_root, Path(path))))
 
 

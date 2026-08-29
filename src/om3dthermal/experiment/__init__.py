@@ -10,6 +10,7 @@ from .config import (
     load_architecture_spec,
     load_experiment_spec,
     load_platform_spec,
+    load_moe_workload_spec,
     load_serving_experiment_spec,
     load_workload_spec,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "load_architecture_spec",
     "load_experiment_spec",
     "load_platform_spec",
+    "load_moe_workload_spec",
     "load_serving_experiment_spec",
     "load_workload_spec",
     "run_experiment",

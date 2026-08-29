@@ -28,6 +28,7 @@ Accounting policy (frozen for B1-R2):
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import (
@@ -38,6 +39,37 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+
+@dataclass(frozen=True)
+class KVDecodeAccounting:
+    """Shared exact analytical KV footprint/read/write accounting."""
+
+    bytes_per_request: float
+    footprint_bytes: float
+    read_bytes_per_token: float
+    write_bytes_per_token: float
+
+
+def calculate_kv_decode_accounting(
+    *,
+    n_layers: int,
+    batch_size: int,
+    context_length: int,
+    n_heads_kv: int,
+    d_head: int,
+    kv_bits: int,
+) -> KVDecodeAccounting:
+    """Return the common GQA/MHA KV equations using true byte division."""
+    bytes_per_request = (
+        2 * n_layers * context_length * n_heads_kv * d_head * kv_bits / 8)
+    return KVDecodeAccounting(
+        bytes_per_request=bytes_per_request,
+        footprint_bytes=batch_size * bytes_per_request,
+        read_bytes_per_token=bytes_per_request,
+        write_bytes_per_token=(
+            2 * n_layers * n_heads_kv * d_head * kv_bits / 8),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -281,8 +313,16 @@ def evaluate_llm_decode(inp: LLMDecodeInput) -> LLMDecodeMetrics:
     # 5. KV footprint
     # -------------------------------------------------------------
     # Formula: 2 * L * B * S * Hkv * Dhead * bkv / 8  (true division)
-    kv_bytes_per_request = 2 * L * S * Hkv * Dhead * bkv / 8
-    bytes_kv_footprint = B * kv_bytes_per_request
+    kv = calculate_kv_decode_accounting(
+        n_layers=L,
+        batch_size=B,
+        context_length=S,
+        n_heads_kv=Hkv,
+        d_head=Dhead,
+        kv_bits=bkv,
+    )
+    kv_bytes_per_request = kv.bytes_per_request
+    bytes_kv_footprint = kv.footprint_bytes
 
     # -------------------------------------------------------------
     # 6. Required capacity on the workload side
@@ -303,11 +343,11 @@ def evaluate_llm_decode(inp: LLMDecodeInput) -> LLMDecodeMetrics:
     # MODELING_CHOICE (v0): full_reread – all historical K/V re-read.
     # KV read per token = 2 * L * S * Hkv * Dhead * bkv / 8  (true division;
     # independent of B).
-    kv_read_per_token = 2 * L * S * Hkv * Dhead * bkv / 8
+    kv_read_per_token = kv.read_bytes_per_token
 
     # KV write per token = 2 * L * Hkv * Dhead * bkv / 8  (true division;
     # independent of S).
-    kv_write_per_token = 2 * L * Hkv * Dhead * bkv / 8
+    kv_write_per_token = kv.write_bytes_per_token
 
     read_per_token = weight_read_per_token + kv_read_per_token
     write_per_token = kv_write_per_token
