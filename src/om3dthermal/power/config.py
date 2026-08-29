@@ -415,6 +415,60 @@ class PhysicalAccessLatencyInput(StrictModel):
     interface_note: str
 
 
+class CoilBandwidthInput(StrictModel):
+    links_per_die: int = Field(gt=0)
+    data_rate_gbps_per_link: float = Field(gt=0.0)
+    classification: Literal["DERIVED_FROM_ARCHITECTURE"]
+    parameter_classification: Literal["MODELING_CHOICE"]
+    link_count_source: Literal["ARCHITECTURE_CONTACTLESS_LINK_COUNT"]
+
+
+class InternalBandwidthInput(StrictModel):
+    model: Literal["FIRST_ORDER_PARALLEL_MEMORY_SERVICE_MODEL"]
+    service_unit: Literal[
+        "FEOL_IO_CHANNEL_ALIGNED_CLUSTER_ACCESS_GROUP"]
+    parallel_units_per_slab_source: Literal["FEOL_IO_CHANNEL_COUNT"]
+    parallel_slabs_source: Literal["GEOMETRY_MEMORY_REGION_COUNT"]
+    clusters_per_service_source: Literal[
+        "M3D_ACCESSED_CLUSTERS_PER_ACCESS"]
+    read_payload_source: Literal["M3D_DELIVERED_BITS_PER_ACCESS"]
+    service_cycle_source: Literal[
+        "FIRST_ORDER_SERVICE_CYCLE_APPROXIMATION"]
+    service_cycle_scale: float = Field(gt=0.0)
+    classification: Literal["MODELING_CHOICE"]
+
+
+class GPUInternalBandwidthInput(StrictModel):
+    bandwidth_bytes_per_s: float | None = Field(default=None, gt=0.0)
+    status: Literal[
+        "GPU_INTERNAL_BW_NOT_MODELED_AS_BINDING",
+        "NON_BINDING_NUMERICAL_CHOICE_NOT_HARDWARE_CAPABILITY",
+    ]
+
+    @model_validator(mode="after")
+    def status_closure(self) -> "GPUInternalBandwidthInput":
+        if (
+            self.bandwidth_bytes_per_s is None
+            and self.status != "GPU_INTERNAL_BW_NOT_MODELED_AS_BINDING"
+        ):
+            raise ValueError("unbounded GPU internal bandwidth needs None status")
+        if (
+            self.bandwidth_bytes_per_s is not None
+            and self.status != (
+                "NON_BINDING_NUMERICAL_CHOICE_NOT_HARDWARE_CAPABILITY")
+        ):
+            raise ValueError("finite GPU internal bandwidth needs numerical status")
+        return self
+
+
+class HierarchicalMemoryServiceInput(StrictModel):
+    model: Literal["HIERARCHICAL_BANDWIDTH_MODEL"]
+    die_count_source: Literal["GEOMETRY_MEMORY_REGION_COUNT"]
+    coil: CoilBandwidthInput
+    internal: InternalBandwidthInput
+    gpu_internal: GPUInternalBandwidthInput
+
+
 class GeometrySourceInput(StrictModel):
     """Existing thermal-geometry source for memory footprint constraints."""
 
@@ -434,6 +488,7 @@ class ArchitectureInput(StrictModel):
     base_route: BaseRouteInput
     interface: InterfaceInput
     physical_access_latency: PhysicalAccessLatencyInput | None = None
+    memory_service: HierarchicalMemoryServiceInput | None = None
     logic_background_w: float | None = Field(default=None, ge=0.0)
 
     @model_validator(mode="after")
@@ -447,6 +502,16 @@ class ArchitectureInput(StrictModel):
             if self.vertical.type != "miv" or self.feol_route is None:
                 raise ValueError(
                     "physical access latency requires MIV and FEOL routes")
+        if self.memory_service is not None:
+            if (
+                self.physical_access_latency is None
+                or self.m3d_subarray is None
+                or self.feol_route is None
+                or self.interface.type != "contactless"
+            ):
+                raise ValueError(
+                    "hierarchical memory service requires contactless M3D "
+                    "topology and physical latency")
         return self
 
 

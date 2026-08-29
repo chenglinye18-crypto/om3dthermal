@@ -8,6 +8,7 @@ import statistics
 from typing import Sequence
 
 from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
+from om3dthermal.power.memory_bandwidth import ArchitectureBandwidthClosure
 from om3dthermal.workload.moe_decode import MoEDecodeInput, evaluate_moe_decode
 from om3dthermal.workload.moe_published_page_demand import (
     MoEPublishedPageDemand,
@@ -19,7 +20,9 @@ from om3dthermal.workload.moe_published_profile import FiddlerPublishedProfile
 
 from .fast_region import PagePlacementResult, place_pages_on_slots
 from .serving_e2e import (
+    HierarchicalPlacementServingTimingResult,
     PlacementServingTimingResult,
+    evaluate_hierarchical_placement_serving_timing,
     evaluate_metrics_placement_serving_timing,
 )
 
@@ -87,6 +90,21 @@ class MoEPublishedPlacementE2ECase:
     total_throughput_gain: float
     physical_latency_exposure_model: str
     verdict_scope: str
+
+
+@dataclass(frozen=True)
+class MoEHierarchicalPlacementE2ECase:
+    legacy: MoEPublishedPlacementE2ECase
+    random_timing: HierarchicalPlacementServingTimingResult
+    fast_region_timing: HierarchicalPlacementServingTimingResult
+    popularity_aware_timing: HierarchicalPlacementServingTimingResult
+    fast_region_e2e_latency_gain: float
+    popularity_e2e_latency_gain: float
+    total_e2e_latency_gain: float
+    fast_region_throughput_gain: float
+    popularity_throughput_gain: float
+    total_throughput_gain: float
+    old_new_model_status: str
 
 
 def evaluate_published_moe_placement_e2e(
@@ -216,6 +234,95 @@ def evaluate_published_moe_placement_e2e(
             / random_timing.aggregate_tokens_per_s - 1.0),
         physical_latency_exposure_model=next(iter(exposure_models)),
         verdict_scope="CONDITIONAL_ON_CURRENT_MEMORY_SERVICE_MODEL",
+    )
+
+
+def evaluate_published_moe_hierarchical_e2e(
+    profile: FiddlerPublishedProfile,
+    workload: MoEDecodeInput,
+    physical_layout: PhysicalCapacityLayout,
+    bandwidth_closure: ArchitectureBandwidthClosure,
+    *,
+    legacy_matched_payload_bandwidth_bits_per_second: float,
+    effective_compute_flops_per_second: float,
+    random_seeds: Sequence[int] = tuple(range(20)),
+    internal_parallelism_scale: float = 1.0,
+) -> MoEHierarchicalPlacementE2ECase:
+    """Report legacy and hierarchical service without changing placement."""
+    legacy = evaluate_published_moe_placement_e2e(
+        profile,
+        workload,
+        physical_layout,
+        matched_payload_bandwidth_bits_per_second=(
+            legacy_matched_payload_bandwidth_bits_per_second),
+        effective_compute_flops_per_second=effective_compute_flops_per_second,
+        random_seeds=random_seeds,
+    )
+    demand = build_published_moe_page_demand(
+        profile, workload, physical_layout,
+        routing_source="FIDDLER_PUBLISHED_ROUTING_PROFILE")
+    metrics = evaluate_moe_decode(workload)
+    performance_input = MoEPlacementPerformanceInput(
+        required_capacity_bytes=metrics.required_capacity_bytes,
+        read_bytes_per_token=(
+            demand.total_read_bytes_per_decode_step / workload.batch_size),
+        write_bytes_per_token=(
+            demand.kv_write_bytes_per_decode_step / workload.batch_size),
+        flops_per_token=metrics.flops_per_token,
+    )
+    physical = legacy.all_read_physical
+    common = {
+        "metrics": performance_input,
+        "demand": demand,
+        "physical_layout": physical_layout,
+        "bandwidth_closure": bandwidth_closure,
+        "requested_requests": workload.batch_size,
+        "effective_compute_flops_per_second": (
+            effective_compute_flops_per_second),
+        "internal_parallelism_scale": internal_parallelism_scale,
+    }
+    p0 = evaluate_hierarchical_placement_serving_timing(
+        **common,
+        strategy="P0_LATENCY_OBLIVIOUS_RANDOM_MEAN",
+        physical_access_latency_avg_ns=(
+            physical.random.weighted_average_latency_ns),
+        physical_access_latency_max_ns=(
+            physical.random.max_occupied_slot_latency_ns),
+    )
+    p1 = evaluate_hierarchical_placement_serving_timing(
+        **common,
+        strategy="P1_FAST_REGION_ONLY",
+        physical_access_latency_avg_ns=(
+            physical.fast_region_only.weighted_average_latency_ns),
+        physical_access_latency_max_ns=(
+            physical.fast_region_only.max_occupied_slot_latency_ns),
+    )
+    p2 = evaluate_hierarchical_placement_serving_timing(
+        **common,
+        strategy="P2_POPULARITY_AWARE_FAST_REGION",
+        physical_access_latency_avg_ns=(
+            physical.popularity_aware_fast_region.weighted_average_latency_ns),
+        physical_access_latency_max_ns=(
+            physical.popularity_aware_fast_region.max_occupied_slot_latency_ns),
+    )
+    return MoEHierarchicalPlacementE2ECase(
+        legacy=legacy,
+        random_timing=p0,
+        fast_region_timing=p1,
+        popularity_aware_timing=p2,
+        fast_region_e2e_latency_gain=(
+            1.0 - p1.total_step_time_ms / p0.total_step_time_ms),
+        popularity_e2e_latency_gain=(
+            1.0 - p2.total_step_time_ms / p1.total_step_time_ms),
+        total_e2e_latency_gain=(
+            1.0 - p2.total_step_time_ms / p0.total_step_time_ms),
+        fast_region_throughput_gain=(
+            p1.aggregate_tokens_per_s / p0.aggregate_tokens_per_s - 1.0),
+        popularity_throughput_gain=(
+            p2.aggregate_tokens_per_s / p1.aggregate_tokens_per_s - 1.0),
+        total_throughput_gain=(
+            p2.aggregate_tokens_per_s / p0.aggregate_tokens_per_s - 1.0),
+        old_new_model_status="LEGACY_AND_HIERARCHICAL_REPORTED_SIDE_BY_SIDE",
     )
 
 

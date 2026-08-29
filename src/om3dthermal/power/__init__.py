@@ -30,6 +30,13 @@ from .physical_capacity import (
     calculate_physical_capacity_layout,
     iter_physical_slots,
 )
+from .memory_bandwidth import (
+    ArchitectureBandwidthClosure,
+    EffectiveBandwidth,
+    InternalBandwidthPrefix,
+    derive_architecture_bandwidth,
+    resolve_effective_bandwidth,
+)
 from .system import (
     ResolvedSystemPower,
     ResolvedThermalPowerMapping,
@@ -50,6 +57,9 @@ __all__ = [
     "PhysicalCapacityLayout",
     "PhysicalSlot",
     "PhysicalSlotClass",
+    "ArchitectureBandwidthClosure",
+    "EffectiveBandwidth",
+    "InternalBandwidthPrefix",
     "MissingCellReplacementError",
     "UnresolvedMIVEnergyError",
     "apply_component_replacements",
@@ -57,6 +67,8 @@ __all__ = [
     "calculate_physical_access_latency",
     "calculate_physical_capacity_layout",
     "iter_physical_slots",
+    "derive_architecture_bandwidth",
+    "resolve_effective_bandwidth",
     "load_power_config",
     "load_case_config",
     "resolve_case_geometry",

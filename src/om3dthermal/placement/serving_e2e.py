@@ -9,6 +9,11 @@ from typing import Protocol, Sequence
 from om3dthermal.evaluation import ArchitectureCapacityFeasibility
 from om3dthermal.evaluator import evaluate_llm_decode_performance
 from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
+from om3dthermal.power.memory_bandwidth import (
+    ArchitectureBandwidthClosure,
+    EffectiveBandwidth,
+    resolve_effective_bandwidth,
+)
 from om3dthermal.workload import LLMDecodeInput, evaluate_llm_decode
 from om3dthermal.workload.m3d_page_demand import M3DWorkloadPageDemand
 
@@ -55,6 +60,26 @@ class PlacementServingComparison:
     physical_latency_gain_vs_random: float
     end_to_end_latency_gain_vs_random: float
     tokens_per_s_gain_vs_random: float
+
+
+@dataclass(frozen=True)
+class HierarchicalPlacementServingTimingResult:
+    strategy: str
+    requested_requests: int
+    physical_access_startup_latency_ns: float
+    physical_access_max_latency_ns: float
+    bandwidth: EffectiveBandwidth
+    startup_step_time_ms: float
+    streaming_transfer_step_time_ms: float
+    memory_stage_step_time_ms: float
+    compute_step_time_ms: float
+    total_step_time_ms: float
+    aggregate_tokens_per_s: float
+    bottleneck: str
+    memory_service_model: str
+    startup_model: str
+    transaction_granularity_semantics: str
+    overlap_semantics: str
 
 
 @dataclass(frozen=True)
@@ -214,6 +239,87 @@ def evaluate_metrics_placement_serving_timing(
         double_counting_status=(
             "PASS_BULK_BYTES_OVER_BANDWIDTH_SEPARATE_FROM_PAGE_SCAN_"
             "STARTUP_LATENCY"),
+    )
+
+
+def evaluate_hierarchical_placement_serving_timing(
+    metrics: PlacementDecodeMetrics,
+    demand: M3DWorkloadPageDemand,
+    physical_layout: PhysicalCapacityLayout,
+    bandwidth_closure: ArchitectureBandwidthClosure,
+    *,
+    requested_requests: int,
+    strategy: str,
+    physical_access_latency_avg_ns: float,
+    physical_access_latency_max_ns: float,
+    effective_compute_flops_per_second: float,
+    internal_parallelism_scale: float = 1.0,
+) -> HierarchicalPlacementServingTimingResult:
+    """First-order streaming service: one startup plus bytes/effective BW."""
+    if requested_requests != demand.requested_requests:
+        raise ValueError("metrics batch and page demand request count differ")
+    average_latency = _finite_nonnegative(
+        physical_access_latency_avg_ns, "physical_access_latency_avg_ns")
+    maximum_latency = _finite_nonnegative(
+        physical_access_latency_max_ns, "physical_access_latency_max_ns")
+    if average_latency <= 0.0 or maximum_latency < average_latency:
+        raise ValueError("hierarchical startup latencies are invalid")
+    compute_rate = _finite_nonnegative(
+        effective_compute_flops_per_second,
+        "effective_compute_flops_per_second")
+    if compute_rate <= 0.0:
+        raise ValueError("effective compute throughput must be positive")
+    required = float(metrics.required_capacity_bytes)
+    if required > physical_layout.total_capacity_bytes:
+        raise ValueError("hierarchical service workload exceeds M3D capacity")
+    bandwidth = resolve_effective_bandwidth(
+        bandwidth_closure,
+        average_latency,
+        internal_parallelism_scale=internal_parallelism_scale,
+    )
+    read_step = _finite_nonnegative(
+        demand.total_read_bytes_per_decode_step,
+        "total_read_bytes_per_decode_step")
+    write_step = _finite_nonnegative(
+        demand.kv_write_bytes_per_decode_step,
+        "kv_write_bytes_per_decode_step")
+    startup_ms = average_latency * 1e-6
+    transfer_ms = (
+        (read_step + write_step)
+        / bandwidth.effective_bandwidth_bytes_per_s
+        * 1e3)
+    memory_ms = startup_ms + transfer_ms
+    compute_ms = (
+        requested_requests * metrics.flops_per_token / compute_rate * 1e3)
+    total_ms = max(memory_ms, compute_ms)
+    if math.isclose(memory_ms, compute_ms, rel_tol=1e-12, abs_tol=0.0):
+        bottleneck = "BALANCED"
+    elif memory_ms > compute_ms:
+        bottleneck = "MEMORY"
+    else:
+        bottleneck = "COMPUTE"
+    return HierarchicalPlacementServingTimingResult(
+        strategy=strategy,
+        requested_requests=requested_requests,
+        physical_access_startup_latency_ns=average_latency,
+        physical_access_max_latency_ns=maximum_latency,
+        bandwidth=bandwidth,
+        startup_step_time_ms=startup_ms,
+        streaming_transfer_step_time_ms=transfer_ms,
+        memory_stage_step_time_ms=memory_ms,
+        compute_step_time_ms=compute_ms,
+        total_step_time_ms=total_ms,
+        aggregate_tokens_per_s=(
+            requested_requests / (total_ms * 1e-3)),
+        bottleneck=bottleneck,
+        memory_service_model="HIERARCHICAL_BANDWIDTH_MODEL",
+        startup_model="FIRST_ORDER_STREAMING_STARTUP_MODEL",
+        transaction_granularity_semantics=(
+            "PHYSICAL_SERVICE_PAYLOAD_FROM_M3D_ACCESS_TOPOLOGY;"
+            "RESIDENT_2MIB_PAGE_IS_PLACEMENT_ONLY"),
+        overlap_semantics=(
+            "MEMORY_STAGE_EQUALS_ONE_STARTUP_PLUS_STREAMING_TRANSFER_THEN_"
+            "ROOFLINE_MAX_WITH_COMPUTE"),
     )
 
 

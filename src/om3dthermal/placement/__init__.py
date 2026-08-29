@@ -14,20 +14,24 @@ from .fast_region import (
     select_physical_slots,
 )
 from .serving_e2e import (
+    HierarchicalPlacementServingTimingResult,
     OccupancyServingClosurePoint,
     PlacementServingComparison,
     PlacementServingTimingResult,
     compare_placement_serving_performance,
     evaluate_placement_serving_timing,
     evaluate_metrics_placement_serving_timing,
+    evaluate_hierarchical_placement_serving_timing,
     propagate_occupancy_sweep_to_serving,
 )
 from .moe_published_e2e import (
+    MoEHierarchicalPlacementE2ECase,
     MoEPublishedPlacementE2ECase,
     PhysicalPlacementComparison,
     PhysicalPlacementPoint,
     TrafficClassLatency,
     evaluate_published_moe_placement_e2e,
+    evaluate_published_moe_hierarchical_e2e,
 )
 
 __all__ = [
@@ -41,7 +45,9 @@ __all__ = [
     "OccupancyServingClosurePoint",
     "PlacementServingComparison",
     "PlacementServingTimingResult",
+    "HierarchicalPlacementServingTimingResult",
     "MoEPublishedPlacementE2ECase",
+    "MoEHierarchicalPlacementE2ECase",
     "PhysicalPlacementComparison",
     "PhysicalPlacementPoint",
     "TrafficClassLatency",
@@ -52,6 +58,8 @@ __all__ = [
     "compare_placement_serving_performance",
     "evaluate_placement_serving_timing",
     "evaluate_metrics_placement_serving_timing",
+    "evaluate_hierarchical_placement_serving_timing",
     "evaluate_published_moe_placement_e2e",
+    "evaluate_published_moe_hierarchical_e2e",
     "propagate_occupancy_sweep_to_serving",
 ]
