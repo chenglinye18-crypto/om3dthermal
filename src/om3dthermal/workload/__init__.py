@@ -36,6 +36,14 @@ from om3dthermal.workload.moe_m3d import (
     build_m3d_moe_capacity_layout,
     build_moe_resident_objects,
 )
+from om3dthermal.workload.moe_published_profile import (
+    FiddlerPublishedProfile,
+    PublishedExpertDemand,
+    PublishedExpertObjectDemand,
+    RelativePopularityStatistics,
+    build_published_expert_demand,
+    load_fiddler_published_profile,
+)
 from om3dthermal.workload.spec import MoEWorkloadSpec, WorkloadSpec
 
 __all__ = [
@@ -55,6 +63,10 @@ __all__ = [
     "M3DMoECapacityError",
     "M3DMoECapacityResult",
     "M3DMoEPhysicalPackingError",
+    "FiddlerPublishedProfile",
+    "PublishedExpertDemand",
+    "PublishedExpertObjectDemand",
+    "RelativePopularityStatistics",
     "WorkloadSpec",
     "WorkloadDemand",
     "evaluate_architecture_capacity_feasibility",
@@ -66,5 +78,7 @@ __all__ = [
     "build_m3d_workload_page_demand",
     "build_m3d_moe_capacity_layout",
     "build_moe_resident_objects",
+    "build_published_expert_demand",
+    "load_fiddler_published_profile",
     "resolve_llm_decode_demand",
 ]

@@ -1,0 +1,116 @@
+{
+  "classification": "DERIVED_FROM_PUBLISHED_ROUTING_PROFILE",
+  "extracted_statistics": {
+    "count_gt_0_8": 29,
+    "count_lt_0_6": 15,
+    "max": 0.9944004472188577,
+    "mean": 0.7133249382744806,
+    "median": 0.7101350973632722,
+    "min": 0.22413304761017416,
+    "p25": 0.6691120842262183,
+    "p75": 0.760810584179633,
+    "std": 0.08328987193134668
+  },
+  "extraction": "DIGITIZED_FROM_OFFICIAL_ARXIV_SOURCE_FIGURE",
+  "extraction_deviation": {
+    "count_gt_0_8": 2,
+    "count_lt_0_6": 0,
+    "max": -0.005599552781142325,
+    "mean": 0.00332493827448066,
+    "min": 0.004133047610174162,
+    "p25": -0.0008879157737817778,
+    "p75": 0.0008105841796329782,
+    "std": 0.00328987193134668
+  },
+  "extraction_gate": "PASS",
+  "geometry": {
+    "cell_sampling": "CENTER_PIXEL",
+    "colorbar_linear_intercept": 1.4770241311841983,
+    "colorbar_linear_slope_per_pixel": -0.0019304947358613621,
+    "colorbar_tick_y_value_pairs": [
+      [
+        247.0,
+        1.0
+      ],
+      [
+        351.0,
+        0.8
+      ],
+      [
+        454.0,
+        0.6
+      ],
+      [
+        558.0,
+        0.4
+      ]
+    ],
+    "colorbar_x_pixel": 2290,
+    "colorbar_y_range_pixels": [
+      249,
+      651
+    ],
+    "estimated_colorbar_quantization_step": 0.0019304947358613621,
+    "heatmap_bounds_pixels": [
+      162,
+      194,
+      2229,
+      707
+    ],
+    "maximum_rgb_distance_squared": 5,
+    "source_size_pixels": [
+      2700,
+      900
+    ]
+  },
+  "measurement_status": "NOT_MEASURED_BY_THIS_WORK",
+  "model": "mistralai/Mixtral-8x7B-v0.1",
+  "orientation": "CSV layer 0..31 maps x-axis Layer 1..32; expert 0..7 maps y-axis Expert 1..8",
+  "paper_reported_statistics": {
+    "count_gt_0_8": 27,
+    "count_lt_0_6": 15,
+    "max": 1.0,
+    "mean": 0.71,
+    "min": 0.22,
+    "p25": 0.67,
+    "p75": 0.76,
+    "std": 0.08
+  },
+  "paper_url": "https://arxiv.org/pdf/2402.07033",
+  "paper_version": "arXiv:2402.07033v3, 1 May 2025",
+  "profile_kind": "published_relative_expert_selection_frequency",
+  "raw_matrix_search": {
+    "arxiv_source_archive_checked": true,
+    "official_repository": "https://github.com/efeslab/fiddler",
+    "official_repository_commit": "227715bfd6e8c731b29548eab01d9919c4fe9564",
+    "repository_recursive_tree_checked": true,
+    "status": "NO_RAW_32X8_ARTIFACT_FOUND"
+  },
+  "schema_version": 1,
+  "source": "Fiddler, ICLR 2025, Appendix C, Figure 8",
+  "source_archive_member": "img/expert-popularity.png",
+  "source_archive_url": "https://export.arxiv.org/e-print/2402.07033",
+  "source_image_sha256": "003b4c6ed2f20485b796cdb5591d871af8a1133900b5977bd3cb18b8c2ce0e29",
+  "source_workload": "random samples from ShareGPT",
+  "synthetic_status": "NOT_SYNTHETIC",
+  "validation_checks": {
+    "count_gt_0_8": true,
+    "count_lt_0_6": true,
+    "max": true,
+    "mean": true,
+    "min": true,
+    "p25": true,
+    "p75": true,
+    "std": true
+  },
+  "validation_tolerances": {
+    "count_gt_0_8": 2,
+    "count_lt_0_6": 2,
+    "max": 0.015,
+    "mean": 0.015,
+    "min": 0.015,
+    "p25": 0.015,
+    "p75": 0.015,
+    "std": 0.015
+  }
+}
