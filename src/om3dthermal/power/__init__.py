@@ -30,6 +30,13 @@ from .physical_capacity import (
     calculate_physical_capacity_layout,
     iter_physical_slots,
 )
+from .dream_reference_service import (
+    DreamInternalStage,
+    DreamReferenceLatency,
+    DreamReferenceServiceAudit,
+    audit_dream_reference_service,
+    classify_bottleneck,
+)
 from .memory_bandwidth import (
     ArchitectureBandwidthClosure,
     EffectiveBandwidth,
@@ -60,6 +67,11 @@ __all__ = [
     "ArchitectureBandwidthClosure",
     "EffectiveBandwidth",
     "InternalBandwidthPrefix",
+    "DreamInternalStage",
+    "DreamReferenceLatency",
+    "DreamReferenceServiceAudit",
+    "audit_dream_reference_service",
+    "classify_bottleneck",
     "MissingCellReplacementError",
     "UnresolvedMIVEnergyError",
     "apply_component_replacements",
