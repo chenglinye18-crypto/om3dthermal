@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import replace
 
 import pytest
 
@@ -96,6 +97,9 @@ def test_full_occupancy_uniform_latency_and_zero_gain(canonical) -> None:
         layout, layout.physical_slot_count, policy="SEQUENTIAL")
     random_full = select_physical_slots(
         layout, layout.physical_slot_count, policy="RANDOM", random_seed=0)
+    conventional = select_physical_slots(
+        layout, layout.physical_slot_count,
+        policy="CONVENTIONAL_LATENCY_OBLIVIOUS")
     assert point.selected_slot_count == layout.physical_slot_count
     assert point.fast_pack_average_slot_latency_ns == pytest.approx(
         point.random_mean_average_slot_latency_ns)
@@ -103,6 +107,8 @@ def test_full_occupancy_uniform_latency_and_zero_gain(canonical) -> None:
         sequential.mean_slot_latency_ns)
     assert point.fast_pack_average_slot_latency_ns == pytest.approx(
         random_full.mean_slot_latency_ns)
+    assert point.fast_pack_average_slot_latency_ns == pytest.approx(
+        conventional.mean_slot_latency_ns)
     assert point.slot_selection_gain_vs_random == pytest.approx(0.0, abs=1e-14)
 
 
@@ -120,6 +126,52 @@ def test_canonical_workloads_fit_and_fast_pack_beats_random(
     assert comparison.fast_pack.total_read_demand_bytes_per_decode_step == (
         pytest.approx(demand.total_read_bytes_per_decode_step))
     assert comparison.page_ordering_gain >= 0.0
+
+
+@pytest.mark.parametrize(
+    ("requests", "expected"),
+    ((1, 10.072213443776443),
+     (8, 10.427075358422606),
+     (16, 11.276452163080243)),
+)
+def test_fast_pack_canonical_latency_regression(canonical, requests, expected) -> None:
+    layout, workload = canonical
+    demand = build_m3d_workload_page_demand(
+        workload.model_copy(update={"batch_size": requests}), layout)
+    result = place_pages_on_slots(
+        demand, layout, slot_policy="FASTEST",
+        page_ordering="DEMAND_DESCENDING")
+    assert result.weighted_average_access_latency_ns == pytest.approx(expected)
+
+
+def test_conventional_is_deterministic_balanced_and_latency_oblivious(
+        canonical) -> None:
+    layout, _ = canonical
+    count = 15_822
+    baseline = select_physical_slots(
+        layout, count, policy="CONVENTIONAL_LATENCY_OBLIVIOUS")
+    repeated = select_physical_slots(
+        layout, count, policy="CONVENTIONAL_LATENCY_OBLIVIOUS")
+    assert baseline.selected_slots == repeated.selected_slots
+    identities = tuple((slot.slab_id, slot.cluster_id, slot.layer_id)
+                       for slot in baseline.selected_slots)
+    assert len(identities) == len(set(identities)) == count
+    class_counts: dict[tuple[int, int], int] = {}
+    for slot in baseline.selected_slots:
+        key = (slot.cluster_id, slot.layer_id)
+        class_counts[key] = class_counts.get(key, 0) + 1
+    assert max(class_counts.values()) - min(class_counts.values()) <= 1
+
+    reversed_classes = tuple(
+        replace(slot, physical_access_latency_ns=10_000.0 - index)
+        for index, slot in enumerate(layout.slot_classes))
+    changed = replace(layout, slot_classes=reversed_classes)
+    changed_selection = select_physical_slots(
+        changed, count, policy="CONVENTIONAL_LATENCY_OBLIVIOUS")
+    changed_identities = tuple(
+        (slot.slab_id, slot.cluster_id, slot.layer_id)
+        for slot in changed_selection.selected_slots)
+    assert changed_identities == identities
 
 
 def test_oversize_workload_fails_loudly(canonical) -> None:

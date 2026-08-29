@@ -32,6 +32,11 @@ Scope (frozen for v0):
   time is the maximum of memory and compute time, not their sum.
   An additive model must be added as a separate task with a new
   ``overlap_model`` literal if needed.
+* **Optional physical-access startup term.**  Its default is zero and
+  preserves the frozen bandwidth-only behavior.  Placement-aware callers may
+  supply a separately derived latency time; it is added to bulk
+  bytes/bandwidth time inside the memory boundary before ``ROOFLINE_MAX``.
+  This evaluator does not derive access counts or placement.
 * **Aggregate vs per-sequence semantics are explicit.**  The
   ``token_equivalent_time_s`` is *not* a per-sequence step latency.
   One aggregate decode step generates ``B`` tokens, so the
@@ -135,6 +140,8 @@ class LLMDecodePerformanceMetrics(BaseModel):
     effective_compute_flops_per_second: float
 
     # Per-token-equivalent resource times (None if capacity infeasible)
+    memory_bandwidth_time_per_token_equivalent_s: float | None = None
+    physical_access_latency_time_per_token_equivalent_s: float | None = None
     memory_time_per_token_equivalent_s: float | None
     compute_time_per_token_equivalent_s: float | None
     token_equivalent_time_s: float | None
@@ -288,6 +295,7 @@ def evaluate_llm_decode_performance(
     batch_size: int,
     matched_payload_bandwidth_bits_per_second: float,
     effective_compute_flops_per_second: float,
+    physical_access_latency_time_per_token_equivalent_s: float = 0.0,
     memory_bandwidth_model: Literal[
         "SHARED_READ_WRITE_PAYLOAD_BANDWIDTH",
     ] = MEMORY_BANDWIDTH_MODEL,
@@ -356,6 +364,10 @@ def evaluate_llm_decode_performance(
         "effective_compute_flops_per_second",
         effective_compute_flops_per_second,
     )
+    physical_latency_time = _validate_nonneg_real(
+        "physical_access_latency_time_per_token_equivalent_s",
+        physical_access_latency_time_per_token_equivalent_s,
+    )
 
     # ----- Validate workload (no silent coercion) -----------------------
     r_bpt = _validate_nonneg_real(
@@ -380,6 +392,8 @@ def evaluate_llm_decode_performance(
             flops_per_token=flops,
             matched_payload_bandwidth_bits_per_second=float(bw),
             effective_compute_flops_per_second=float(flops_per_s),
+            memory_bandwidth_time_per_token_equivalent_s=None,
+            physical_access_latency_time_per_token_equivalent_s=None,
             memory_time_per_token_equivalent_s=None,
             compute_time_per_token_equivalent_s=None,
             token_equivalent_time_s=None,
@@ -396,10 +410,11 @@ def evaluate_llm_decode_performance(
             overlap_model=overlap_model,
         )
 
-    # ----- Memory boundary (SHARED_READ_WRITE_PAYLOAD_BANDWIDTH) -----
+    # ----- Memory boundary: bulk transfer + optional access startup ----
     traffic_bytes_per_token = r_bpt + w_bpt
     traffic_bits_per_token = traffic_bytes_per_token * 8.0
-    memory_time = traffic_bits_per_token / float(bw)
+    memory_bandwidth_time = traffic_bits_per_token / float(bw)
+    memory_time = memory_bandwidth_time + physical_latency_time
 
     # ----- Compute boundary -------------------------------------------
     compute_time = float(flops) / float(flops_per_s)
@@ -439,6 +454,9 @@ def evaluate_llm_decode_performance(
         flops_per_token=flops,
         matched_payload_bandwidth_bits_per_second=float(bw),
         effective_compute_flops_per_second=float(flops_per_s),
+        memory_bandwidth_time_per_token_equivalent_s=memory_bandwidth_time,
+        physical_access_latency_time_per_token_equivalent_s=(
+            physical_latency_time),
         memory_time_per_token_equivalent_s=memory_time,
         compute_time_per_token_equivalent_s=compute_time,
         token_equivalent_time_s=token_equivalent_time,

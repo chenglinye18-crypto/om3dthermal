@@ -17,7 +17,12 @@ from om3dthermal.power.physical_capacity import (
 from om3dthermal.workload.m3d_page_demand import M3DWorkloadPageDemand
 
 
-SlotSelectionPolicy = Literal["FASTEST", "RANDOM", "SEQUENTIAL"]
+SlotSelectionPolicy = Literal[
+    "FASTEST",
+    "CONVENTIONAL_LATENCY_OBLIVIOUS",
+    "RANDOM",
+    "SEQUENTIAL",
+]
 PageOrderingPolicy = Literal["CANONICAL", "DEMAND_DESCENDING"]
 
 
@@ -74,6 +79,8 @@ class RandomPlacementSummary:
     std_average_access_latency_ns: float
     min_average_access_latency_ns: float
     max_average_access_latency_ns: float
+    max_occupied_latency_per_seed_ns: tuple[float, ...]
+    mean_max_occupied_latency_ns: float
     baseline_semantics: str
 
 
@@ -83,11 +90,13 @@ class FastRegionWorkloadComparison:
     occupancy_fraction: float
     allocated_working_set_bytes: int
     fast_pack: PagePlacementResult
+    conventional: PagePlacementResult
     sequential: PagePlacementResult
     random: RandomPlacementSummary
     fast_pack_canonical_page_order_latency_ns: float
     page_ordering_gain: float
     slot_selection_gain_vs_random: float
+    slot_selection_gain_vs_conventional: float
     slot_selection_gain_vs_sequential: float
     gain_decomposition_status: str
 
@@ -128,6 +137,12 @@ def select_physical_slots(
         selected = _latency_ordered_physical_slots(layout)[:selected_slot_count]
         seed = None
         semantics = "GLOBAL_LOWEST_LATENCY_CAPACITY_PREFIX"
+    elif policy == "CONVENTIONAL_LATENCY_OBLIVIOUS":
+        selected = _balanced_interleaved_slots(layout)[:selected_slot_count]
+        seed = None
+        semantics = (
+            "DETERMINISTIC_CLASS_AND_SLAB_BALANCED_INTERLEAVING_WITHOUT_"
+            "LATENCY_RANKING")
     elif policy == "SEQUENTIAL":
         selected = expanded[:selected_slot_count]
         seed = None
@@ -258,16 +273,26 @@ def compare_fast_region_placements(
         slot_policy="SEQUENTIAL",
         page_ordering="CANONICAL",
     )
-    random_latencies = tuple(
+    conventional = place_pages_on_slots(
+        demand,
+        layout,
+        slot_policy="CONVENTIONAL_LATENCY_OBLIVIOUS",
+        page_ordering="CANONICAL",
+    )
+    random_runs = tuple(
         place_pages_on_slots(
             demand,
             layout,
             slot_policy="RANDOM",
             page_ordering="CANONICAL",
             random_seed=seed,
-        ).weighted_average_access_latency_ns
+        )
         for seed in seeds
     )
+    random_latencies = tuple(
+        run.weighted_average_access_latency_ns for run in random_runs)
+    random_maxima = tuple(
+        run.max_occupied_slot_latency_ns for run in random_runs)
     random_mean = statistics.fmean(random_latencies)
     random_summary = RandomPlacementSummary(
         seeds=seeds,
@@ -276,6 +301,8 @@ def compare_fast_region_placements(
         std_average_access_latency_ns=statistics.pstdev(random_latencies),
         min_average_access_latency_ns=min(random_latencies),
         max_average_access_latency_ns=max(random_latencies),
+        max_occupied_latency_per_seed_ns=random_maxima,
+        mean_max_occupied_latency_ns=statistics.fmean(random_maxima),
         baseline_semantics=(
             "FIXED_SEED_UNIFORM_SLOT_SAMPLE_WITHOUT_REPLACEMENT_"
             "LATENCY_OBLIVIOUS_NOT_AN_INDUSTRY_ALLOCATOR"),
@@ -285,6 +312,7 @@ def compare_fast_region_placements(
         occupancy_fraction=demand.page_count / layout.physical_slot_count,
         allocated_working_set_bytes=demand.allocated_page_bytes,
         fast_pack=fast,
+        conventional=conventional,
         sequential=sequential,
         random=random_summary,
         fast_pack_canonical_page_order_latency_ns=(
@@ -295,6 +323,10 @@ def compare_fast_region_placements(
             / fast_canonical.weighted_average_access_latency_ns),
         slot_selection_gain_vs_random=(
             1.0 - fast.weighted_average_access_latency_ns / random_mean),
+        slot_selection_gain_vs_conventional=(
+            1.0
+            - fast.weighted_average_access_latency_ns
+            / conventional.weighted_average_access_latency_ns),
         slot_selection_gain_vs_sequential=(
             1.0
             - fast.weighted_average_access_latency_ns
@@ -373,3 +405,26 @@ def _latency_ordered_physical_slots(
             slot.slab_id,
         ),
     ))
+
+
+@lru_cache(maxsize=4)
+def _balanced_interleaved_slots(
+    layout: PhysicalCapacityLayout,
+) -> tuple[PhysicalSlot, ...]:
+    """Balance every prefix across classes and slabs without latency input."""
+    classes = layout.slot_classes
+    slots: list[PhysicalSlot] = []
+    for replica_round in range(layout.slab_count):
+        for class_index, slot_class in enumerate(classes):
+            slab_id = (class_index + replica_round) % layout.slab_count
+            slots.append(PhysicalSlot(
+                slab_id=slab_id,
+                cluster_id=slot_class.cluster_id,
+                layer_id=slot_class.layer_id,
+                capacity_bytes=slot_class.capacity_bytes,
+                physical_access_latency_ns=(
+                    slot_class.physical_access_latency_ns),
+            ))
+    if len(slots) != layout.physical_slot_count:
+        raise ValueError("balanced interleaving does not close to slot count")
+    return tuple(slots)
