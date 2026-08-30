@@ -58,6 +58,10 @@ from .die_local_e2e import (
     independent_domain_semantics,
     minimum_active_domains,
 )
+from .nmp_locality_e2e import (
+    DenseDecodePlacementUnit, NMPFinalResult, evaluate_nmp_locality_case,
+    build_dense_decode_placement_units, independent_physical_die_count,
+)
 
 __all__ = [
     "FastRegionCapacityError",
@@ -106,4 +110,9 @@ __all__ = [
     "evaluate_die_local_placement",
     "independent_domain_semantics",
     "minimum_active_domains",
+    "DenseDecodePlacementUnit",
+    "NMPFinalResult",
+    "evaluate_nmp_locality_case",
+    "build_dense_decode_placement_units",
+    "independent_physical_die_count",
 ]

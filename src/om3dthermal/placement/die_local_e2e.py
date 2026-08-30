@@ -30,7 +30,7 @@ class IndependentDomainSemantics:
     capacity_per_domain_bytes: int
     slots_per_domain: int
     domain_id_source: str
-    provenance: str = "MODELING_CHOICE_NOT_PHYSICAL_DIE_VALIDATED"
+    provenance: str = "ARCHITECTURE_DEFINED_ONE_SLAB_PER_PHYSICAL_DIE"
 
 
 @dataclass(frozen=True)
@@ -95,12 +95,12 @@ class DieLocalComparison:
 
 
 def independent_domain_semantics(layout: PhysicalCapacityLayout) -> IndependentDomainSemantics:
-    """Expose the minimal domain abstraction without claiming slab == die."""
+    """Expose the architecture-defined one-slab-per-physical-die mapping."""
     return IndependentDomainSemantics(
         independent_memory_domain_count=layout.slab_count,
         capacity_per_domain_bytes=layout.capacity_per_slab_bytes,
         slots_per_domain=layout.clusters_per_slab * layout.layers_per_cluster,
-        domain_id_source="PhysicalSlot.slab_id__one_to_one_symmetric_capacity_domain",
+        domain_id_source="ARCHITECTURE_DEFINED_PhysicalSlot.slab_id__ONE_PHYSICAL_DIE",
     )
 
 
