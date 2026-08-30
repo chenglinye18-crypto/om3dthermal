@@ -27,6 +27,7 @@ class ArchitectureBandwidthClosure:
     num_m3d_dies: int
     die_count_source: str
     coil_links_per_die: int
+    external_coil_links_per_die: int
     coil_data_rate_gbps_per_link: float
     coil_bandwidth_bits_per_s: float
     coil_bandwidth_bytes_per_s: float
@@ -35,6 +36,9 @@ class ArchitectureBandwidthClosure:
     internal_service_model: str
     internal_service_unit: str
     parallel_service_units_per_slab: int
+    local_service_groups_per_die: int
+    total_local_service_groups: int
+    local_service_group_source: str
     parallel_slabs: int
     total_parallel_service_units: int
     clusters_per_service: int
@@ -88,6 +92,8 @@ def derive_architecture_bandwidth(
         raise ValueError("FEOL IO channel count must be positive")
     if physical_layout.slab_count <= 0:
         raise ValueError("physical layout must contain slabs")
+    # This is deliberately retained as the long-FEOL/external-service resource.
+    # It is not an NMP-local memory parallelism parameter.
     parallel_per_slab = feol_io_channels
     clusters_per_service = topology.accessed_clusters_per_access
     if parallel_per_slab * clusters_per_service > (
@@ -107,6 +113,9 @@ def derive_architecture_bandwidth(
         raise ValueError("M3D delivered service payload must close to whole bytes")
     payload_bytes = delivered_bits / 8.0
     slabs = physical_layout.slab_count
+    local_groups = physical_layout.clusters_per_slab // clusters_per_service
+    if local_groups <= 0:
+        raise ValueError("M3D topology has no disjoint local service group")
     total_parallel = slabs * parallel_per_slab
     numerator_bytes = total_parallel * payload_bytes
     latencies = tuple(
@@ -139,6 +148,7 @@ def derive_architecture_bandwidth(
         num_m3d_dies=slabs,
         die_count_source=spec.die_count_source,
         coil_links_per_die=spec.coil.links_per_die,
+        external_coil_links_per_die=spec.coil.links_per_die,
         coil_data_rate_gbps_per_link=(
             spec.coil.data_rate_gbps_per_link),
         coil_bandwidth_bits_per_s=coil_bits,
@@ -149,6 +159,11 @@ def derive_architecture_bandwidth(
         internal_service_model=spec.internal.model,
         internal_service_unit=spec.internal.service_unit,
         parallel_service_units_per_slab=parallel_per_slab,
+        local_service_groups_per_die=local_groups,
+        total_local_service_groups=slabs * local_groups,
+        local_service_group_source=(
+            "TOPOLOGY_DERIVED_PARALLEL_SERVICE_GROUP_COUNT__"
+            "DERIVED_FROM_DISJOINT_CLUSTER_ACCESS_GROUPS"),
         parallel_slabs=slabs,
         total_parallel_service_units=total_parallel,
         clusters_per_service=clusters_per_service,
