@@ -5,6 +5,7 @@ from dataclasses import replace
 from scripts.evaluate_die_local_placement import ROOT, _architecture
 from om3dthermal.experiment import load_experiment_spec, load_workload_spec
 from om3dthermal.placement import evaluate_nmp_locality_case, independent_physical_die_count
+from om3dthermal.power.memory_bandwidth import resolve_effective_bandwidth
 from om3dthermal.power import calculate_memory_power, calculate_physical_access_latency, load_case_config, resolve_case_geometry
 from om3dthermal.power.feol_route import calculate_feol_route
 from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
@@ -46,6 +47,26 @@ def test_topology_local_groups_are_decoupled_from_coils(inputs):
     old_50_lane_bw=(l.slab_count*b.parallel_service_units_per_slab*b.read_payload_bytes_per_service/(b.service_cycle_scale*current.placement.local_access_latency_ns*1e-9))
     new_bw=current.traffic.local_memory_bytes/(current.timing.local_memory_ms*1e-3)
     assert new_bw > old_50_lane_bw
+
+def test_non_nmp_separates_raw_internal_and_external_pipeline(inputs):
+    l,b,p,w,d,g=inputs
+    result=evaluate_nmp_locality_case(w,d,l,p,b,case='NON_NMP_GPU',nmp_aggregate_tflops=None,gpu_compute_flops_per_s=g)
+    t=result.timing; bulk=result.traffic.external_interface_bytes
+    effective=resolve_effective_bandwidth(b,result.placement.local_access_latency_ns)
+    assert effective.bottleneck == 'COIL_INTERFACE'
+    assert t.raw_internal_bandwidth_bytes_per_s != pytest.approx(t.external_bandwidth_bytes_per_s)
+    assert t.local_memory_ms == pytest.approx(bulk/t.raw_internal_bandwidth_bytes_per_s*1e3)
+    assert t.external_ms == pytest.approx(bulk/t.external_bandwidth_bytes_per_s*1e3)
+    assert t.memory_serial_ms == pytest.approx(t.local_memory_ms+t.external_ms)
+    assert t.memory_pipeline_ms == pytest.approx(max(t.local_memory_ms,t.external_ms))
+    assert t.bottleneck == 'EXTERNAL'
+    assert result.traffic.weight_bulk_external_bytes > 0 and result.traffic.kv_bulk_external_bytes > 0
+
+def test_nmp_local_crossover_is_unchanged_by_non_nmp_fix(inputs):
+    l,b,p,w,d,g=inputs
+    result=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
+    assert result.timing.local_memory_ms == pytest.approx(1.512, abs=0.002)
+    assert result.timing.nmp_compute_crossover_tflops == pytest.approx(54.67, abs=0.02)
 
 @pytest.mark.parametrize('batch',[1,8,16])
 def test_flops_scale_and_more_nmp_compute_never_hurts(inputs,batch):

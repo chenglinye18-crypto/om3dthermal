@@ -236,6 +236,23 @@ def resolve_effective_bandwidth(
     )
 
 
+def resolve_internal_service_bandwidth(
+        closure: ArchitectureBandwidthClosure,
+        physical_access_latency_ns: float,
+        *, internal_parallelism_scale: float = 1.0) -> float:
+    """Return raw internal/FEOL service capacity without coil/GPU min().
+
+    Use this only when the caller explicitly times the external interface as a
+    separate pipeline stage.  ``resolve_effective_bandwidth`` retains its
+    historical end-to-end bottleneck semantics.
+    """
+    latency = _positive_finite(physical_access_latency_ns, "physical_access_latency_ns")
+    parallelism = _positive_finite(internal_parallelism_scale, "internal_parallelism_scale")
+    return (closure.total_parallel_service_units * parallelism
+            * closure.read_payload_bytes_per_service
+            / (closure.service_cycle_scale * latency * 1e-9))
+
+
 def _positive_finite(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be numeric")

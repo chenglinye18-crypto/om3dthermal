@@ -43,6 +43,7 @@ from .memory_bandwidth import (
     InternalBandwidthPrefix,
     derive_architecture_bandwidth,
     resolve_effective_bandwidth,
+    resolve_internal_service_bandwidth,
 )
 from .mat_to_coil import (
     AggregationLoadSensitivity,
@@ -124,6 +125,7 @@ __all__ = [
     "iter_physical_slots",
     "derive_architecture_bandwidth",
     "resolve_effective_bandwidth",
+    "resolve_internal_service_bandwidth",
     "calculate_hierarchical_mat_to_coil",
     "calculate_normalized_single_path_delay",
     "calculate_wire_rc_delay",

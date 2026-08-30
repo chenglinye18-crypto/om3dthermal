@@ -10,7 +10,7 @@ import math
 import statistics
 from typing import Literal
 
-from om3dthermal.power.memory_bandwidth import ArchitectureBandwidthClosure, resolve_effective_bandwidth
+from om3dthermal.power.memory_bandwidth import ArchitectureBandwidthClosure, resolve_internal_service_bandwidth
 from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
 from om3dthermal.power.physical_latency import PhysicalAccessLatency
 from om3dthermal.workload.llm_decode import LLMDecodeInput, evaluate_llm_decode
@@ -42,6 +42,9 @@ class NMPCaseTiming:
     case: Case; nmp_aggregate_tflops: float | None; local_memory_ms: float; external_ms: float
     nmp_compute_ms: float; gpu_small_compute_ms: float; total_step_ms: float; tokens_per_s: float
     nmp_compute_crossover_tflops: float | None; average_tflops_per_die: float | None; bottleneck: str
+    raw_internal_bandwidth_bytes_per_s: float | None; external_bandwidth_bytes_per_s: float
+    memory_serial_ms: float; total_step_serial_ms: float; memory_pipeline_ms: float; total_step_pipeline_ms: float
+    tokens_per_s_serial: float; tokens_per_s_pipeline: float
 
 @dataclass(frozen=True)
 class NMPFinalResult:
@@ -131,12 +134,16 @@ def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPage
     units=build_dense_decode_placement_units(workload); placement=_placement(case,units,layout,physical); traffic=_traffic(case,demand,units,placement,layout)
     external_bw=bandwidth.coil_bandwidth_bytes_per_s
     if case == "NON_NMP_GPU":
-        local_bw=resolve_effective_bandwidth(bandwidth,placement.local_access_latency_ns).effective_bandwidth_bytes_per_s
+        local_bw=resolve_internal_service_bandwidth(bandwidth,placement.local_access_latency_ns)
         local_ms=(traffic.weight_bulk_external_bytes+traffic.kv_bulk_external_bytes)/local_bw*1e3
         external_ms=traffic.external_interface_bytes/external_bw*1e3
         gpu_ms=workload.batch_size*evaluate_llm_decode(workload).flops_per_token/gpu_compute_flops_per_s*1e3
-        total=local_ms+external_ms+gpu_ms
-        timing=NMPCaseTiming(case,None,local_ms,external_ms,0,gpu_ms,total,workload.batch_size/(total*1e-3),None,None,"GPU_AND_EXTERNAL")
+        memory_serial=local_ms+external_ms; total_serial=memory_serial+gpu_ms
+        memory_pipeline=max(local_ms,external_ms); total_pipeline=max(memory_pipeline,gpu_ms)
+        timing=NMPCaseTiming(case,None,local_ms,external_ms,0,gpu_ms,total_pipeline,workload.batch_size/(total_pipeline*1e-3),None,None,
+            "EXTERNAL" if external_ms >= local_ms and external_ms >= gpu_ms else ("GPU" if gpu_ms >= local_ms else "INTERNAL"),
+            local_bw,external_bw,memory_serial,total_serial,memory_pipeline,total_pipeline,
+            workload.batch_size/(total_serial*1e-3),workload.batch_size/(total_pipeline*1e-3))
         return NMPFinalResult(placement,traffic,timing)
     if nmp_aggregate_tflops is None or nmp_aggregate_tflops<=0: raise ValueError("NMP case requires positive aggregate TFLOPS")
     # Full 98-die local service capacity with path-correct MAT+MIV latency.
@@ -148,5 +155,6 @@ def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPage
     total=max(local_ms,nmp_ms)+external_ms
     cross=flops/(local_ms*1e-3)/1e12
     timing=NMPCaseTiming(case,nmp_aggregate_tflops,local_ms,external_ms,nmp_ms,0,total,workload.batch_size/(total*1e-3),cross,nmp_aggregate_tflops/layout.slab_count,
-        "NMP_COMPUTE" if nmp_ms>local_ms else "EXTERNAL_OR_LOCAL_MEMORY")
+        "NMP_COMPUTE" if nmp_ms>local_ms else "EXTERNAL_OR_LOCAL_MEMORY",local_bw,external_bw,
+        total,total,total,total,workload.batch_size/(total*1e-3),workload.batch_size/(total*1e-3))
     return NMPFinalResult(placement,traffic,timing)

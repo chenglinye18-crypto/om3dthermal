@@ -27,7 +27,12 @@ def run(output_dir: Path):
             points.append({'nmp_aggregate_tflops':p,'naive':naive.as_dict(),'locality_aware':local.as_dict(),
                 'nmp_gain':naive.timing.tokens_per_s/baseline.timing.tokens_per_s,
                 'placement_incremental_gain':local.timing.tokens_per_s/naive.timing.tokens_per_s,
-                'combined_A_gain':local.timing.tokens_per_s/baseline.timing.tokens_per_s})
+                'combined_A_gain':local.timing.tokens_per_s/baseline.timing.tokens_per_s,
+                'serial_stage_bound': {
+                    'nmp_gain': naive.timing.tokens_per_s_serial / baseline.timing.tokens_per_s_serial,
+                    'placement_incremental_gain': local.timing.tokens_per_s_serial / naive.timing.tokens_per_s_serial,
+                    'combined_A_gain': local.timing.tokens_per_s_serial / baseline.timing.tokens_per_s_serial,
+                }})
         rows.append({'requests':n,'working_set_bytes':d.allocated_page_bytes,'non_nmp_gpu':baseline.as_dict(),'points':points})
     payload={'model':'A_FINAL_NMP_LOCALITY_AWARE_PLACEMENT','physical_die_count':layout.slab_count,'die_semantics':'ARCHITECTURE_DEFINED_ONE_SLAB_PER_PHYSICAL_DIE','DIRECT_DIE_TO_DIE_COMMUNICATION':'FORBIDDEN','canonical_overlap':'CONSERVATIVE_NO_OVERLAP','rows':rows}
     output_dir.mkdir(parents=True,exist_ok=True); (output_dir/'nmp_locality_placement.json').write_text(json.dumps(payload,indent=2),encoding='utf-8'); return payload
