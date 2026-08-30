@@ -48,6 +48,16 @@ from .tier_service_e2e import (
     evaluate_tier_service_placement,
     sweep_local_service_fraction,
 )
+from .die_local_e2e import (
+    DieLocalComparison,
+    DieLocalFastPack,
+    DieLocalTiming,
+    DieLocalTraffic,
+    IndependentDomainSemantics,
+    evaluate_die_local_placement,
+    independent_domain_semantics,
+    minimum_active_domains,
+)
 
 __all__ = [
     "FastRegionCapacityError",
@@ -88,4 +98,12 @@ __all__ = [
     "evaluate_tier_service_placement",
     "sweep_local_service_fraction",
     "propagate_occupancy_sweep_to_serving",
+    "DieLocalComparison",
+    "DieLocalFastPack",
+    "DieLocalTiming",
+    "DieLocalTraffic",
+    "IndependentDomainSemantics",
+    "evaluate_die_local_placement",
+    "independent_domain_semantics",
+    "minimum_active_domains",
 ]
