@@ -42,6 +42,12 @@ from .nmp_feasibility import (
     evaluate_nmp_feasibility,
     sweep_nmp_feasibility,
 )
+from .tier_service_e2e import (
+    TierServiceComparison,
+    TierServiceTiming,
+    evaluate_tier_service_placement,
+    sweep_local_service_fraction,
+)
 
 __all__ = [
     "FastRegionCapacityError",
@@ -65,6 +71,8 @@ __all__ = [
     "NMPPlacementPoint",
     "NMPSweepSummary",
     "NMPWorkloadClosure",
+    "TierServiceComparison",
+    "TierServiceTiming",
     "compare_fast_region_placements",
     "evaluate_fast_region_occupancy_sweep",
     "place_pages_on_slots",
@@ -77,5 +85,7 @@ __all__ = [
     "evaluate_published_moe_hierarchical_e2e",
     "evaluate_nmp_feasibility",
     "sweep_nmp_feasibility",
+    "evaluate_tier_service_placement",
+    "sweep_local_service_fraction",
     "propagate_occupancy_sweep_to_serving",
 ]
