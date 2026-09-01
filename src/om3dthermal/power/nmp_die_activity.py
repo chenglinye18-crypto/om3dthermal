@@ -19,6 +19,11 @@ class NMPHardware:
 class NMPDiePower:
     die_id: int; compute_dynamic_W: float; memory_dynamic_W: float|None
     refresh_W: float|None; total_dynamic_W: float|None; power_status: str
+    memory_read_dynamic_W: float|None=None; memory_write_dynamic_W: float|None=None
+    mac_dynamic_W: float|None=None; nmp_logic_overhead_factor: float=1.0
+    nmp_dynamic_W: float|None=None; residual_external_W: float|None=None
+    total_W: float|None=None; thermal_memory_carrier_W: float|None=None
+    thermal_nmp_carrier_W: float|None=None; thermal_mapping_status: str="THERMAL_MAPPING_PENDING"
 
 @dataclass(frozen=True)
 class NMPDieWorkloadActivity:

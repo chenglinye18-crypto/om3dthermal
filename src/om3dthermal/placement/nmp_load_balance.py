@@ -102,3 +102,14 @@ def remaining_external_bytes_for_ownership(loads:tuple[NMPPlacementUnitLoad,...]
     partial=sum(x.unit.partial_output_bytes*len(o) for x,o in zip(loads,ownership))
     output=next(x.unit.partial_output_bytes for x in loads if x.unit.operator_type=="O")
     return activation+partial+output+activation
+
+def external_bytes_per_die_for_ownership(loads:tuple[NMPPlacementUnitLoad,...],ownership:tuple[tuple[int,...],...],die_count:int)->tuple[float,...]:
+    """Deterministically attribute the unchanged residual boundary traffic."""
+    result=[0.0]*die_count
+    for load,owners in zip(loads,ownership):
+        contribution=2*load.unit.activation_input_bytes+load.unit.partial_output_bytes
+        for die in owners: result[die]+=contribution
+    output=next(x.unit.partial_output_bytes for x in loads if x.unit.operator_type=="O")
+    first_o=next(i for i,x in enumerate(loads) if x.unit.operator_type=="O")
+    result[ownership[first_o][0]]+=output
+    return tuple(result)

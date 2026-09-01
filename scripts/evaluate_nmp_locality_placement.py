@@ -14,6 +14,7 @@ from om3dthermal.power import calculate_memory_power, calculate_physical_access_
 from om3dthermal.power.feol_route import calculate_feol_route
 from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
 from om3dthermal.power.nmp_die_activity import canonical_nmp_hardware, evaluate_nmp_die_activity
+from om3dthermal.power.nmp_die_power import build_nmp_die_power_map
 from om3dthermal.workload import build_m3d_workload_page_demand
 
 def run(output_dir: Path):
@@ -57,6 +58,7 @@ def run(output_dir: Path):
             external_boundary_time_ms=external_ms,
             ownership=balanced_placement.ownership)
         balanced_tps=n/(balanced_activity.decode_step_interval_ms*1e-3)
+        power_map=build_nmp_die_power_map(case,power,topology,feol,balanced_activity,balanced_placement)
         ideal_local_ms=(d.total_read_bytes_per_decode_step+d.kv_write_bytes_per_decode_step)/(hardware_bw_die*layout.slab_count)*1e3
         ideal_compute_ms=canonical.timing.nmp_compute_ms
         ideal_step_ms=max(ideal_local_ms,ideal_compute_ms)+external_ms
@@ -89,7 +91,7 @@ def run(output_dir: Path):
                 'placement': balanced_placement.as_dict(),
                 'activity': balanced_activity.as_dict(),
                 'remaining_external_bytes': external_bytes,
-            }})
+            },'B_PREP_DIE_POWER_MAP':power_map.as_dict()})
     payload={'model':'A_FINAL_NMP_LOCALITY_AWARE_PLACEMENT','physical_die_count':layout.slab_count,'die_semantics':'ARCHITECTURE_DEFINED_ONE_SLAB_PER_PHYSICAL_DIE','DIRECT_DIE_TO_DIE_COMMUNICATION':'FORBIDDEN','canonical_overlap':'CONSERVATIVE_NO_OVERLAP','rows':rows}
     output_dir.mkdir(parents=True,exist_ok=True); (output_dir/'nmp_locality_placement.json').write_text(json.dumps(payload,indent=2),encoding='utf-8'); return payload
 def main():

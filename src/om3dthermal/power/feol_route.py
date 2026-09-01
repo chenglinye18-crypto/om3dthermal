@@ -80,6 +80,15 @@ class FEOLRouteResult:
         return asdict(self)
 
 
+def wire_cv2_energy_pj_per_bit(*,activity_factor:float,capacitance_fF_per_um:float,
+        length_um:float,voltage_V:float)->float:
+    """Shared FEOL convention: alpha*C'*L*V^2, fJ converted to pJ."""
+    values=(activity_factor,capacitance_fF_per_um,length_um,voltage_V)
+    if any(not math.isfinite(x) or x<0 for x in values):
+        raise ValueError("wire CV2 inputs must be finite and non-negative")
+    return activity_factor*capacitance_fF_per_um*length_um*voltage_V**2*1e-3
+
+
 def _cluster_centers(
         topology: M3DSubarrayResult) -> tuple[tuple[float, float], ...]:
     pitch_x = topology.cluster_width_um + topology.cluster_gap_x_um
@@ -157,11 +166,10 @@ def calculate_feol_route(
         spec.wire.capacitance_fF_per_um * length * 1e-3
         for length in lengths)
     # Framework convention: supply energy is alpha*C*V^2. fJ -> pJ is 1e-3.
-    energy = (
-        spec.wire.activity_factor
-        * average_capacitance
-        * spec.wire.voltage_V ** 2
-        * 1e-3)
+    energy = wire_cv2_energy_pj_per_bit(
+        activity_factor=spec.wire.activity_factor,
+        capacitance_fF_per_um=spec.wire.capacitance_fF_per_um,
+        length_um=average_length,voltage_V=spec.wire.voltage_V)
 
     wire_resistances = None
     driver_cap_terms = None

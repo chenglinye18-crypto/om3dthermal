@@ -84,6 +84,45 @@ def test_request_level_kv_unit_and_workload_closures(payload):
         assert sum(x["local_memory_traffic_bytes"] for x in loads)==pytest.approx(sum(a["total_local_memory_bytes"] for a in row["A_FINAL_CANONICAL_GAIN"]["activity"]["activities"]))
         assert sum(x["nmp_flops"] for x in loads)==pytest.approx(sum(a["nmp_flops"] for a in row["A_FINAL_CANONICAL_GAIN"]["activity"]["activities"]))
 
+def test_power_primitives_reuse_feol_and_exclude_external_bulk_terms(payload):
+    primitive=payload["rows"][0]["B_PREP_DIE_POWER_MAP"]["primitives"]
+    assert primitive["local_route_length_um"]==pytest.approx(.5*(primitive["cluster_width_um"]+primitive["cluster_height_um"]))
+    expected=primitive["feol_activity_factor"]*primitive["feol_capacitance_fF_per_um"]*primitive["local_route_length_um"]*primitive["feol_voltage_V"]**2*1e-3
+    assert primitive["local_route_energy_pj_per_bit"]==pytest.approx(expected)
+    assert primitive["local_route_energy_pj_per_bit"]<primitive["long_feol_pj_per_bit"]
+    assert primitive["local_read_total_pj_per_bit"]==pytest.approx(primitive["igzo_local_read_and_global_control_pj_per_bit"]+primitive["vertical_miv_pj_per_bit"]+primitive["local_route_energy_pj_per_bit"])
+    assert primitive["local_write_total_pj_per_bit"]==pytest.approx(primitive["igzo_weighted_write_pj_per_bit"]+primitive["vertical_miv_pj_per_bit"]+primitive["local_route_energy_pj_per_bit"])
+    assert primitive["nmp_logic_overhead_factor"]==1.0
+
+def test_per_die_power_and_energy_closure(payload):
+    refresh=[]
+    for row in payload["rows"]:
+        power=row["B_PREP_DIE_POWER_MAP"]; primitive=power["primitives"]; die=power["die_powers"]
+        activity=row["A_FINAL_CANONICAL_GAIN"]["activity"]["activities"]
+        assert len(die)==98 and power["power_component_double_count_gate"]=="PASS"
+        assert sum(x["refresh_W"] for x in die)==pytest.approx(power["refresh_total_W"])
+        refresh.append(tuple(x["refresh_W"] for x in die))
+        assert all(x["nmp_logic_overhead_factor"]==1 and x["nmp_dynamic_W"]==pytest.approx(x["mac_dynamic_W"]) for x in die)
+        assert all(math.isfinite(x["total_W"]) and x["total_W"]>=0 for x in die)
+        assert sum(x["total_W"] for x in die)==pytest.approx(power["aggregate_total_W"])
+        assert sum(x["memory_read_dynamic_W"] for x in die)==pytest.approx(power["aggregate_memory_read_dynamic_W"])
+        assert sum(x["memory_write_dynamic_W"] for x in die)==pytest.approx(power["aggregate_memory_write_dynamic_W"])
+        assert sum(x["mac_dynamic_W"] for x in die)==pytest.approx(power["aggregate_mac_dynamic_W"])
+        interval=power["decode_step_interval_ms"]*1e-3
+        expected_read=sum(8*(x["weight_read_bytes"]+x["kv_read_bytes"]) for x in activity)*primitive["local_read_total_pj_per_bit"]*1e-12/interval
+        expected_write=sum(8*x["kv_write_bytes"] for x in activity)*primitive["local_write_total_pj_per_bit"]*1e-12/interval
+        assert power["aggregate_memory_read_dynamic_W"]==pytest.approx(expected_read)
+        assert power["aggregate_memory_write_dynamic_W"]==pytest.approx(expected_write)
+        expected_mac_j=sum(x["nmp_flops"] for x in activity)/2*primitive["mac_energy_pj_per_mac"]*1e-12
+        assert power["aggregate_mac_dynamic_W"]*interval==pytest.approx(expected_mac_j)
+        assert power["residual_external_bytes"]==pytest.approx(row["A_FINAL_CANONICAL_GAIN"]["remaining_external_bytes"])
+        expected_external=power["residual_external_bytes"]*8*(primitive["long_feol_pj_per_bit"]+primitive["interface_pj_per_bit"])*1e-12/(power["decode_step_interval_ms"]*1e-3)
+        assert power["aggregate_residual_external_W"]==pytest.approx(expected_external)
+    assert refresh[0]==refresh[1]==refresh[2]
+
+def test_a_canonical_gains_unchanged_by_power_map(payload):
+    assert [r["A_FINAL_CANONICAL_GAIN"]["combined_A_gain"] for r in payload["rows"]]==pytest.approx([2.565,3.950,3.744],abs=.001)
+
 @pytest.mark.parametrize("index",[0,1,2])
 def test_per_die_activity_energy_and_service_closure(payload,index):
     row=payload["rows"][index]; a=row["canonical_die_activity"]; activities=a["activities"]; h=a["hardware"]
