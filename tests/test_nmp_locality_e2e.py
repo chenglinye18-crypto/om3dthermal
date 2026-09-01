@@ -62,11 +62,11 @@ def test_non_nmp_separates_raw_internal_and_external_pipeline(inputs):
     assert t.bottleneck == 'EXTERNAL'
     assert result.traffic.weight_bulk_external_bytes > 0 and result.traffic.kv_bulk_external_bytes > 0
 
-def test_nmp_local_crossover_is_unchanged_by_non_nmp_fix(inputs):
+def test_nmp_local_timing_includes_frozen_one_ns_route(inputs):
     l,b,p,w,d,g=inputs
     result=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
-    assert result.timing.local_memory_ms == pytest.approx(1.512, abs=0.002)
-    assert result.timing.nmp_compute_crossover_tflops == pytest.approx(54.67, abs=0.02)
+    assert result.timing.local_memory_ms == pytest.approx(1.66354, abs=0.00002)
+    assert result.timing.nmp_compute_crossover_tflops == pytest.approx(49.700, abs=0.002)
 
 @pytest.mark.parametrize('batch',[1,8,16])
 def test_flops_scale_and_more_nmp_compute_never_hurts(inputs,batch):

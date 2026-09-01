@@ -17,6 +17,8 @@ from om3dthermal.workload.llm_decode import LLMDecodeInput, evaluate_llm_decode
 from om3dthermal.workload.m3d_page_demand import M3DWorkloadPageDemand
 
 Case = Literal["NON_NMP_GPU", "NMP_NAIVE", "NMP_LOCALITY_AWARE_PLACEMENT"]
+NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS = 1.0
+NMP_LOCAL_ROUTE_PROVENANCE = "MODELING_CHOICE_FIXED_LOCAL_NMP_ROUTE_DELAY__NOT_PHYSICALLY_EXTRACTED__NOT_OPTIMIZED__NOT_POSITION_DEPENDENT"
 
 @dataclass(frozen=True)
 class DenseDecodePlacementUnit:
@@ -104,7 +106,7 @@ def _placement(case: Case, units: tuple[DenseDecodePlacementUnit, ...], layout: 
     else:
         spans, used = _spans(units, layout, case == "NMP_LOCALITY_AWARE_PLACEMENT")
         # Existing MIV layer delays, but no long FEOL / edge interface.
-        access=statistics.fmean(x.mat_latency_ns+x.miv_latency_ns for x in physical.locations)
+        access=statistics.fmean(x.mat_latency_ns+x.miv_latency_ns+NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS for x in physical.locations)
         edge=False
     values=tuple(len(x) for x in spans)
     layers=[]
@@ -112,7 +114,13 @@ def _placement(case: Case, units: tuple[DenseDecodePlacementUnit, ...], layout: 
         layers.append(len(set(d for u,s in zip(units,spans) if u.layer_id==layer for d in s)))
     return NMPPlacementMetrics(case, layout.slab_count, statistics.fmean(values), statistics.median(values), max(values),
         statistics.fmean(layers), used, access, edge,
-        "MODELNG_CHOICE_LOCAL_ROUTE_NOT_SEPARATELY_MODELED" if not edge else "LONG_FEOL_EDGE_ROUTE_INCLUDED")
+        NMP_LOCAL_ROUTE_PROVENANCE if not edge else "LONG_FEOL_EDGE_ROUTE_INCLUDED")
+
+def build_locality_aware_unit_ownership(workload: LLMDecodeInput, layout: PhysicalCapacityLayout):
+    """Return deterministic operator units and their physical-die ownership."""
+    units=build_dense_decode_placement_units(workload)
+    spans,_=_spans(units,layout,True)
+    return units,spans
 
 def _traffic(case: Case, demand: M3DWorkloadPageDemand, units: tuple[DenseDecodePlacementUnit, ...],
              placement: NMPPlacementMetrics, layout: PhysicalCapacityLayout) -> NMPTraffic:

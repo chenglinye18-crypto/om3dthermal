@@ -2,12 +2,16 @@
 from __future__ import annotations
 import argparse, json
 from pathlib import Path
-from evaluate_die_local_placement import ROOT, _architecture
+try:
+    from evaluate_die_local_placement import ROOT, _architecture
+except ModuleNotFoundError:  # imported as scripts.evaluate_nmp_locality_placement
+    from scripts.evaluate_die_local_placement import ROOT, _architecture
 from om3dthermal.experiment import load_experiment_spec, load_workload_spec
 from om3dthermal.placement import evaluate_nmp_locality_case
 from om3dthermal.power import calculate_memory_power, calculate_physical_access_latency, load_case_config, resolve_case_geometry
 from om3dthermal.power.feol_route import calculate_feol_route
 from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
+from om3dthermal.power.nmp_die_activity import canonical_nmp_hardware, evaluate_nmp_die_activity
 from om3dthermal.workload import build_m3d_workload_page_demand
 
 def run(output_dir: Path):
@@ -33,7 +37,13 @@ def run(output_dir: Path):
                     'placement_incremental_gain': local.timing.tokens_per_s_serial / naive.timing.tokens_per_s_serial,
                     'combined_A_gain': local.timing.tokens_per_s_serial / baseline.timing.tokens_per_s_serial,
                 }})
-        rows.append({'requests':n,'working_set_bytes':d.allocated_page_bytes,'non_nmp_gpu':baseline.as_dict(),'points':points})
+        hardware=canonical_nmp_hardware(layout.slab_count)
+        canonical=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu)
+        activity=evaluate_nmp_die_activity(w,d,layout,bandwidth,local_access_latency_ns=canonical.placement.local_access_latency_ns,external_boundary_time_ms=canonical.timing.external_ms)
+        canonical_tps=n/(activity.decode_step_interval_ms*1e-3)
+        rows.append({'requests':n,'working_set_bytes':d.allocated_page_bytes,'non_nmp_gpu':baseline.as_dict(),'points':points,
+            'canonical_nmp_hardware':hardware.__dict__,'canonical_die_activity':activity.as_dict(),
+            'canonical_combined_A_gain':canonical_tps/baseline.timing.tokens_per_s})
     payload={'model':'A_FINAL_NMP_LOCALITY_AWARE_PLACEMENT','physical_die_count':layout.slab_count,'die_semantics':'ARCHITECTURE_DEFINED_ONE_SLAB_PER_PHYSICAL_DIE','DIRECT_DIE_TO_DIE_COMMUNICATION':'FORBIDDEN','canonical_overlap':'CONSERVATIVE_NO_OVERLAP','rows':rows}
     output_dir.mkdir(parents=True,exist_ok=True); (output_dir/'nmp_locality_placement.json').write_text(json.dumps(payload,indent=2),encoding='utf-8'); return payload
 def main():
