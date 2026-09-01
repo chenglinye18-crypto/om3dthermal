@@ -48,10 +48,12 @@ def canonical_nmp_hardware(physical_die_count:int)->NMPHardware:
         "DERIVED_FROM_MAC_COUNT_CLOCK_AND_PRECISION")
 
 def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,layout:PhysicalCapacityLayout,
-        bandwidth:ArchitectureBandwidthClosure,*,local_access_latency_ns:float,external_boundary_time_ms:float)->NMPDieActivitySummary:
+        bandwidth:ArchitectureBandwidthClosure,*,local_access_latency_ns:float,external_boundary_time_ms:float,
+        ownership:tuple[tuple[int,...],...]|None=None)->NMPDieActivitySummary:
     hw=canonical_nmp_hardware(layout.slab_count)
     bw_die=(bandwidth.local_service_groups_per_die*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*local_access_latency_ns*1e-9))
-    units,spans=build_locality_aware_unit_ownership(workload,layout); n=layout.slab_count
+    units,default_spans=build_locality_aware_unit_ownership(workload,layout); spans=default_spans if ownership is None else ownership; n=layout.slab_count
+    if len(spans)!=len(units): raise ValueError("unit ownership count mismatch")
     weights=[0.0]*n; kvreads=[0.0]*n; kvwrites=[0.0]*n; flops=[0.0]*n
     weight_basis=sum(u.weight_bytes for u in units); kv_basis=sum(u.kv_bytes for u in units)
     for u,owners in zip(units,spans):
@@ -76,4 +78,4 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
     return NMPDieActivitySummary(hw,local_access_latency_ns,1.0,bw_die,bw_die*n,ai_balance,tuple(rows),stage,interval,service.index(stage),statistics.fmean(service),p90,stage,
         sum(r.bottleneck=="MEMORY_BOUND" for r in rows),sum(r.bottleneck=="COMPUTE_BOUND" for r in rows),sum(r.bottleneck=="BALANCED" for r in rows),
         sum(r.compute_energy_j for r in rows),sum(r.power.compute_dynamic_W for r in rows),"DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B",
-        "NON_CANONICAL_DIE_LEVEL_STRAGGLER_DIAGNOSTIC__DOES_NOT_DEFINE_A_CANONICAL_THROUGHPUT")
+        "REALIZED_DIE_LEVEL_SERVICE_TIMING")

@@ -20,18 +20,38 @@ def test_hardware_freeze_and_local_route(payload):
     assert a["aggregate_local_bandwidth_bytes_per_s"] < old_bw
     assert payload["rows"][0]["non_nmp_gpu"]["timing"]["external_bandwidth_bytes_per_s"]==4.9e12
 
-def test_a_canonical_uses_aggregate_timing_not_die_straggler(payload):
+def test_three_performance_references_are_explicit(payload):
     for row in payload["rows"]:
+        ideal=row["IDEAL_AGGREGATE_UPPER_BOUND"]
+        locality=row["LOCALITY_ONLY_BASELINE"]
         canonical=row["A_FINAL_CANONICAL_GAIN"]
-        diagnostic=row["DIE_LEVEL_STRAGGLER_DIAGNOSTIC_GAIN"]
-        activity=row["canonical_die_activity"]
-        assert canonical["nmp_step_ms"]==pytest.approx(max(
-            canonical["nmp_local_memory_ms"],canonical["nmp_compute_ms"]
-        )+canonical["nmp_remaining_external_ms"])
-        assert canonical["nmp_step_ms"] != pytest.approx(activity["decode_step_interval_ms"])
+        assert ideal["nmp_step_ms"]==pytest.approx(max(
+            ideal["nmp_local_memory_ms"],ideal["nmp_compute_ms"]
+        )+ideal["nmp_remaining_external_ms"])
+        assert canonical["nmp_step_ms"]==pytest.approx(canonical["activity"]["decode_step_interval_ms"])
         assert canonical["combined_A_gain"]>1 and math.isfinite(canonical["combined_A_gain"])
-        assert diagnostic["timing_semantics"]=="NON_CANONICAL_STRAGGLER_BOUND"
-        assert "NON_CANONICAL" in activity["timing_semantics"]
+        assert ideal["timing_semantics"]=="IDEAL_AGGREGATE_BALANCED_UPPER_BOUND"
+        assert locality["timing_semantics"]=="REALIZED_DIE_LEVEL_LOCALITY_ONLY"
+        assert "PERFORMANCE_BALANCED" in canonical["timing_semantics"]
+
+def test_performance_balanced_constraints_and_closures(payload):
+    for row in payload["rows"]:
+        locality=row["LOCALITY_ONLY_BASELINE"]; balanced=row["A_FINAL_CANONICAL_GAIN"]
+        lp=locality["placement"]; bp=balanced["placement"]
+        assert bp["capacity_violations"]==0
+        assert sum(bp["resident_used_bytes_per_die"])==pytest.approx(row["logical_working_set_bytes"])
+        assert sum(bp["traffic_bytes_per_die"])==pytest.approx(sum(x["total_local_memory_bytes"] for x in balanced["activity"]["activities"]))
+        assert sum(bp["flops_per_die"])==pytest.approx(sum(x["nmp_flops"] for x in balanced["activity"]["activities"]))
+        assert bp["operator_die_spans"]==lp["operator_die_spans"]
+        assert balanced["remaining_external_bytes"]==locality["remaining_external_bytes"]
+        assert max(bp["service_time_ms_per_die"])<=max(lp["service_time_ms_per_die"])*(1+1e-12)
+        assert max(bp["service_time_ms_per_die"])/(sum(bp["service_time_ms_per_die"])/98)<=max(lp["service_time_ms_per_die"])/(sum(lp["service_time_ms_per_die"])/98)*(1+1e-12)
+        assert row["points"][0]["locality_aware"]["traffic"]["direct_die_to_die_bytes"]==0
+
+def test_performance_balanced_allocator_is_deterministic(payload,tmp_path):
+    repeated=run(tmp_path/"repeat")
+    assert [r["A_FINAL_CANONICAL_GAIN"]["placement"]["ownership"] for r in repeated["rows"]]==[
+        r["A_FINAL_CANONICAL_GAIN"]["placement"]["ownership"] for r in payload["rows"]]
 
 @pytest.mark.parametrize("index",[0,1,2])
 def test_per_die_activity_energy_and_service_closure(payload,index):
