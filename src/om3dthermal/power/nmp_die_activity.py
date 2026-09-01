@@ -38,6 +38,7 @@ class NMPDieActivitySummary:
     memory_bound_die_count: int; compute_bound_die_count: int; balanced_die_count: int
     aggregate_compute_energy_j: float; aggregate_compute_dynamic_W: float
     memory_power_status: str
+    timing_semantics: str
     def as_dict(self): return asdict(self)
 
 def canonical_nmp_hardware(physical_die_count:int)->NMPHardware:
@@ -74,4 +75,5 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
     ordered=sorted(service); p90=ordered[math.ceil(.9*len(ordered))-1]
     return NMPDieActivitySummary(hw,local_access_latency_ns,1.0,bw_die,bw_die*n,ai_balance,tuple(rows),stage,interval,service.index(stage),statistics.fmean(service),p90,stage,
         sum(r.bottleneck=="MEMORY_BOUND" for r in rows),sum(r.bottleneck=="COMPUTE_BOUND" for r in rows),sum(r.bottleneck=="BALANCED" for r in rows),
-        sum(r.compute_energy_j for r in rows),sum(r.power.compute_dynamic_W for r in rows),"DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B")
+        sum(r.compute_energy_j for r in rows),sum(r.power.compute_dynamic_W for r in rows),"DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B",
+        "NON_CANONICAL_DIE_LEVEL_STRAGGLER_DIAGNOSTIC__DOES_NOT_DEFINE_A_CANONICAL_THROUGHPUT")

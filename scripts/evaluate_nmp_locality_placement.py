@@ -38,12 +38,27 @@ def run(output_dir: Path):
                     'combined_A_gain': local.timing.tokens_per_s_serial / baseline.timing.tokens_per_s_serial,
                 }})
         hardware=canonical_nmp_hardware(layout.slab_count)
+        canonical_naive=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_NAIVE',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu)
         canonical=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu)
         activity=evaluate_nmp_die_activity(w,d,layout,bandwidth,local_access_latency_ns=canonical.placement.local_access_latency_ns,external_boundary_time_ms=canonical.timing.external_ms)
-        canonical_tps=n/(activity.decode_step_interval_ms*1e-3)
+        diagnostic_tps=n/(activity.decode_step_interval_ms*1e-3)
         rows.append({'requests':n,'working_set_bytes':d.allocated_page_bytes,'non_nmp_gpu':baseline.as_dict(),'points':points,
             'canonical_nmp_hardware':hardware.__dict__,'canonical_die_activity':activity.as_dict(),
-            'canonical_combined_A_gain':canonical_tps/baseline.timing.tokens_per_s})
+            'A_FINAL_CANONICAL_GAIN': {
+                'timing_semantics': 'AGGREGATE_LOCAL_BW_AND_AGGREGATE_NMP_COMPUTE__STEADY_STATE_PIPELINE',
+                'non_nmp_step_ms': baseline.timing.total_step_ms,
+                'nmp_local_memory_ms': canonical.timing.local_memory_ms,
+                'nmp_compute_ms': canonical.timing.nmp_compute_ms,
+                'nmp_remaining_external_ms': canonical.timing.external_ms,
+                'nmp_step_ms': canonical.timing.total_step_ms,
+                'nmp_gain': canonical_naive.timing.tokens_per_s/baseline.timing.tokens_per_s,
+                'placement_incremental_gain': canonical.timing.tokens_per_s/canonical_naive.timing.tokens_per_s,
+                'combined_A_gain': canonical.timing.tokens_per_s/baseline.timing.tokens_per_s,
+            },
+            'DIE_LEVEL_STRAGGLER_DIAGNOSTIC_GAIN': {
+                'timing_semantics': 'NON_CANONICAL_STRAGGLER_BOUND',
+                'combined_A_gain': diagnostic_tps/baseline.timing.tokens_per_s,
+            }})
     payload={'model':'A_FINAL_NMP_LOCALITY_AWARE_PLACEMENT','physical_die_count':layout.slab_count,'die_semantics':'ARCHITECTURE_DEFINED_ONE_SLAB_PER_PHYSICAL_DIE','DIRECT_DIE_TO_DIE_COMMUNICATION':'FORBIDDEN','canonical_overlap':'CONSERVATIVE_NO_OVERLAP','rows':rows}
     output_dir.mkdir(parents=True,exist_ok=True); (output_dir/'nmp_locality_placement.json').write_text(json.dumps(payload,indent=2),encoding='utf-8'); return payload
 def main():

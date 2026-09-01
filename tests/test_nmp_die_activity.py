@@ -20,6 +20,19 @@ def test_hardware_freeze_and_local_route(payload):
     assert a["aggregate_local_bandwidth_bytes_per_s"] < old_bw
     assert payload["rows"][0]["non_nmp_gpu"]["timing"]["external_bandwidth_bytes_per_s"]==4.9e12
 
+def test_a_canonical_uses_aggregate_timing_not_die_straggler(payload):
+    for row in payload["rows"]:
+        canonical=row["A_FINAL_CANONICAL_GAIN"]
+        diagnostic=row["DIE_LEVEL_STRAGGLER_DIAGNOSTIC_GAIN"]
+        activity=row["canonical_die_activity"]
+        assert canonical["nmp_step_ms"]==pytest.approx(max(
+            canonical["nmp_local_memory_ms"],canonical["nmp_compute_ms"]
+        )+canonical["nmp_remaining_external_ms"])
+        assert canonical["nmp_step_ms"] != pytest.approx(activity["decode_step_interval_ms"])
+        assert canonical["combined_A_gain"]>1 and math.isfinite(canonical["combined_A_gain"])
+        assert diagnostic["timing_semantics"]=="NON_CANONICAL_STRAGGLER_BOUND"
+        assert "NON_CANONICAL" in activity["timing_semantics"]
+
 @pytest.mark.parametrize("index",[0,1,2])
 def test_per_die_activity_energy_and_service_closure(payload,index):
     row=payload["rows"][index]; a=row["canonical_die_activity"]; activities=a["activities"]; h=a["hardware"]
