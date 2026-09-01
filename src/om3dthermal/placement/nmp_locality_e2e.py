@@ -24,6 +24,7 @@ NMP_LOCAL_ROUTE_PROVENANCE = "MODELING_CHOICE_FIXED_LOCAL_NMP_ROUTE_DELAY__NOT_P
 class DenseDecodePlacementUnit:
     unit_id: str; layer_id: int; operator_type: str; weight_bytes: int; kv_bytes: int
     local_flops: int; activation_input_bytes: int; partial_output_bytes: int
+    request_id: int|None; placement_scope: Literal["SHARED_BATCH","REQUEST_LOCAL"]
 
 @dataclass(frozen=True)
 class NMPPlacementMetrics:
@@ -61,15 +62,20 @@ def build_dense_decode_placement_units(workload: LLMDecodeInput) -> tuple[DenseD
     """Dimension-exact LLaMA Q/K/V/attention/O/MLP decomposition."""
     b = workload.weight_bits // 8; h = workload.d_model; kv = workload.n_heads_kv * workload.d_head
     specs = (("Q", h*h, 2*h*h, h, h), ("K", h*kv, 2*h*kv, h, kv),
-             ("V", h*kv, 2*h*kv, h, kv), ("ATTENTION_KV", 0, 4*workload.n_heads_q*workload.context_length*workload.d_head, h, h),
+             ("V", h*kv, 2*h*kv, h, kv),
              ("O", h*h, 2*h*h, h, h), ("FFN_GATE", h*workload.d_ff, 2*h*workload.d_ff, h, workload.d_ff),
              ("FFN_UP", h*workload.d_ff, 2*h*workload.d_ff, h, workload.d_ff), ("FFN_DOWN", workload.d_ff*h, 2*workload.d_ff*h, workload.d_ff, h))
     units=[]
     for layer in range(workload.n_layers):
         for name, params, flops, inp, out in specs:
             units.append(DenseDecodePlacementUnit(f"layer.{layer}.{name}", layer, name, params*b,
-                (2*workload.context_length*kv*b if name == "ATTENTION_KV" else 0), flops,
-                workload.batch_size*inp*b, workload.batch_size*out*b))
+                0,flops,workload.batch_size*inp*b,workload.batch_size*out*b,None,"SHARED_BATCH"))
+        for request in range(workload.batch_size):
+            units.append(DenseDecodePlacementUnit(
+                f"layer.{layer}.ATTENTION_KV.request.{request}",layer,"ATTENTION_KV",0,
+                2*workload.context_length*kv*b,
+                4*workload.n_heads_q*workload.context_length*workload.d_head,
+                h*b,h*b,request,"REQUEST_LOCAL"))
     return tuple(units)
 
 def _spans(units: tuple[DenseDecodePlacementUnit, ...], layout: PhysicalCapacityLayout,
@@ -159,7 +165,7 @@ def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPage
     # 50 external coil/FEOL IO lanes per die.
     local_bw=(layout.slab_count*bandwidth.local_service_groups_per_die*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*placement.local_access_latency_ns*1e-9))
     local_ms=traffic.local_memory_bytes/local_bw*1e3; external_ms=traffic.external_interface_bytes/external_bw*1e3
-    flops=workload.batch_size*sum(u.local_flops for u in units); nmp_ms=flops/(nmp_aggregate_tflops*1e12)*1e3
+    flops=sum((workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops for u in units); nmp_ms=flops/(nmp_aggregate_tflops*1e12)*1e3
     total=max(local_ms,nmp_ms)+external_ms
     cross=flops/(local_ms*1e-3)/1e12
     timing=NMPCaseTiming(case,nmp_aggregate_tflops,local_ms,external_ms,nmp_ms,0,total,workload.batch_size/(total*1e-3),cross,nmp_aggregate_tflops/layout.slab_count,

@@ -4,6 +4,11 @@ import math
 import pytest
 from scripts.evaluate_nmp_locality_placement import ROOT, run
 from om3dthermal.power.nmp_die_activity import canonical_nmp_hardware
+from om3dthermal.experiment import load_workload_spec
+from om3dthermal.workload.llm_decode import evaluate_llm_decode
+from scripts.evaluate_die_local_placement import _architecture
+from om3dthermal.workload import build_m3d_workload_page_demand
+from om3dthermal.placement.nmp_load_balance import build_performance_balanced_placement
 
 @pytest.fixture(scope="module")
 def payload(tmp_path_factory):
@@ -48,10 +53,36 @@ def test_performance_balanced_constraints_and_closures(payload):
         assert max(bp["service_time_ms_per_die"])/(sum(bp["service_time_ms_per_die"])/98)<=max(lp["service_time_ms_per_die"])/(sum(lp["service_time_ms_per_die"])/98)*(1+1e-12)
         assert row["points"][0]["locality_aware"]["traffic"]["direct_die_to_die_bytes"]==0
 
-def test_performance_balanced_allocator_is_deterministic(payload,tmp_path):
-    repeated=run(tmp_path/"repeat")
-    assert [r["A_FINAL_CANONICAL_GAIN"]["placement"]["ownership"] for r in repeated["rows"]]==[
-        r["A_FINAL_CANONICAL_GAIN"]["placement"]["ownership"] for r in payload["rows"]]
+def test_performance_balanced_allocator_is_deterministic(payload):
+    layout,_=_architecture()
+    workload=load_workload_spec(ROOT/"configs/workload/llama31_8b_decode_b1_s131072.yaml",project_root=ROOT).decode
+    demand=build_m3d_workload_page_demand(workload,layout)
+    kwargs={"bandwidth_per_die_bytes_per_s":payload["rows"][0]["canonical_die_activity"]["local_bandwidth_per_die_bytes_per_s"],
+            "compute_per_die_flops_per_s":1.024e12}
+    first=build_performance_balanced_placement(workload,demand,layout,**kwargs)
+    second=build_performance_balanced_placement(workload,demand,layout,**kwargs)
+    assert first.ownership==second.ownership
+
+def test_request_level_kv_unit_and_workload_closures(payload):
+    base=load_workload_spec(ROOT/"configs/workload/llama31_8b_decode_b1_s131072.yaml",project_root=ROOT).decode
+    for row in payload["rows"]:
+        workload=base.model_copy(update={"batch_size":row["requests"]}); metrics=evaluate_llm_decode(workload)
+        loads=row["A_FINAL_CANONICAL_GAIN"]["placement"]["unit_loads"]
+        request_units=[x for x in loads if x["unit"]["placement_scope"]=="REQUEST_LOCAL"]
+        shared=[x for x in loads if x["unit"]["placement_scope"]=="SHARED_BATCH"]
+        expected_one_layer=2*workload.context_length*workload.n_heads_kv*workload.d_head*workload.kv_bits/8
+        assert len(request_units)==workload.n_layers*workload.batch_size
+        assert len(shared)==workload.n_layers*7
+        assert all(x["unit"]["request_id"] is None for x in shared)
+        assert all(x["unit"]["kv_bytes"]==expected_one_layer for x in request_units)
+        assert all(x["minimum_die_span"]==1 for x in request_units)
+        assert sum(x["unit"]["kv_bytes"] for x in request_units)==pytest.approx(metrics.kv_footprint_bytes)
+        assert sum(x["kv_read_bytes"] for x in request_units)==pytest.approx(workload.batch_size*metrics.kv_read_bytes_per_token)
+        assert sum(x["kv_write_bytes"] for x in request_units)==pytest.approx(workload.batch_size*metrics.kv_write_bytes_per_token)
+        expected_attention=workload.batch_size*workload.n_layers*4*workload.n_heads_q*workload.context_length*workload.d_head
+        assert sum(x["nmp_flops"] for x in request_units)==expected_attention
+        assert sum(x["local_memory_traffic_bytes"] for x in loads)==pytest.approx(sum(a["total_local_memory_bytes"] for a in row["A_FINAL_CANONICAL_GAIN"]["activity"]["activities"]))
+        assert sum(x["nmp_flops"] for x in loads)==pytest.approx(sum(a["nmp_flops"] for a in row["A_FINAL_CANONICAL_GAIN"]["activity"]["activities"]))
 
 @pytest.mark.parametrize("index",[0,1,2])
 def test_per_die_activity_energy_and_service_closure(payload,index):

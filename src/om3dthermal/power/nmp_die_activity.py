@@ -63,7 +63,8 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
             if u.kv_bytes:
                 kvreads[die]+=demand.total_kv_read_bytes_per_decode_step*(u.kv_bytes/kv_basis)*share
                 kvwrites[die]+=demand.kv_write_bytes_per_decode_step*(u.kv_bytes/kv_basis)*share
-            flops[die]+=workload.batch_size*u.local_flops*share
+            unit_flops=(workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops
+            flops[die]+=unit_flops*share
     totals=[weights[i]+kvreads[i]+kvwrites[i] for i in range(n)]
     mem_ms=[x/bw_die*1e3 for x in totals]; comp_ms=[x/hw.peak_flops_per_die*1e3 for x in flops]
     service=[max(mem_ms[i],comp_ms[i]) for i in range(n)]; stage=max(service); interval=stage+external_boundary_time_ms

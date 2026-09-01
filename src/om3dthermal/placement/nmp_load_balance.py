@@ -10,6 +10,7 @@ from .nmp_locality_e2e import DenseDecodePlacementUnit, build_dense_decode_place
 @dataclass(frozen=True)
 class NMPPlacementUnitLoad:
     unit: DenseDecodePlacementUnit; resident_bytes: float
+    weight_read_bytes: float; kv_read_bytes: float; kv_write_bytes: float
     local_memory_traffic_bytes: float; nmp_flops: float; minimum_die_span: int
 
 @dataclass(frozen=True)
@@ -33,10 +34,14 @@ def derive_unit_loads(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,layou
         kv_res=demand.kv_footprint_bytes*u.kv_bytes/kv_basis if u.kv_bytes else 0.0
         raw=u.weight_bytes+u.kv_bytes
         resident=weight_res+kv_res+(runtime*raw/raw_resident if raw_resident else 0.0)
-        traffic=(demand.total_weight_read_bytes_per_decode_step*u.weight_bytes/weight_basis if u.weight_bytes else 0.0)
+        weight_read=(demand.total_weight_read_bytes_per_decode_step*u.weight_bytes/weight_basis if u.weight_bytes else 0.0)
+        kv_read=0.0; kv_write=0.0
         if u.kv_bytes:
-            traffic+=(demand.total_kv_read_bytes_per_decode_step+demand.kv_write_bytes_per_decode_step)*u.kv_bytes/kv_basis
-        loads.append(NMPPlacementUnitLoad(u,resident,traffic,workload.batch_size*u.local_flops,max(1,math.ceil(resident/layout.capacity_per_slab_bytes))))
+            kv_read=demand.total_kv_read_bytes_per_decode_step*u.kv_bytes/kv_basis
+            kv_write=demand.kv_write_bytes_per_decode_step*u.kv_bytes/kv_basis
+        traffic=weight_read+kv_read+kv_write
+        unit_flops=(workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops
+        loads.append(NMPPlacementUnitLoad(u,resident,weight_read,kv_read,kv_write,traffic,unit_flops,max(1,math.ceil(resident/layout.capacity_per_slab_bytes))))
     return tuple(loads)
 
 def build_performance_balanced_placement(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,
@@ -95,5 +100,5 @@ def remaining_external_bytes_for_ownership(loads:tuple[NMPPlacementUnitLoad,...]
     """Apply the existing activation/partial/next-stage accounting to spans."""
     activation=sum(x.unit.activation_input_bytes*len(o) for x,o in zip(loads,ownership))
     partial=sum(x.unit.partial_output_bytes*len(o) for x,o in zip(loads,ownership))
-    output=loads[-1].unit.partial_output_bytes
+    output=next(x.unit.partial_output_bytes for x in loads if x.unit.operator_type=="O")
     return activation+partial+output+activation
