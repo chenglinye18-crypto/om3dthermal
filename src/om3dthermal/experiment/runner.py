@@ -15,8 +15,10 @@ from om3dthermal import _git_metadata
 from om3dthermal.adapters import resolve_architecture_spec
 from om3dthermal.evaluator import (
     ConditionalLLMDecodeE2ERow,
+    GPUDecodeEnergyMetrics,
     assemble_conditional_llm_decode_e2e_row,
     evaluate_architecture_decode_memory_energy,
+    evaluate_gpu_decode_energy,
     evaluate_llm_decode_performance,
     evaluate_llm_decode_workload_power,
     map_workload_power_to_thermal,
@@ -51,6 +53,7 @@ class ExperimentRunResult:
     output_dir: Path | None
     provenance: RunProvenance
     m3d_parameter_sensitivity: M3DParameterSensitivityResult | None = None
+    gpu_decode_energy: tuple[GPUDecodeEnergyMetrics, ...] | None = None
 
 
 def _project_root(path: Path) -> Path:
@@ -143,6 +146,7 @@ def run_experiment(
     powers = []
     thermals = []
     rows = []
+    gpu_energies = []
     for resolved in resolved_architectures:
         system = resolved.system_power
         if system.gpu_power_W != platform.fixed_gpu_power_W:
@@ -193,6 +197,9 @@ def run_experiment(
             powers.append(power)
             thermals.append(thermal)
             rows.append(row)
+            if platform.gpu_decode_power is not None:
+                gpu_energies.append(evaluate_gpu_decode_energy(
+                    performance, energy, platform.gpu_decode_power))
 
     validated_rows = validate_conditional_llm_decode_e2e_rows(
         rows,
@@ -253,6 +260,10 @@ def run_experiment(
             "write_energy_model_status": "NOT_VALIDATED",
             "gpu_energy_model_status": "NOT_AVAILABLE",
             "system_j_token_status": "NOT_AVAILABLE",
+            **({
+                "gpu_decode_energy_stage_status": (
+                    "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY"),
+            } if gpu_energies else {}),
         },
     )
 
@@ -284,6 +295,7 @@ def run_experiment(
                 "status": "PASS",
                 "rows": validated_rows,
                 "m3d_parameter_sensitivity": sensitivity_result,
+                "gpu_decode_energy": gpu_energies or None,
             },
         )
     else:
@@ -294,4 +306,5 @@ def run_experiment(
         output_dir=output_dir,
         provenance=provenance,
         m3d_parameter_sensitivity=sensitivity_result,
+        gpu_decode_energy=tuple(gpu_energies) if gpu_energies else None,
     )

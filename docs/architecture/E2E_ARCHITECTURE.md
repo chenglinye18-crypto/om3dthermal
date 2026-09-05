@@ -94,11 +94,19 @@ The formal scenario remains conditional:
 
 - bandwidth is `MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED`;
 - write energy is a rho sensitivity, not a validated physical model;
-- the 0.5 pJ/bit M3D contactless-interface term is a conditional assumption,
-  not a complete-PHY or capability validation;
+- the 0.5 pJ/bit M3D contactless-interface term is
+  `PAPER_REPORTED_INDUCTIVE_LINK_ENERGY` (Shiba SSC-L 2023, 7 nm FinFET,
+  12.8 Gb/s; the same value adopted by MOSAIC, Mitarai VLSI 2026); its
+  clock/SerDes coverage boundary is unconfirmed, so it remains swept in
+  sensitivity analyses and is not a complete-PHY validation;
 - M3D logic-background power is either an explicit conditional lower bound or
   a `PARAMETRIC_SENSITIVITY` value, never a validated nominal;
-- GPU energy and complete system J/token are unavailable;
+- GPU decode energy and system J/token exist only as the optional E8
+  affine-utilization stage (`ANALYTICAL_AFFINE_UTILIZATION_MODEL` with
+  `PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE`); the frozen E7 row
+  keeps `gpu_energy_model_status = NOT_AVAILABLE` and the thermal path keeps
+  the fixed 300 W GPU power source — at u = 1 the affine model reproduces
+  that fixed baseline exactly;
 - the read-shaped write spatial distribution is sensitivity-only.
 
 No directory structure or PASS status upgrades those scientific claims.

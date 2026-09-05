@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from om3dthermal.provenance import ProvenanceRecord
 
+from .gpu_power import AffineGPUDecodePowerSpec
+
 
 class HostOffloadSpec(BaseModel):
     """Two-tier host-memory transport facts; decimal GB/s are explicit."""
@@ -65,4 +67,5 @@ class PlatformSpec(BaseModel):
     ]
     package_profile_status: str = Field(min_length=1)
     host_offload: HostOffloadSpec | None = None
+    gpu_decode_power: "AffineGPUDecodePowerSpec | None" = None
     provenance: tuple[ProvenanceRecord, ...] = ()

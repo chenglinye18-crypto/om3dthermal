@@ -28,10 +28,15 @@ from om3dthermal.evaluator.llm_decode_e2e import (
     validate_conditional_llm_decode_e2e_rows,
     validate_conditional_llm_decode_e2e_table,
 )
+from om3dthermal.evaluator.llm_decode_gpu_energy import (
+    GPUDecodeEnergyMetrics,
+    evaluate_gpu_decode_energy,
+)
 
 __all__ = [
     "ArchitectureDecodeMemoryEnergyMetrics",
     "ConditionalLLMDecodeE2ERow",
+    "GPUDecodeEnergyMetrics",
     "LLMDecodeMemoryEnergyMetrics",
     "LLMDecodePerformanceMetrics",
     "LLMDecodeWorkloadPowerMetrics",
@@ -41,6 +46,7 @@ __all__ = [
     "WorkloadThermalSource",
     "assemble_conditional_llm_decode_e2e_row",
     "evaluate_architecture_decode_memory_energy",
+    "evaluate_gpu_decode_energy",
     "evaluate_llm_decode_memory_energy",
     "evaluate_llm_decode_performance",
     "evaluate_llm_decode_workload_power",

@@ -106,6 +106,37 @@ def test_result_bundle_preserves_conditional_claim_boundaries(formal_run) -> Non
     assert all(row["write_energy_model_status"] == "NOT_VALIDATED" for row in rows)
 
 
+def test_formal_runner_evaluates_gpu_decode_energy_stage(formal_run) -> None:
+    """The E8 affine GPU energy stage runs alongside the frozen E7 rows."""
+    gpu_rows = formal_run.gpu_decode_energy
+    assert gpu_rows is not None
+    assert len(gpu_rows) == len(formal_run.rows) == 12
+    e7 = {(row.architecture, row.rho): row for row in formal_run.rows}
+    for gpu in gpu_rows:
+        assert gpu.evaluation_status == (
+            "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY")
+        # Matched-bandwidth scenario is memory-bound, so u == 1 and the
+        # affine power reproduces the fixed 300 W baseline exactly.
+        assert gpu.memory_bandwidth_utilization == pytest.approx(1.0)
+        assert gpu.utilization_clamped is False
+        assert gpu.gpu_decode_power_W == pytest.approx(300.0)
+        assert gpu.gpu_energy_j_per_token == pytest.approx(
+            300.0 * gpu.token_time_s)
+        row = e7[(gpu.architecture, gpu.rho)]
+        assert gpu.system_energy_j_per_token == pytest.approx(
+            gpu.gpu_energy_j_per_token
+            + row.memory_dynamic_energy_j_per_token)
+
+    output = formal_run.output_dir
+    assert output is not None
+    summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+    assert len(summary["gpu_decode_energy"]) == 12
+    provenance = json.loads(
+        (output / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["environment"]["gpu_decode_energy_stage_status"] == (
+        "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY")
+
+
 def test_result_bundle_persists_workload_demand_boundary(formal_run) -> None:
     output = formal_run.output_dir
     assert output is not None

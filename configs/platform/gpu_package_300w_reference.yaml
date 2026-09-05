@@ -3,6 +3,54 @@ platform_id: gpu_package_300w_reference
 fixed_gpu_power_W: 300.0
 gpu_power_status: FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL
 package_profile_status: EXISTING_CANONICAL_CASE_THERMAL_PACKAGE
+gpu_decode_power:
+  model: AFFINE_UTILIZATION_MODEL
+  static_power_W: 100.0
+  peak_decode_power_W: 300.0
+  peak_memory_bandwidth_bytes_per_s: 4.9e12
+  static_power_status: PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE
+  peak_power_status: PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE
+  bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
+  model_form_status: MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING
+  provenance:
+    - record_id: ml_energy_llama31_8b_h100_v0
+      classification: MATCHED_REFERENCE
+      source: https://ml.energy/blog/measurement/energy/llm-inference-energy-a-longitudinal-analysis/
+      source_location: Llama 3.1 8B on H100, energy per token vs batch size
+      status: MEASURED_REFERENCE_GPU_UTILIZATION_POWER_CORRELATION
+      notes: >-
+        Measured evidence that GPU power draw tracks utilization during LLM
+        inference and that static power dominates at small batch; anchors the
+        affine model form, not the nominal parameter values.
+    - record_id: tokenpowerbench_decode_phase_v0
+      classification: MATCHED_REFERENCE
+      source: https://arxiv.org/abs/2512.03024
+      source_location: Phase-aligned prefill/decode GPU power measurement
+      status: MEASURED_REFERENCE_DECODE_PHASE_STEADY_LOWER_POWER
+      notes: >-
+        Decode-phase GPU power is steady and below the prefill peak (reported
+        ~90 W lower on H100-class nodes); supports a single-utilization
+        parameterization of the decode phase.
+    - record_id: from_words_to_watts_hpec2023_v0
+      classification: MATCHED_REFERENCE
+      source: https://arxiv.org/abs/2310.03003
+      source_location: GPU power-cap and energy-per-token methodology
+      status: MEASURED_REFERENCE_MEMORY_BOUND_DECODE_POWER_INSENSITIVITY
+      notes: >-
+        250 W to 175 W power cap reduces energy by ~23% while increasing
+        inference time by only ~6.7%, evidencing memory-bound decode.
+    - record_id: affine_param_nominals_v0
+      classification: MODELING_CHOICE
+      source: docs/research/gpu_power_model_spec_2026-09-05.md
+      status: PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE
+      notes: >-
+        P_static = 100 W lies inside the idle/static range reported for
+        300-700 W-class data-center GPUs by the measured anchors;
+        P_peak_decode = 300 W makes the u = 1 memory-bottleneck point
+        reproduce the existing fixed 300 W thermal baseline exactly;
+        BW_peak = 4.9e12 B/s equals the matched-reference scenario bandwidth.
+        Values are swept in sensitivity analyses and are not a per-GPU
+        calibration.
 host_offload:
   status: RESOLVED
   host_memory_bandwidth_GBps: 460.8
