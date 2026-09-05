@@ -1,4 +1,4 @@
-﻿name: orthogonal_m3d_igzo
+name: orthogonal_m3d_igzo
 
 geometry:
   type: orthogonal_m3d
@@ -155,13 +155,22 @@ architecture:
     type: contactless
     source: constant
     energy_pj_per_bit: 0.5
-    energy_status: CONDITIONAL_ASSUMPTION
+    energy_status: PAPER_REPORTED_INDUCTIVE_LINK_ENERGY
     included_components: [inductive_coupling_interface_aggregate]
     excluded_components: []
-    unconfirmed_components: [tx, rx, coil_or_coupling_path, clock, serialization_deserialization, driver_control]
+    unconfirmed_components: [clock, serialization_deserialization, driver_control]
     source_boundary: >-
-      Existing 0.5 pJ/bit inductive-interface reference; repository evidence
-      does not establish a complete TX/RX/coil/clock/SerDes/driver boundary.
+      0.5 pJ/bit is the link energy reported for a 7-nm FinFET
+      encoding-less inductive-coupling interface at 12.8 Gb/s
+      (K. Shiba et al., IEEE SSC-L, vol. 6, pp. 65-68, 2023,
+      DOI: 10.1109/LSSC.2023.3252607), the same value adopted by
+      Mitarai et al. (MOSAIC, IEEE Symp. VLSI Circuits 2026) as the
+      I/O energy of a contactless die-to-die interface at 8 Gb/s.
+      The TX/RX/coil link path is covered by the measurement;
+      whether clock distribution and SerDes are included is not
+      established by repository evidence, so clock and
+      serialization remain unconfirmed components and the value is
+      still swept in sensitivity analyses.
   physical_access_latency:
     mat_latency_ns: 10.0
     mat_classification: MODELING_CHOICE_PLACEHOLDER

@@ -111,6 +111,7 @@ class ArchitectureDecodeMemoryEnergyMetrics(BaseModel):
         "NOT_APPLICABLE",
         "CONDITIONAL_ASSUMPTION",
         "PARAMETRIC_SENSITIVITY",
+        "PAPER_REPORTED_INDUCTIVE_LINK_ENERGY",
     ] = "NOT_APPLICABLE"
     evaluation_status: Literal[
         "EVALUATED_CONDITIONAL_ARCHITECTURE_MEMORY_ENERGY",
@@ -210,7 +211,8 @@ def evaluate_architecture_decode_memory_energy(
     elif (system.architecture_type == "orthogonal_m3d"
           and system.memory_result is not None):
         interface_energy = system.memory_result.E_interface_pj_bit
-        interface_status = "CONDITIONAL_ASSUMPTION"
+        interface_status = system.memory_result.diagnostics.get(
+            "interface_energy_status", "CONDITIONAL_ASSUMPTION")
     has_energy = e_read is not None
 
     # Common fields always populated

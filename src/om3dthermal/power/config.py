@@ -396,7 +396,10 @@ class InterfaceInput(StrictModel):
     type: Literal["hbm_dq", "contactless", "direct"]
     source: Literal["dreamram", "constant", "none"]
     energy_pj_per_bit: float | None = Field(default=None, ge=0.0)
-    energy_status: Literal["CONDITIONAL_ASSUMPTION"] | None = None
+    energy_status: Literal[
+        "CONDITIONAL_ASSUMPTION",
+        "PAPER_REPORTED_INDUCTIVE_LINK_ENERGY",
+    ] | None = None
     included_components: tuple[str, ...] = ()
     excluded_components: tuple[str, ...] = ()
     unconfirmed_components: tuple[str, ...] = ()
