@@ -6,7 +6,7 @@ from typing import Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from om3dthermal.platform import HostOffloadSpec
+from om3dthermal.platform import HostOffloadSpec, resolve_host_offload_power
 from om3dthermal.workload import LLMDecodeInput, evaluate_llm_decode
 
 from .gpu import GPUDecodePerformanceModel
@@ -51,6 +51,14 @@ class CapacityAwareServingResult(BaseModel):
     host_device_link_bandwidth_GBps: float | None
     host_offload_efficiency: float | None
     host_effective_bandwidth_bytes_per_second: float | None
+    host_bandwidth_demand_bytes_per_second: float | None
+    host_bandwidth_actual_bytes_per_second: float | None
+    host_bandwidth_saturated: bool | None
+    pcie_dynamic_power_W: float | None
+    ddr_dynamic_power_W: float | None
+    host_offload_dynamic_power_W: float | None
+    host_power_model_status: str
+    host_static_power_status: Literal["UNRESOLVED"]
     host_transfer_time_ms: float | None
     host_penalty_time_ms: float | None
     host_overlap_policy: str
@@ -114,8 +122,14 @@ def evaluate_capacity_aware_serving(
         host_offload=host_offload,
     )
     if residency.capacity_status == "WEIGHTS_NOT_RESIDENT":
+        host_power = _host_power_fields(
+            host_offload=host_offload,
+            host_transfer_bytes_per_step=0.0,
+            host_transfer_time_ms=None,
+        )
         return CapacityAwareServingResult(
             **common,
+            **host_power,
             host_read_bytes_per_step=0.0,
             host_write_bytes_per_step=0.0,
             host_transfer_bytes_per_step=0.0,
@@ -142,9 +156,16 @@ def evaluate_capacity_aware_serving(
     else:
         host_time_ms = host_total / effective * 1e3
 
+    host_power = _host_power_fields(
+        host_offload=host_offload,
+        host_transfer_bytes_per_step=host_total,
+        host_transfer_time_ms=host_time_ms,
+    )
+
     if host_time_ms is None:
         return CapacityAwareServingResult(
             **common,
+            **host_power,
             host_read_bytes_per_step=host_read,
             host_write_bytes_per_step=host_write,
             host_transfer_bytes_per_step=host_total,
@@ -163,6 +184,7 @@ def evaluate_capacity_aware_serving(
     total_ms = gpu.decode_step_time_ms + host_penalty_ms
     return CapacityAwareServingResult(
         **common,
+        **host_power,
         host_read_bytes_per_step=host_read,
         host_write_bytes_per_step=host_write,
         host_transfer_bytes_per_step=host_total,
@@ -268,6 +290,54 @@ def _common(
             "ONE_TOKEN_PER_ACTIVE_SEQUENCE_PER_DECODE_STEP"),
         "capacity_source_status": residency.capacity_source_status,
         "host_model_status": host_offload.status,
+        "host_power_model_status": host_offload.power_model_status,
+        "host_static_power_status": host_offload.host_static_power_status,
         "runtime_capacity_semantics_status": (
             residency.runtime_capacity_semantics_status),
+    }
+
+
+def _host_power_fields(
+    *,
+    host_offload: HostOffloadSpec,
+    host_transfer_bytes_per_step: float,
+    host_transfer_time_ms: float | None,
+) -> dict[str, object]:
+    """Resolve the active-transfer operating point without changing timing."""
+    if host_offload.power_model_status == "UNRESOLVED":
+        return {
+            "host_bandwidth_demand_bytes_per_second": None,
+            "host_bandwidth_actual_bytes_per_second": None,
+            "host_bandwidth_saturated": None,
+            "pcie_dynamic_power_W": None,
+            "ddr_dynamic_power_W": None,
+            "host_offload_dynamic_power_W": None,
+        }
+    effective = host_offload.effective_bandwidth_bytes_per_second
+    assert effective is not None
+    assert host_offload.e_pcie_dynamic_J_per_bit is not None
+    assert host_offload.e_ddr_dynamic_J_per_bit is not None
+    if host_transfer_bytes_per_step == 0.0:
+        demand = 0.0
+    else:
+        assert host_transfer_time_ms is not None and host_transfer_time_ms > 0.0
+        # Frozen serving timing is bytes / BW_eff, so an active transfer is
+        # exactly at the transport boundary.  Assign the exact configured
+        # value to avoid a floating round-trip changing saturation semantics.
+        demand = effective
+    point = resolve_host_offload_power(
+        host_transfer_demand_bytes_per_second=demand,
+        host_effective_bandwidth_bytes_per_second=effective,
+        e_pcie_dynamic_J_per_bit=host_offload.e_pcie_dynamic_J_per_bit,
+        e_ddr_dynamic_J_per_bit=host_offload.e_ddr_dynamic_J_per_bit,
+    )
+    return {
+        "host_bandwidth_demand_bytes_per_second": (
+            point.host_bandwidth_demand_bytes_per_second),
+        "host_bandwidth_actual_bytes_per_second": (
+            point.host_bandwidth_actual_bytes_per_second),
+        "host_bandwidth_saturated": point.host_bandwidth_saturated,
+        "pcie_dynamic_power_W": point.pcie_dynamic_power_W,
+        "ddr_dynamic_power_W": point.ddr_dynamic_power_W,
+        "host_offload_dynamic_power_W": point.host_offload_dynamic_power_W,
     }

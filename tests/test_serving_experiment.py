@@ -59,6 +59,12 @@ def test_formal_serving_path_reads_current_architecture_capacity_and_skips_therm
     assert hbm_8.host_effective_bandwidth_bytes_per_second == 56.2e9
     assert hbm_8.host_transfer_time_ms == pytest.approx(
         hbm_8.host_transfer_bytes_per_step / 56.2e9 * 1e3)
+    assert hbm_8.host_bandwidth_actual_bytes_per_second == pytest.approx(56.2e9)
+    assert hbm_8.host_bandwidth_saturated is False
+    assert hbm_8.pcie_dynamic_power_W == pytest.approx(75.48784)
+    assert hbm_8.ddr_dynamic_power_W == pytest.approx(11.109302325581394)
+    assert hbm_8.host_offload_dynamic_power_W == pytest.approx(86.5971423255814)
+    assert hbm_8.host_static_power_status == "UNRESOLVED"
     assert m3d_8.capacity_status == "FULLY_LOCAL"
     assert m3d_8.evaluation_status == "EVALUATED"
     assert hbm_8.aggregate_tokens_per_s < m3d_8.aggregate_tokens_per_s

@@ -12,7 +12,7 @@ from .gpu_power import AffineGPUComputePowerSpec, AffineGPUDecodePowerSpec
 
 
 class HostOffloadSpec(BaseModel):
-    """Two-tier host-memory transport facts; decimal GB/s are explicit."""
+    """Host transport facts plus optional incremental dynamic-only power."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -22,6 +22,14 @@ class HostOffloadSpec(BaseModel):
         default=None, gt=0.0)
     host_offload_efficiency: float | None = Field(
         default=None, gt=0.0, le=1.0)
+    power_model_status: Literal[
+        "INCREMENTAL_DYNAMIC_OFFLOAD_POWER", "UNRESOLVED"
+    ] = "UNRESOLVED"
+    host_static_power_status: Literal["UNRESOLVED"] = "UNRESOLVED"
+    e_pcie_dynamic_J_per_bit: float | None = Field(default=None, ge=0.0)
+    e_pcie_dynamic_uncertainty_J_per_bit: float | None = Field(
+        default=None, ge=0.0)
+    e_ddr_dynamic_J_per_bit: float | None = Field(default=None, ge=0.0)
     provenance: tuple[ProvenanceRecord, ...]
 
     @model_validator(mode="after")
@@ -37,6 +45,21 @@ class HostOffloadSpec(BaseModel):
             raise ValueError("RESOLVED host offload requires all numeric inputs")
         if self.status == "UNRESOLVED" and any(value is not None for value in values):
             raise ValueError("UNRESOLVED host offload must not carry nominal numbers")
+        power_values = (
+            self.e_pcie_dynamic_J_per_bit,
+            self.e_pcie_dynamic_uncertainty_J_per_bit,
+            self.e_ddr_dynamic_J_per_bit,
+        )
+        if self.power_model_status == "INCREMENTAL_DYNAMIC_OFFLOAD_POWER":
+            if self.status != "RESOLVED":
+                raise ValueError(
+                    "resolved host dynamic power requires resolved transport")
+            if any(value is None for value in power_values):
+                raise ValueError(
+                    "INCREMENTAL_DYNAMIC_OFFLOAD_POWER requires PCIe and DDR coefficients")
+        elif any(value is not None for value in power_values):
+            raise ValueError(
+                "UNRESOLVED host power must not carry dynamic coefficients")
         return self
 
     @property
@@ -54,6 +77,15 @@ class HostOffloadSpec(BaseModel):
             * self.host_offload_efficiency
             * 1e9
         )
+
+    @property
+    def e_host_offload_dynamic_J_per_bit(self) -> float | None:
+        """Derived sum; PCIe and DDR remain independently configured."""
+        if self.power_model_status == "UNRESOLVED":
+            return None
+        assert self.e_pcie_dynamic_J_per_bit is not None
+        assert self.e_ddr_dynamic_J_per_bit is not None
+        return self.e_pcie_dynamic_J_per_bit + self.e_ddr_dynamic_J_per_bit
 
 
 class PlatformSpec(BaseModel):

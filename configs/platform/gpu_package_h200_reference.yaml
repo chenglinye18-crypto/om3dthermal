@@ -111,6 +111,11 @@ host_offload:
   host_memory_bandwidth_GBps: 460.8
   host_device_link_bandwidth_GBps: 64.0
   host_offload_efficiency: 0.878125
+  power_model_status: INCREMENTAL_DYNAMIC_OFFLOAD_POWER
+  host_static_power_status: UNRESOLVED
+  e_pcie_dynamic_J_per_bit: 167.9e-12
+  e_pcie_dynamic_uncertainty_J_per_bit: 10.5e-12
+  e_ddr_dynamic_J_per_bit: 2.4709302325581393e-11
   provenance:
     - record_id: amd_epyc_9654_ddr5_capability_v0
       classification: MATCHED_REFERENCE
@@ -140,6 +145,26 @@ host_offload:
         C2C 450 GB/s per direction is a robustness sensitivity, not the main
         baseline; even at 450 GB/s the host link stays ~11x below the 4.9 TB/s
         scenario HBM bandwidth so the capacity-bottleneck conclusion holds.
+    - record_id: perlmutter_pcie_dynamic_energy_v0
+      classification: PAPER_REPORTED
+      source: https://escholarship.org/uc/item/67z0d2wn
+      source_location: Table III, PCIe Dynamic row
+      status: CROSS_PLATFORM_MEASURED_REFERENCE_A100_PERLMUTTER_PCIE_PATH
+      notes: >-
+        PCIe host-GPU path dynamic energy is 167.9 +/- 10.5 pJ/bit. This is
+        an A100/Perlmutter isolated dynamic reference, not an H200 PCIe Gen5
+        direct measurement.
+    - record_id: perlmutter_h2d_ddr_dynamic_derivation_v0
+      classification: SOFTWARE_DERIVED
+      source: https://escholarship.org/uc/item/67z0d2wn
+      source_location: Table II, representative H2D row
+      status: SOFTWARE_DERIVED_FROM_PAPER_REPRESENTATIVE_RUN
+      transformation: >-
+        e_ddr_dynamic = 4.93 W / (24.94e9 byte/s x 8 bit/byte)
+        = 2.4709302325581393e-11 J/bit = 24.709302325581394 pJ/bit.
+      notes: >-
+        A100 + DDR4 Perlmutter reference; NOT_MULTI_RUN_TABLE_III_RESULT;
+        NOT_H200_DDR5_DIRECT_MEASUREMENT.
 provenance:
   - record_id: h200_anchored_rev_v2
     classification: MATCHED_REFERENCE

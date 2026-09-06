@@ -62,6 +62,16 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
         (525.0 - 74.0) / 989.5e12)
     assert compute.e_compute_dynamic_J_per_FLOP_max == pytest.approx(
         (700.0 - 74.0) / 989.5e12)
+    host = platform.host_offload
+    assert host.effective_bandwidth_bytes_per_second == 56.2e9
+    assert host.power_model_status == "INCREMENTAL_DYNAMIC_OFFLOAD_POWER"
+    assert host.host_static_power_status == "UNRESOLVED"
+    assert host.e_pcie_dynamic_J_per_bit == 167.9e-12
+    assert host.e_pcie_dynamic_uncertainty_J_per_bit == 10.5e-12
+    assert host.e_ddr_dynamic_J_per_bit == pytest.approx(
+        4.93 / (24.94e9 * 8.0))
+    assert host.e_host_offload_dynamic_J_per_bit == pytest.approx(
+        192.6093023255814e-12)
     assert experiment.scenario.rho_values == (0.0, 1.0, 100.0, 1000.0)
     assert not hasattr(experiment.scenario, "thermal")
     assert experiment.output_policy == "ERROR_IF_EXISTS"

@@ -22,6 +22,11 @@
 | host DDR5 能力 | 460.8 GB/s | MATCHED_REFERENCE | AMD EPYC 9654 厂商值 |
 | H2D 链路效率 η | 0.878125 | MATCHED_REFERENCE | Tyan H100 实测 56.2 / min(460.8, 64.0) |
 | GPU↔DDR 链路 | **PCIe Gen5 x16 = 64 GB/s 单向**（128 双向）；备选 NVLink-C2C 450 GB/s 单向（GH200 风格） | VENDOR_SPEC + MEASURED | 表：docs/research/gpu_platform_table_2026-09-06.csv（host_link 段）。主结果用 PCIe 64 GB/s（x86 host 主流、DGX H200 即此），C2C 450 GB/s 放 robustness 敏感性证明容量瓶颈结论不变 |
+| Host offload transport boundary | BW_actual=min(BW_demand, 56.2 GB/s) | MODELING_CHOICE；performance 已冻结 | BW_eff=0.878125×min(460.8,64.0)=56.2 GB/s；transfer time=bytes/BW_eff；无 compute branch |
+| PCIe dynamic energy | **167.9 ± 10.5 pJ/bit** | PAPER_REPORTED | Zhao et al., Perlmutter Table III；A100 host-GPU path cross-platform reference，不是 H200 Gen5 直测 |
+| DDR dynamic energy | **24.7093023256 pJ/bit** | SOFTWARE_DERIVED_FROM_PAPER_REPRESENTATIVE_RUN | Perlmutter Table II 单次代表性 H2D 行：4.93 W/(24.94 GB/s×8)；A100+DDR4，不是多次 Table III 结果，不是 H200 DDR5 直测 |
+| Host offload dynamic energy | **192.6093023256 pJ/bit** | SOFTWARE_DERIVED | PCIe 与 DDR 两项独立保存，运行时相加；只计 incremental dynamic power |
+| Host static power | **UNRESOLVED** | NOT_VALIDATED | 原论文说明 PCIe/NVLink static 无法可靠测量；当前模型不添加 idle/static power |
 
 ## 继续校准 / 待定的参数
 
@@ -43,5 +48,7 @@
   `docs/research/gpu_platform_table_2026-09-06.csv`
   （生成器 `tmp/gen_gpu_platform_table.py`；category 列区分
   gpu_energy / host_link / idle_power_anchor；含 rev v2 计划行，标注 PLANNED）。
+- Host offload 动态功耗的独立参数与 provenance 表：
+  `docs/research/host_offload_power_table_2026-09-07.csv`。
 - 算子分工原则（MAC 只接权重 GEMV 约 15.0 GFLOP/token，GPU 接 attention 约
   68.7 GFLOP/token @128K）已确认，代码未实施、未授权。
