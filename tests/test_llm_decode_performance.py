@@ -214,6 +214,7 @@ def test_memory_bound() -> None:
         effective_compute_flops_per_second=1000.0,
     )
     assert r.bottleneck == "MEMORY"
+    assert r.aggregate_tokens_per_second == pytest.approx(1000.0 / 8000.0)
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +235,7 @@ def test_compute_bound() -> None:
         effective_compute_flops_per_second=1000.0,
     )
     assert r.bottleneck == "COMPUTE"
+    assert r.aggregate_tokens_per_second == pytest.approx(1000.0 / 10_000.0)
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +260,7 @@ def test_balanced_when_memory_and_compute_time_equal() -> None:
     assert r.memory_time_per_token_equivalent_s == 1.0
     assert r.compute_time_per_token_equivalent_s == 1.0
     assert r.bottleneck == "BALANCED"
+    assert r.aggregate_tokens_per_second == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------

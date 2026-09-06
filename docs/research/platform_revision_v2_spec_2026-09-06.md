@@ -16,6 +16,7 @@
 | P_static | 100 W（旧名义） | **74 W**（H200 SXM 实测 idle floor；NVL 121 W 作敏感性上界）；baseline/proposed/H200 三行同值 | MEASURED_REFERENCE：ai-gpu-energy-optimizer 白皮书（72+ 次实测）；h200-gpu-benchmark-suite |
 | e_decode（GPU-side effective decode coefficient） | 隐含 5.10 pJ/bit | **5.10 pJ/bit nominal**；由实测 decode 动态功耗反推，并扣除 E4 已单独计账的 memory energy；不是单纯 memory-I/O energy | DERIVED_FROM_MEASURED_REFERENCE，扣存区间内的 nominal |
 | P_decode_at_bw_peak | 300 W | **269.84 W 派生/校验量** = 74 + 5.10e-12×8×4.8e12；不是独立物理参数 | SOFTWARE_DERIVED |
+| compute-bound power | 未显式区分 static | **525–700 W 参考范围**；dynamic-only e_compute = 0.4557857504–0.6326427489 pJ/FLOP | DERIVED_FROM_MEASURED_REFERENCE；无 nominal |
 | host 链路 | PCIe Gen5 64 GB/s 单向 | 不变（主结果）；+ NVLink-C2C 450 GB/s 敏感性 | VENDOR_SPEC；docs/research/gpu_platform_table_2026-09-06.csv |
 | host DDR5 | 460.8 GB/s, η=0.878 | 不变 | MATCHED_REFERENCE |
 | 场景 matched 带宽 | 39.2 Tb/s 字面值 | 派生 + cap = 39.2 Tb/s（已落地） | MODELING_CHOICE；106-slab 能力 42.4 Tb/s 作冗余 |
@@ -57,6 +58,7 @@ memory energy 后的 GPU-side effective coefficient；P 全部由实际带宽派
 | orthogonal_si 对照 | configs/cases/orthogonal_si.yaml | 仅 power_W 300→269.84，几何冻结作 MOSAIC 文献对照 | YAML | ✅ 已实施 |
 | 平台 YAML | configs/platform/gpu_package_h200_reference.yaml | H200 锚定平台（static 74 W、e_decode 5.10 pJ/bit、peak bw 4.8e12、派生峰值 269.84 W）；旧 300w 文件已 git rm | YAML | ✅ 已实施 |
 | GPU decode bandwidth boundary | src/om3dthermal/platform/gpu_power.py + evaluator/llm_decode_gpu_energy.py | `B_actual=min(B_demand,B_peak)` 单一解析路径；超峰值后 dynamic power 保持 195.84 W | **代码** | ✅ 已实施 |
+| GPU compute boundary | src/om3dthermal/platform/gpu_power.py + evaluator/llm_decode_gpu_energy.py | `F_actual=min(F_demand,F_effective)` 单一解析路径；按 bottleneck 选择 regime，balanced unresolved | **代码** | ✅ 已实施 |
 | 300 W 校验 | src/om3dthermal/power/config.py | CANONICAL_GPU_POWER_W = 269.84 常量；校验器改 isclose + 豁免 unresolved legacy 案例 | **代码** | ✅ 已实施 |
 | B 臂热几何 | src/om3dthermal/geometry/orthogonal_hbm.py + config.py + architecture_comparison.py | edge strip 发射（y 两侧 1 mm、x 全 GPU 宽、component=orthogonal_hbm_edge_strip）；conventional 硬编码（30/22/8 mm）全部派生化 | **代码** | ✅ 已实施 |
 | 带宽 cap 派生 | src/om3dthermal/placement/nmp_locality_e2e.py + 2 个 scripts | external_bandwidth_cap_bytes_per_s 参数；从 scenario matched_bandwidth_derivation.cap（39.2e13 bits/s）÷8 = 4.9e12 传入 | **代码** | ✅ 已实施 |

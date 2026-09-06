@@ -53,6 +53,15 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
         269.84)
     assert platform.gpu_decode_power.peak_power_status == (
         "DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH")
+    compute = platform.gpu_compute_power
+    assert compute.static_power_W == platform.gpu_decode_power.static_power_W
+    assert compute.peak_compute_BF16_dense_flops_per_s == 989.5e12
+    assert compute.compute_bound_power_W_min == 525.0
+    assert compute.compute_bound_power_W_max == 700.0
+    assert compute.e_compute_dynamic_J_per_FLOP_min == pytest.approx(
+        (525.0 - 74.0) / 989.5e12)
+    assert compute.e_compute_dynamic_J_per_FLOP_max == pytest.approx(
+        (700.0 - 74.0) / 989.5e12)
     assert experiment.scenario.rho_values == (0.0, 1.0, 100.0, 1000.0)
     assert not hasattr(experiment.scenario, "thermal")
     assert experiment.output_policy == "ERROR_IF_EXISTS"

@@ -49,6 +49,7 @@ def _performance(
     *,
     token_time_s: float | None = 1e-9,
     capacity_feasible: bool = True,
+    bottleneck: str = "MEMORY",
 ) -> LLMDecodePerformanceMetrics:
     blocked = not capacity_feasible
     return LLMDecodePerformanceMetrics(
@@ -73,7 +74,7 @@ def _performance(
         compute_throughput_required_to_match_memory_flops_per_second=(
             None if blocked else 1e13),
         bottleneck=("NOT_EVALUATED_CAPACITY_INFEASIBLE" if blocked
-                    else ("MEMORY" if token_time_s == 1e-9 else "COMPUTE")),
+                    else bottleneck),
         performance_status=("BLOCKED_BY_CAPACITY" if blocked
                             else "EVALUATED_MATCHED_REFERENCE_SCENARIO"),
         bandwidth_status="MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED",

@@ -1,16 +1,22 @@
-"""Canonical bandwidth-bounded GPU decode power model (E8 platform facts).
+"""Canonical regime-bounded GPU decode power models (E8 platform facts).
 
-The steady-state decode operating point is resolved from byte rate, not from
-tokens or compute activity::
+The steady-state decode operating point is resolved from the selected
+bottleneck's actual service rate, not directly from tokens::
 
     B_actual = min(B_demand, B_gpu_peak)
-    P_gpu = P_static + e_decode * 8 * B_actual
+    P_gpu_memory = P_static + e_decode * 8 * B_actual
+
+    F_actual = min(F_demand, F_effective)
+    P_gpu_compute = P_static + e_compute_dynamic * F_actual
 
 ``e_decode`` is the GPU-side effective decode coefficient inferred from
 measured decode dynamic power after subtracting memory energy accounted for
 separately by E4. It is not a memory-I/O coefficient. The compatibility field
 ``peak_decode_power_W`` is a derived closure check, never an independent
 power-model parameter.
+
+Both regimes share the 74 W static anchor. Their dynamic terms are alternatives,
+not additive components.
 """
 
 from __future__ import annotations
@@ -33,6 +39,19 @@ class GPUDecodePowerOperatingPoint(BaseModel):
     bandwidth_utilization: float = Field(ge=0.0, le=1.0)
     bandwidth_saturated: bool
     gpu_dynamic_power_W: float = Field(ge=0.0)
+    gpu_power_W: float = Field(gt=0.0)
+
+
+class GPUComputePowerOperatingPoint(BaseModel):
+    """Resolved compute rate and GPU power at one compute operating point."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    compute_demand_flops_per_s: float = Field(ge=0.0)
+    compute_actual_flops_per_s: float = Field(ge=0.0)
+    compute_utilization: float = Field(ge=0.0, le=1.0)
+    compute_saturated: bool
+    gpu_dynamic_compute_power_W: float = Field(ge=0.0)
     gpu_power_W: float = Field(gt=0.0)
 
 
@@ -90,6 +109,51 @@ def resolve_gpu_decode_power(
     )
 
 
+def resolve_gpu_compute_power(
+    *,
+    static_power_W: float,
+    compute_energy_dynamic_J_per_FLOP: float,
+    compute_demand_FLOP_per_s: float,
+    effective_compute_ceiling_FLOP_per_s: float,
+) -> GPUComputePowerOperatingPoint:
+    """Resolve the canonical compute-bounded GPU operating point.
+
+    The supplied ceiling is the scenario/effective compute ceiling, which may
+    be below the vendor peak. Saturation uses the same strict exceedance
+    semantics as the bandwidth resolver; the exact boundary is not marked as
+    saturated. Static power is added exactly once.
+    """
+
+    static_power = _finite_real(
+        "static_power_W", static_power_W, positive=True)
+    compute_energy = _finite_real(
+        "compute_energy_dynamic_J_per_FLOP",
+        compute_energy_dynamic_J_per_FLOP,
+        positive=True,
+    )
+    demand = _finite_real(
+        "compute_demand_FLOP_per_s",
+        compute_demand_FLOP_per_s,
+        positive=False,
+    )
+    ceiling = _finite_real(
+        "effective_compute_ceiling_FLOP_per_s",
+        effective_compute_ceiling_FLOP_per_s,
+        positive=True,
+    )
+
+    actual = min(demand, ceiling)
+    dynamic_power = compute_energy * actual
+    return GPUComputePowerOperatingPoint(
+        compute_demand_flops_per_s=demand,
+        compute_actual_flops_per_s=actual,
+        compute_utilization=actual / ceiling,
+        compute_saturated=demand > ceiling,
+        gpu_dynamic_compute_power_W=dynamic_power,
+        gpu_power_W=static_power + dynamic_power,
+    )
+
+
 class AffineGPUDecodePowerSpec(BaseModel):
     """Platform inputs for the bandwidth-bounded GPU decode power model."""
 
@@ -142,4 +206,61 @@ class AffineGPUDecodePowerSpec(BaseModel):
         if not self.provenance:
             raise ValueError(
                 "GPU decode power spec requires provenance records")
+        return self
+
+
+class AffineGPUComputePowerSpec(BaseModel):
+    """H200 compute-power range with no implicit nominal selection."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model: Literal["AFFINE_COMPUTE_RATE_MODEL"]
+    static_power_W: float = Field(gt=0.0)
+    peak_compute_BF16_dense_flops_per_s: float = Field(gt=0.0)
+    compute_bound_power_W_min: float = Field(gt=0.0)
+    compute_bound_power_W_max: float = Field(gt=0.0)
+    e_compute_dynamic_J_per_FLOP_min: float = Field(gt=0.0)
+    e_compute_dynamic_J_per_FLOP_max: float = Field(gt=0.0)
+    static_power_status: Literal[
+        "MEASURED_REFERENCE_H200_SXM_IDLE_FLOOR"
+    ]
+    peak_compute_status: Literal["VENDOR_SPEC_H200_BF16_DENSE"]
+    compute_power_range_status: Literal[
+        "DERIVED_FROM_MEASURED_REFERENCE"
+    ]
+    coefficient_status: Literal[
+        "DYNAMIC_ONLY_DERIVED_AFTER_SUBTRACTING_STATIC_POWER"
+    ]
+    provenance: tuple[ProvenanceRecord, ...]
+
+    @model_validator(mode="after")
+    def _closure(self) -> "AffineGPUComputePowerSpec":
+        if self.compute_bound_power_W_min <= self.static_power_W:
+            raise ValueError(
+                "compute-bound power minimum must exceed static power")
+        if self.compute_bound_power_W_max < self.compute_bound_power_W_min:
+            raise ValueError(
+                "compute-bound power maximum must not be below minimum")
+        derived_min = (
+            self.compute_bound_power_W_min - self.static_power_W
+        ) / self.peak_compute_BF16_dense_flops_per_s
+        derived_max = (
+            self.compute_bound_power_W_max - self.static_power_W
+        ) / self.peak_compute_BF16_dense_flops_per_s
+        for name, configured, derived in (
+            ("e_compute_dynamic_J_per_FLOP_min",
+             self.e_compute_dynamic_J_per_FLOP_min, derived_min),
+            ("e_compute_dynamic_J_per_FLOP_max",
+             self.e_compute_dynamic_J_per_FLOP_max, derived_max),
+        ):
+            if not math.isclose(
+                configured, derived, rel_tol=1e-12, abs_tol=1e-18
+            ):
+                raise ValueError(
+                    f"{name} must be derived from compute-bound power "
+                    "after subtracting static_power_W"
+                )
+        if not self.provenance:
+            raise ValueError(
+                "GPU compute power spec requires provenance records")
         return self

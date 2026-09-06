@@ -20,8 +20,12 @@ Sources:
   GitHub h200-gpu-benchmark-suite: H200 NVL idle ~121 W.
 
 Derived invariants:
-  e_compute = P_prefill / TFLOPS   [pJ/FLOP] (compute-bound)
+  e_compute_total = P_compute / TFLOPS                  [pJ/FLOP]
+  e_compute_dynamic = (P_compute - P_static) / TFLOPS  [pJ/FLOP]
   1 W / (1 TFLOP/s) = 1 pJ/FLOP
+
+The total-equivalent coefficient includes static power. Only the dynamic-only
+coefficient may be used in P_gpu = P_static + e_compute_dynamic * FLOP_rate.
 
 Decode section records exactly two model parameters, nothing else:
   static_power_W            measured idle floor (per-second billing)
@@ -45,15 +49,13 @@ Decisions recorded (2026-09-06):
   100 W replaced in rev v2.
 """
 import csv
+import os
 from pathlib import Path
 
-OUT = Path("docs/research/gpu_platform_table_2026-09-06.csv")
-if OUT.exists():
-    try:
-        with OUT.open("a"):
-            pass
-    except PermissionError:
-        OUT = OUT.with_name(OUT.stem + "_v2.csv")
+OUT = Path(os.environ.get(
+    "OM3D_GPU_PLATFORM_TABLE_OUT",
+    "docs/research/gpu_platform_table_2026-09-06.csv",
+))
 
 PJBIT_PER_W_PER_TBS = 0.125
 PJFLOP_PER_W_PER_TFLOPS = 1.0
@@ -67,7 +69,10 @@ header = [
     "e_decode_dynamic_pJ_per_bit_min", "e_decode_dynamic_pJ_per_bit_max",
     "prefill_power_frac_TDP_min", "prefill_power_frac_TDP_max",
     "compute_bound_power_W_min", "compute_bound_power_W_max",
-    "e_compute_pJ_per_FLOP_min", "e_compute_pJ_per_FLOP_max",
+    "e_compute_total_equivalent_pJ_per_FLOP_min",
+    "e_compute_total_equivalent_pJ_per_FLOP_max",
+    "e_compute_dynamic_pJ_per_FLOP_min",
+    "e_compute_dynamic_pJ_per_FLOP_max",
     # host link columns
     "host_link", "host_link_per_direction_GBps",
     "host_link_bidirectional_GBps", "host_memory",
@@ -76,7 +81,7 @@ header = [
     "notes", "provenance_status", "source",
 ]
 N_COLS = len(header)
-assert N_COLS == 27
+assert N_COLS == 29
 
 # (name, mem, cap, BW_TBs, TFLOPS, TDP, dfrac, pfrac, static_W|None,
 #  host_link_GBps|None, notes, provenance, source)
@@ -192,11 +197,15 @@ with OUT.open("w", newline="") as f:
         p_pre = (tdp * pfrac[0], tdp * pfrac[1])
         e_cmp = tuple(p / tf * PJFLOP_PER_W_PER_TFLOPS for p in p_pre)
         if static_w is not None:
+            e_cmp_dyn = tuple(
+                (p - static_w) / tf * PJFLOP_PER_W_PER_TFLOPS
+                for p in p_pre)
             e_dyn = (round((tdp * dfrac[0] - static_w) / bw
                            * PJBIT_PER_W_PER_TBS, 2),
                      round((tdp * dfrac[1] - static_w) / bw
                            * PJBIT_PER_W_PER_TBS, 2))
         else:
+            e_cmp_dyn = ("", "")
             e_dyn = ("", "")
         row = [
             "gpu_energy", name, mem, cap, bw, tf, tdp,
@@ -204,6 +213,8 @@ with OUT.open("w", newline="") as f:
             dfrac[0], dfrac[1], e_dyn[0], e_dyn[1],
             pfrac[0], pfrac[1], round(p_pre[0], 1), round(p_pre[1], 1),
             round(e_cmp[0], 3), round(e_cmp[1], 3),
+            (e_cmp_dyn[0] if e_cmp_dyn[0] == "" else round(e_cmp_dyn[0], 15)),
+            (e_cmp_dyn[1] if e_cmp_dyn[1] == "" else round(e_cmp_dyn[1], 15)),
             "PCIe Gen5 x16" if link_gb else "", link_gb or "",
             (link_gb * 2) if link_gb else "", "", "", "",
             notes, prov, src,
@@ -216,7 +227,7 @@ with OUT.open("w", newline="") as f:
         print(f"{name:44s} static {static_w} W{dyn_str}")
     for (name, link, per_dir, bidir, host_mem, host_bw, coh,
          notes, prov, src) in LINK_ROWS:
-        row = (["host_link", name] + [""] * 16
+        row = (["host_link", name] + [""] * 18
                + [link, per_dir, bidir, host_mem, host_bw or "", coh,
                   notes, prov, src])
         assert len(row) == N_COLS, (name, len(row))
@@ -225,7 +236,7 @@ with OUT.open("w", newline="") as f:
         print(f"{name:44s} {per_dir} GB/s/dir ({link})")
     for (name, tdp, idle, notes, prov, src) in IDLE_ROWS:
         row = (["idle_power_anchor", name, "", "", "", "", tdp, idle]
-               + [""] * 16 + [notes, prov, src])
+               + [""] * 18 + [notes, prov, src])
         assert len(row) == N_COLS, (name, len(row))
         w.writerow(row)
         rows_written += 1

@@ -86,7 +86,7 @@ Llama-3.1-8B BF16 @128K，balanced 放置：
 | 2 | **全量 formal 热重跑** | 三架构 × rho(0/1/100/1000) 真实 GPU-PCG，产出新 Tmax/cells 冻结值，替换 `test_llm_decode_e2e.py` 旧锚点与 `thermal_results_overview.md` 历史表 |
 | 3 | **A/B 双臂热消融求解** | 机制与 case 就绪，跑两臂 Tmax 对比，分离 Si 条贡献 |
 | 4 | **e_decode 区间敏感性** | 主值 5.10 pJ/bit；板级扣存区间端点（4.88 / 7.61）做敏感性行 |
-| 5 | **e_compute 接入** | 0.531 pJ/FLOP（H200 75% TDP 档）随算子分工启用（GPU attention 能耗）；届时确认 75% 还是 100% 档 |
+| 5 | **compute-bound GPU power** | 已建立 dynamic-only 0.4557857504–0.6326427489 pJ/FLOP sensitivity range；不把含 static 的 0.531–0.707 pJ/FLOP 直接用于 `P_static + dynamic`，且未选择 nominal |
 | 6 | **host 链路敏感性** | 主结果 PCIe Gen5 64 GB/s；C2C 450 GB/s robustness 行待跑 |
 | 7 | **M3D slab IO 物理论证** | 50 ch/slab、8 Gbps/ch 为设计值，论文补通道数×pin rate 可行性一段 |
 | 8 | **写能耗（rho）** | 维持 NOT_VALIDATED + rho 扫描叙事；若找到 IGZO 写能耗文献锚点可收窄 |

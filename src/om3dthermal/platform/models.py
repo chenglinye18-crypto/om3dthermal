@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from om3dthermal.provenance import ProvenanceRecord
 
-from .gpu_power import AffineGPUDecodePowerSpec
+from .gpu_power import AffineGPUComputePowerSpec, AffineGPUDecodePowerSpec
 
 
 class HostOffloadSpec(BaseModel):
@@ -68,4 +68,15 @@ class PlatformSpec(BaseModel):
     package_profile_status: str = Field(min_length=1)
     host_offload: HostOffloadSpec | None = None
     gpu_decode_power: "AffineGPUDecodePowerSpec | None" = None
+    gpu_compute_power: "AffineGPUComputePowerSpec | None" = None
     provenance: tuple[ProvenanceRecord, ...] = ()
+
+    @model_validator(mode="after")
+    def _gpu_static_power_closure(self) -> "PlatformSpec":
+        if (self.gpu_decode_power is not None
+                and self.gpu_compute_power is not None
+                and self.gpu_decode_power.static_power_W
+                != self.gpu_compute_power.static_power_W):
+            raise ValueError(
+                "GPU decode and compute power models must share static power")
+        return self

@@ -216,7 +216,8 @@ def run_experiment(
                 workload, capacity, system, rho=rho)
             gpu_energy = (
                 evaluate_gpu_decode_energy(
-                    performance, energy, platform.gpu_decode_power)
+                    performance, energy, platform.gpu_decode_power,
+                    platform.gpu_compute_power)
                 if platform.gpu_decode_power is not None else None)
             power = evaluate_llm_decode_workload_power(
                 energy,

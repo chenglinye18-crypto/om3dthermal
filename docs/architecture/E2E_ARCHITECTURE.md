@@ -103,12 +103,16 @@ The formal scenario remains conditional:
   a `PARAMETRIC_SENSITIVITY` value, never a validated nominal;
 - GPU decode energy and system J/token exist only as the optional E8
   affine-utilization stage (`ANALYTICAL_AFFINE_UTILIZATION_MODEL` with
-  `PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE`). The runner evaluates
+  measured-reference ranges). The runner evaluates
   E8 before E5/E6 and shares its GPU power with the package total, thermal
   source and E7 row, including logic-background sensitivities. The canonical
   bandwidth-saturated point is 269.84 W; demand above 4.8 TB/s cannot increase
-  bandwidth-dependent GPU power. Without an E8 model, compatibility callers
-  retain explicitly marked fixed power;
+  bandwidth-dependent GPU power. Compute-bound rows use an explicit
+  dynamic-only coefficient selected from 0.4557857504–0.6326427489 pJ/FLOP;
+  the 989.5 TFLOP/s vendor peak remains separate from scenario `F_effective`.
+  Balanced-regime power is unresolved, and bandwidth/compute dynamic terms
+  are never added. Without an E8 model, compatibility callers retain
+  explicitly marked fixed power;
 - the read-shaped write spatial distribution is sensitivity-only.
 
 No directory structure or PASS status upgrades those scientific claims.
