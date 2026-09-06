@@ -178,7 +178,7 @@ def test_weights_only_page_rounded_capacity(workload, physical_layout) -> None:
     assert result.kv_logical_bytes == 0
     assert result.page_layout.page_count == 44_540
     assert result.page_rounded_allocated_bytes / GIB == 86.9921875
-    assert result.occupancy_fraction == pytest.approx(44_540 / 219_520)
+    assert result.occupancy_fraction == pytest.approx(44_540 / 237_440)  # rev v2: 106 slabs
 
 
 @pytest.mark.parametrize(
@@ -193,9 +193,9 @@ def test_n1_n8_n16_m3d_capacity_closure(
     resolved = workload.model_copy(update={"batch_size": requests})
     result = build_m3d_moe_capacity_layout(resolved, physical_layout)
     metrics = evaluate_moe_decode(resolved)
-    assert physical_layout.total_capacity_gib == 428.75
+    assert physical_layout.total_capacity_gib == 463.75  # rev v2: 106 slabs
     assert physical_layout.slot_capacity_bytes == 2 * MIB
-    assert physical_layout.physical_slot_count == 219_520
+    assert physical_layout.physical_slot_count == 237_440  # rev v2
     assert result.expert_object_count == 256
     assert result.weight_logical_bytes == 93_405_585_408
     assert result.kv_logical_bytes == requests * 4 * GIB
@@ -204,7 +204,7 @@ def test_n1_n8_n16_m3d_capacity_closure(
     assert result.page_layout.page_count == expected_pages
     assert result.page_rounded_allocated_bytes / GIB == expected_allocated_gib
     assert result.occupancy_fraction == pytest.approx(
-        expected_pages / 219_520)
+        expected_pages / 237_440)  # rev v2
     assert result.capacity_status == "M3D_ONLY_PAGE_ALLOCATED_CAPACITY_PASS"
     assert result.residency_semantics == "ALL_EXPERTS_STORED_TOP_K_EXPERTS_ACCESSED"
 

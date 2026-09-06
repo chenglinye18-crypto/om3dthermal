@@ -1,101 +1,55 @@
-# Thermal results overview
+# Current DAC thermal baseline
 
-## Official six-case results
+Conventional 2x1 is the only Conventional reference. Its canonical case is
+`configs/cases/conventional_hbm_2x1.yaml`.
 
-| Architecture | GPU power | Memory power | Total power | Global Tmax | HBM/Memory Tmax | Hotspot component |
-|---|---:|---:|---:|---:|---:|---|
-| Conventional 2x2 | 414 W | 160 W | 574 W | 122.9715 degC | 122.4325 degC | GPU FEOL |
-| Conventional 2x2 | 300 W | 160 W | 460 W | 102.3078 degC | 101.9196 degC | GPU FEOL |
-| Conventional 2x1 | 414 W | 160 W | 574 W | 120.4741 degC | 119.8868 degC | GPU FEOL |
-| Conventional 2x1 | 300 W | 160 W | 460 W | 100.4761 degC | 100.0521 degC | GPU FEOL |
-| Orthogonal MOSAIC | 414 W | 156.8 W | 570.8 W | 122.6727 degC | 105.8671 degC | GPU FEOL |
-| Orthogonal MOSAIC | 300 W | 156.8 W | 456.8 W | 99.1471 degC | 87.2945 degC | GPU FEOL |
+> **rev v2 状态（2026-09-07）**：平台修订 v2 已实施（H200 锚定 GPU 功率
+> 269.84 W、新封装几何 32×24 mm、106 slabs）。下表为 rev v2 之前的
+> 历史回归锚点，对应旧几何/旧功率；新冻结值待全量 formal 实验
+> （三架构 × rho）真实 GPU-PCG 重跑后替换。实施细节与漂移记录见
+> [platform_revision_v2_spec](../research/platform_revision_v2_spec_2026-09-06.md) §4。
 
-Conventional HBM uses Son23 component-aware vertical placement. Orthogonal
-MOSAIC retains uniform 1.6 W/die placement in each die BEOL.
+## 历史锚点（rev v2 之前，非当前值）
 
-![Six official Tmax cases](figures/six_case_tmax.png)
+| Quantity | Canonical reference |
+|---|---:|
+| Cells | 859,596 |
+| Internal edges | 2,531,340 |
+| GPU input | 300 W |
+| Analytical memory input, rho = 1 reference | 55.5834875816 W |
+| Package input, rho = 1 reference | 355.5834875816 W |
+| Global Tmax at canonical tolerances | 81.933485 degC |
+| Solver | FP64 matrix-free GPU-PCG with Jacobi preconditioning |
 
-## GPU-power scaling
+These were regression anchors under the pre-rev-v2 platform (300 W nominal
+GPU, 30×22 mm GPU die, 98 slabs). 旧 v0 审计报告（含旧冻结值明细）已随
+rev v2 退役删除；验证与诊断记录见
+[GPU power/thermal unification](../research/gpu_power_thermal_unification_2026-09-05.md)。
+The fixed physical operator, tolerances and numerical implementation remain
+unchanged by rev v2.
 
-| Architecture | Tmax at 300 W | Tmax at 414 W | Delta T over 114 W | Delta T / 114 W |
-|---|---:|---:|---:|---:|
-| Conventional 2x2 | 102.3078 degC | 122.9715 degC | 20.6637 K | 0.1813 K/W |
-| Conventional 2x1 | 100.4761 degC | 120.4741 degC | 19.9980 K | 0.1754 K/W |
-| Orthogonal MOSAIC | 99.1471 degC | 122.6727 degC | 23.5256 K | 0.2064 K/W |
+## Architecture comparison status
 
-![GPU-power thermal scaling](figures/gpu_power_scaling.png)
+The earlier M3D NMP result of approximately 83.85 degC uses an old operator
+assignment and its own workload power. It is not a matched-work comparison
+against the Conventional reference above. No thermal improvement is claimed
+from subtracting those values.
 
-## Base-die removal optimization
+Before making a thermal claim, report the same cooling and boundary assumptions,
+geometry/package constraints, power accounting and workload definition. Separate
+an equal-power geometry comparison from workload-dependent power results.
+Report GPU and memory Tmax separately, together with the applicable temperature
+limits, capacity and throughput. MAC/GPU partition results require validation
+and a new evaluation before inclusion.
 
-The no-base intervention removes the 5 um `HBM_Base_BEOL` and 50 um base
-silicon from every physical stack while retaining the 40 um GPU-HBM uBump and
-all 12 DRAM dies. Logic power is removed with the logic die, so HBM power is
-128 W rather than 160 W. The HBM top, TIM, and Lid move down by 55 um, leaving
-direct HBM-top-to-TIM contact with zero interface resistance. No Mold or air
-layer is inserted above the shortened HBM stack.
+rev v2 新增 A/B 双臂热消融设计（y 方向两侧 1 mm 边条：A 臂 mold 填充为
+主结果，B 臂 thermal Si bar 为对照），用于分离"正交结构 vs Si 导热条"
+的热贡献；双臂热求解尚未运行。
 
-| Layout / GPU power | Base-present Tmax | Base-removed Tmax | Delta T (removed - present) | Base-removed DRAM Tmax |
-|---|---:|---:|---:|---:|
-| Conventional 2x2 / 414 W | 122.9715 degC | 116.9883 degC | -5.9832 K | 111.1871 degC |
-| Conventional 2x2 / 300 W | 102.3078 degC | 95.9839 degC | -6.3238 K | 91.8277 degC |
-| Conventional 2x1 / 414 W | 120.4741 degC | 111.6267 degC | -8.8474 K | 109.6643 degC |
-| Conventional 2x1 / 300 W | 100.4761 degC | 92.1853 degC | -8.2908 K | 90.7674 degC |
+## Historical results
 
-The GPU 414-to-300 W Tmax reduction is 21.0043 K for no-base 2x2 and
-19.4414 K for no-base 2x1. The hotspot component remains GPU FEOL in all four
-cases. IEDM reports approximately -3.7 K for base-die removal; the corrected
-technology-level intervention gives negative deltas from -5.9832 K to
--8.8474 K, so the trend is in the same direction but the modeled cooling is
-larger. This comparison includes both removal of the base-die thermal layers
-and removal of the corresponding 8 W per physical stack logic power.
-
-The earlier results that inserted a 55 um Mold layer between the DRAM stack
-and TIM are marked `superseded_diagnostic` and are excluded from formal tables
-and paper comparison.
-
-## Paper-parameter-aligned comparison
-
-### IEDM 2025
-
-| Comparison | Our result | IEDM reported | Difference |
-|---|---:|---:|---:|
-| Conventional 2x2, GPU about 414 W | 122.9715 degC | about 141.7 degC | -18.7285 K; absolute difference 18.7285 K |
-| GPU 414 to 300 W sensitivity, Conventional 2x2 | 20.6637 K | about 20.8 K | -0.1363 K |
-| GPU 414 to 300 W sensitivity, Conventional 2x1 | 19.9980 K | about 20.8 K | -0.8020 K |
-
-The IEDM baseline uses commercial non-uniform 0.5 mm power maps. The current
-comparison is paper-parameter-aligned and is used for trend consistency and
-thermal-sensitivity comparison. Both conventional layouts show GPU-power
-sensitivity close to the reported approximately 20.8 K change.
-
-### VLSI 2026
-
-| GPU 300 W comparison | Conventional reference | MOSAIC | MOSAIC minus conventional |
-|---|---:|---:|---:|
-| Our Conventional 2x2 vs Orthogonal | 102.3078 degC | 99.1471 degC | -3.1607 K |
-| Our Conventional 2x1 vs Orthogonal | 100.4761 degC | 99.1471 degC | -1.3289 K |
-| VLSI reported 12Hi HBM vs MOSAIC | about 80.0 degC | about 81.3 degC | +1.3 K |
-
-The sign of the architecture delta differs, but all three current 300 W cases
-remain within 3.2 K of one another. This supports the same architecture-level
-observation that Orthogonal MOSAIC and conventional HBM occupy a close system
-Tmax range while MOSAIC provides different capacity scaling.
-
-![Paper comparison](figures/paper_comparison.png)
-
-## Key observations
-
-1. Removing the internal y-direction Mold seam lowers Conventional 2x1 Tmax
-   relative to 2x2 by 2.4974 K at GPU 414 W and 1.8317 K at GPU 300 W.
-2. Reducing GPU power from 414 W to 300 W lowers Tmax by 20.6637 K for
-   Conventional 2x2, 19.9980 K for Conventional 2x1, and 23.5256 K for
-   Orthogonal MOSAIC.
-3. IEDM absolute Tmax differs by 18.7285 K, while the 2x2 GPU-power sensitivity
-   differs from the reported trend by only 0.1363 K.
-4. At GPU 300 W, Orthogonal MOSAIC is 3.1607 K below Conventional 2x2 and
-   1.3289 K below Conventional 2x1, keeping the three architectures at a close
-   system Tmax level for capacity-versus-thermal scaling discussion.
-
-Legacy conventional uniform-power results are intentionally excluded from all
-tables and figures on this page.
+Superseded fixed-power result tables and comparison plots have been removed
+from the current paper entry point. Text records remain under `docs/archive/`
+for provenance, and historical configurations remain test fixtures only.
+The older fixed-power Conventional 2x1 results also must not be substituted
+for the analytical baseline above.

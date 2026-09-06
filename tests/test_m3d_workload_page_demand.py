@@ -153,7 +153,7 @@ def test_canonical_n16_capacity_and_model_regressions(
     )
     assert result.page_layout.capacity_feasible is True
     assert result.page_layout.page_size_bytes == 2 * MIB
-    assert canonical_physical_layout.total_capacity_gib == 428.75
+    assert canonical_physical_layout.total_capacity_gib == 463.75  # rev v2: 106 slabs
     latencies = tuple(slot.physical_access_latency_ns
                       for slot in canonical_physical_layout.slot_classes)
     assert min(latencies) == pytest.approx(10.050912300102683)

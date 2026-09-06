@@ -17,7 +17,10 @@ from .llm_decode_architecture_energy import (
     ArchitectureDecodeMemoryEnergyMetrics,
 )
 from .llm_decode_performance import LLMDecodePerformanceMetrics
-from .llm_decode_workload_power import LLMDecodeWorkloadPowerMetrics
+from .llm_decode_workload_power import (
+    GPU_WORKLOAD_POWER_STATUS,
+    LLMDecodeWorkloadPowerMetrics,
+)
 from .llm_decode_workload_thermal import LLMDecodeWorkloadThermalMetrics
 
 
@@ -97,7 +100,8 @@ class ConditionalLLMDecodeE2ERow(BaseModel):
 
     bandwidth_capability_status: Literal["NOT_VALIDATED"]
     write_energy_model_status: Literal["NOT_VALIDATED"]
-    gpu_energy_model_status: Literal["NOT_AVAILABLE"]
+    gpu_energy_model_status: Literal[
+        "NOT_AVAILABLE", "ANALYTICAL_AFFINE_UTILIZATION_MODEL"]
     system_j_token_status: Literal["NOT_AVAILABLE"]
     m3d_logic_background_status: Literal[
         "NOT_APPLICABLE", "CONDITIONAL_LOWER_BOUND"]
@@ -192,6 +196,7 @@ def assemble_conditional_llm_decode_e2e_row(
         _all_none("infeasible power", (
             power.memory_dynamic_access_power_W,
             power.memory_workload_total_W,
+            power.gpu_power_W,
             power.fixed_gpu_power_W,
             power.package_workload_total_W))
         thermal_status = "BLOCKED_BY_CAPACITY"
@@ -224,6 +229,11 @@ def assemble_conditional_llm_decode_e2e_row(
         _same("power/thermal mapped package power",
               power.package_workload_total_W,
               thermal.mapped_package_power_W,
+              abs_tol=POWER_CLOSURE_ABS_TOL_W)
+        if power.gpu_power_W is None or "gpu" not in thermal.source_power_breakdown_W:
+            raise ValueError("evaluated thermal result is missing GPU source power")
+        _same("power/thermal GPU source power", power.gpu_power_W,
+              thermal.source_power_breakdown_W["gpu"],
               abs_tol=POWER_CLOSURE_ABS_TOL_W)
         if thermal.power_closure_absolute_error_W > POWER_CLOSURE_ABS_TOL_W:
             raise ValueError("thermal source power closure failed")
@@ -283,7 +293,7 @@ def assemble_conditional_llm_decode_e2e_row(
                          if energy.rho == 0.0 else None),
         memory_dynamic_power_W=power.memory_dynamic_access_power_W,
         memory_total_power_W=power.memory_workload_total_W,
-        gpu_power_W=power.fixed_gpu_power_W,
+        gpu_power_W=power.gpu_power_W,
         package_power_W=power.package_workload_total_W,
         power_status=power.evaluation_status,
         memory_total_completeness_status=(
@@ -300,7 +310,10 @@ def assemble_conditional_llm_decode_e2e_row(
             thermal.write_spatial_distribution_status if thermal else None),
         bandwidth_capability_status="NOT_VALIDATED",
         write_energy_model_status="NOT_VALIDATED",
-        gpu_energy_model_status="NOT_AVAILABLE",
+        gpu_energy_model_status=(
+            "ANALYTICAL_AFFINE_UTILIZATION_MODEL"
+            if power.gpu_power_status == GPU_WORKLOAD_POWER_STATUS
+            else "NOT_AVAILABLE"),
         system_j_token_status="NOT_AVAILABLE",
         m3d_logic_background_status=m3d_status,
         scenario_status=SCENARIO_STATUS,

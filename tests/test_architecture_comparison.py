@@ -38,14 +38,14 @@ def test_system_scope_capacity_and_refresh_close():
     orth_si = _resolved(NAMES[1])
     m3d = _resolved(NAMES[2])
     capacity = _resolved_capacity(*conventional)
-    assert capacity["system_capacity_GiB"] == 108.0
-    assert capacity["capacity_per_instance_GiB"] == 27.0
+    assert capacity["system_capacity_GiB"] == 135.0
+    assert capacity["capacity_per_instance_GiB"] == 33.75
     assert _resolved_capacity(*orth_si)["system_capacity_GiB"] == 234.28125
-    assert _resolved_capacity(*m3d)["system_capacity_GiB"] == 428.75
+    assert _resolved_capacity(*m3d)["system_capacity_GiB"] == 463.75
     assert conventional[2].refresh_power_W == pytest.approx(
-        0.7691732487539762)
+        0.9614665609424703)
     assert orth_si[2].refresh_power_W == pytest.approx(1.6685450943022453)
-    assert m3d[2].refresh_power_W == 98 * 0.0003484694872064
+    assert m3d[2].refresh_power_W == 106 * 0.0003484694872064
 
 
 def test_access_energy_regressions_and_system_bandwidth_are_frozen():
@@ -85,9 +85,9 @@ def test_conventional_physical_geometry_drives_capacity_and_thermal_stack():
     diagnostics = system.diagnostics
     assert geometry.memory_region_count == 4
     assert geometry.memory_dies_per_region == 12
-    assert (geometry.configured_x_mm, geometry.configured_y_mm) == (10.8, 10.8)
-    assert case.geometry.layout["visible_group_footprint_mm"] == [11.0, 22.0]
-    assert diagnostics["packed_banks_per_die"] == 144
+    assert (geometry.configured_x_mm, geometry.configured_y_mm) == (12.2, 11.8)
+    assert case.geometry.layout["visible_group_footprint_mm"] == [12.4, 24.0]
+    assert diagnostics["packed_banks_per_die"] == 180
     assert diagnostics["rotated_90_deg"] is False
     assert diagnostics["bits_per_stack"] == diagnostics["bits_per_die"] * 12
     assert diagnostics["total_stored_bits"] == diagnostics["bits_per_stack"] * 4
@@ -188,7 +188,7 @@ def test_canonical_m3d_thermal_merges_equal_k_bitcell_and_beol():
         box.tags.get("component") for box in scene.boxes
         if str(box.tags.get("component", "")).startswith(
             "orthogonal_hbm:die_")})
-    assert len(slabs) == 98
+    assert len(slabs) == 106
     for component in slabs:
         boxes = scene.filter(component=component)
         assert len(boxes) == 4
@@ -211,9 +211,9 @@ def test_density_denominators_are_geometry_derived():
     conventional = _resolved_capacity(*_resolved(NAMES[0]))
     orth_si = _resolved_capacity(*_resolved(NAMES[1]))
     m3d = _resolved_capacity(*_resolved(NAMES[2]))
-    assert conventional["memory_plane_area_mm2"] == 10.8 * 10.8
-    assert conventional["architecture_footprint_area_mm2"] == 2 * 11 * 22
+    assert conventional["memory_plane_area_mm2"] == 12.2 * 11.8
+    assert conventional["architecture_footprint_area_mm2"] == 2 * 12.4 * 24
     assert orth_si["memory_plane_area_mm2"] == 22 * 5.5
     assert orth_si["architecture_footprint_area_mm2"] == 30 * 22
     assert m3d["memory_plane_area_mm2"] == 22 * 5.5
-    assert m3d["architecture_footprint_area_mm2"] == 30 * 22
+    assert m3d["architecture_footprint_area_mm2"] == 31.8 * 22

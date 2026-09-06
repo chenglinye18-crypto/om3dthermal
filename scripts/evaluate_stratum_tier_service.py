@@ -7,7 +7,11 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from om3dthermal.experiment import load_experiment_spec, load_workload_spec
+from om3dthermal.experiment import (
+    load_experiment_spec,
+    load_workload_spec,
+    resolve_scenario_matched_bandwidth_bits_per_second,
+)
 from om3dthermal.placement import (
     compare_fast_region_placements,
     compare_placement_serving_performance,
@@ -74,6 +78,8 @@ def run(output_dir: Path) -> dict[str, object]:
         project_root=ROOT,
     )
     scenario = experiment.scenario
+    matched_bw = resolve_scenario_matched_bandwidth_bits_per_second(
+        scenario, case.geometry.orthogonal)
     base = load_workload_spec(
         ROOT / "configs/workload/llama31_8b_decode_b1_s131072.yaml",
         project_root=ROOT,
@@ -88,7 +94,7 @@ def run(output_dir: Path) -> dict[str, object]:
         sweep = sweep_local_service_fraction(
             workload, demand, layout, bandwidth, placement.fast_pack,
             matched_external_bandwidth_bits_per_second=(
-                scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bw),
             effective_compute_flops_per_second=(
                 scenario.effective_compute_flops_per_second),
         )
@@ -107,7 +113,7 @@ def run(output_dir: Path) -> dict[str, object]:
         external = compare_placement_serving_performance(
             workload, demand, placement, layout,
             matched_payload_bandwidth_bits_per_second=(
-                scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bw),
             effective_compute_flops_per_second=(
                 scenario.effective_compute_flops_per_second),
         )

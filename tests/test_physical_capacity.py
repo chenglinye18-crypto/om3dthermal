@@ -67,15 +67,15 @@ def test_subarray_and_slot_capacity_closure(canonical_layout):
 
 def test_architecture_capacity_closure(canonical_layout):
     case, geometry, power, *_, layout = canonical_layout
-    assert layout.slab_count == 98
+    assert layout.slab_count == 106  # rev v2: 106 slabs on 32 mm GPU die
     assert layout.clusters_per_slab == 280
     assert layout.layers_per_cluster == 8
     assert layout.slot_class_count == 2240
-    assert layout.physical_slot_count == 280 * 8 * 98 == 219520
+    assert layout.physical_slot_count == 280 * 8 * 106 == 237440  # rev v2
     assert layout.capacity_per_layer_per_slab_bytes == 560 * 2**20
     assert layout.capacity_per_slab_bytes == int(4.375 * 2**30)
-    assert layout.total_capacity_bytes == 460366807040
-    assert layout.total_capacity_gib == 428.75
+    assert layout.total_capacity_bytes == 497947770880  # rev v2
+    assert layout.total_capacity_gib == 463.75  # rev v2
     assert layout.total_capacity_bytes * 8 == power.diagnostics[
         "total_stored_bits"]
     packing = resolve_packing_from_legacy_power_result(case, geometry, power)
@@ -95,7 +95,7 @@ def test_slot_classes_bind_existing_latency_without_recalculation(
         assert slot.physical_access_latency_ns == source.total_latency_ns
         assert slot.feol_route_length_um == source.feol_route_length_um
         assert slot.miv_length_um == source.miv_length_um
-        assert slot.multiplicity == 98
+        assert slot.multiplicity == 106  # rev v2
 
 
 def test_slab_symmetry_and_lazy_expansion(canonical_layout):
@@ -113,8 +113,9 @@ def test_slab_symmetry_and_lazy_expansion(canonical_layout):
 
 def test_cumulative_capacity_curve_closes(canonical_layout):
     *_, layout = canonical_layout
-    expected_gib = (42.875, 107.1875, 214.375,
-                    321.5625, 385.875, 428.75)
+    # Rev v2: fractions of the 463.75 GiB total (was 428.75 GiB).
+    expected_gib = (46.375, 115.9375, 231.875,
+                    347.8125, 417.375, 463.75)
     expected_cutoffs = (
         10.109013444422171,
         10.500345597231911,
@@ -200,7 +201,7 @@ def test_capacity_layout_has_no_cluster_access_assumption_dependence(
         miv_provenance=power.diagnostics["miv_resistance_provenance"],
     )
     changed = calculate_physical_capacity_layout(
-        topology, changed_latency, slab_count=98,
+        topology, changed_latency, slab_count=106,  # rev v2: current geometry
         expected_total_bits=power.diagnostics["total_stored_bits"])
     assert changed_feol.feol_route_length_per_cluster_um == (
         feol.feol_route_length_per_cluster_um)
@@ -216,4 +217,4 @@ def test_latency_energy_and_capacity_regressions(canonical_layout):
     assert power.E_feol_route_pj_bit == pytest.approx(0.16705631334524151)
     assert feol.feol_route_min_length_um == pytest.approx(314.0405233765899)
     assert feol.feol_route_max_length_um == pytest.approx(4905.139070860771)
-    assert layout.total_capacity_gib == 428.75
+    assert layout.total_capacity_gib == 463.75  # rev v2

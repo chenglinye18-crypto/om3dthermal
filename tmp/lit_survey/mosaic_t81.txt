@@ -1,0 +1,248 @@
+3D Orthogonal Die Stacking Technology for DRAM-on-GPU Integration 
+Using Contactless Die-to-Die Interface 
+Yuki Mitarai*1, Masaya Kawano*1, Hung-Chih Huang*1, Takafumi Fukushima*2, 
+Tadahiro Kuroda*1, 3, Mototsugu Hamada*1, Atsutake Kosuge*1, 3 
+*1: University of Tokyo, Tokyo, Japan, *2: Tohoku University, Sendai, Japan, *3: RIKEN, Wako, Japan 
+ 
+Abstract 
+Massive orthogonal stacking assembly of IC (MOSAIC) 
+technology was demonstrated to overcome thermal limitations 
+in 3D memory-on-GPU configurations. By stacking memory 
+dies orthogonally to the GPU, heat is dissipated effectively, 
+enabling twice the memory capacity. A contactless die-to-die 
+interface, achieving up to 4 Gbps/ch in a prototype, mitigates 
+assembly challenges, enabling TSV-free 3D integration. 
+Keywords: Advanced packaging, 3D integration, contactless 
+interface. 
+Introduction 
+The "memory wall" imposes fundamental limits on system 
+performance in the AI era, with memory power, bandwidth, 
+and capacity as primary bottlenecks. Specifically, for LLM 
+inference, now a critical social infrastructure, capacity is 
+essential for efficient computation without frequent transfers 
+of intermediate values among GPU devices [1]. From a 
+hardware perspective, advanced systems typically adopt 2.5D-
+packaged HBM today, while 3D HBM-on-GPU integration is 
+being actively explored to push performance beyond physical 
+constraints and enable further scaling (Fig. 1(a)) [2]. Although 
+this integration offers high bandwidth and energy efficiency, 
+capacity scaling remains a significant issue. As DRAM density 
+scaling slows, increasing the number of stacked dies is highly 
+demanded; however, this is strictly limited by thermal issues. 
+Although emerging technologies, such as hybrid bonding and 
+new materials, are being studied to address this issue [3], they 
+have not yet led to a significant increase in the number of 
+stacked dies, suggesting a structural limit. 
+Proposed method: MOSAIC 
+This work presents the world’s first demonstration of a 
+massive orthogonal stacking assembly of IC (MOSAIC) 
+technology, where memory dies are stacked orthogonally to the 
+base die (Fig. 1(b, c)) [4, 5]. Since GPU heat dissipates 
+primarily in the vertical direction [2], the vertical alignment of 
+high-thermal-conductivity Si substrates effectively suppresses 
+peak temperatures, independent of the number of stacked dies. 
+We constructed detailed thermal models for both HBM and 
+MOSAIC to compare their thermal performances. The HBM 
+configuration is based on Ref. [2] and uses the same values, 
+except for the use of uniform planar power sources and a 1/4 
+symmetric model. The GPU power is set to 300 W, which is 
+comparable to AI-oriented GPUs that deliver over 1 PFLOPS 
+of BF16 Tensor-core performance [6]. To quantify capacity 
+scaling limits, we swept the number of stacked dies from 12 to 
+24 under an iso-bandwidth (power) constraint. The MOSAIC 
+configuration (Fig. 2) integrates 98 memory dies stacked on the 
+GPU. The cube height is set to 5.5 mm, where each memory 
+die is half the area of an HBM die.  Power consumption is 
+estimated assuming 50 channels per die operating at 8 Gbps/ch, 
+with an energy cost of 4 pJ/b per transferred bit for data access 
+[7], of which 0.5 pJ/b is attributed to I/O energy [8]. The results 
+are summarized in Fig. 3. While a 12 Hi HBM reached a peak 
+temperature of 80 °C, doubling the capacity with a 24 Hi HBM 
+increased the peak to 97 °C, crossing the thermal threshold of 
+95 °C [9]. By comparison, MOSAIC accommodates the same 
+twofold capacity while suppressing the peak temperature to 
+81.3 ºC, showing significantly improved heat dissipation. 
+Implementation of a MOSAIC cube 
+In our proposed cube, each memory die receives power 
+through sidewall electrodes, while data transmission is 
+performed using a contactless interface. Fig. 4 illustrates its 
+assembly flow. Compared with HBM, the proposed cube offers 
+several advantages in its assembly: (1) elimination of TSVs; 
+(2) removal of physical electrical contacts, reducing the risk of 
+ESD-induced damage; and (3) direct communication between 
+each memory die and GPU, enabling system-level redundancy 
+and offering the potential for W2W integration. 
+The key challenge is the die-to-die interface between the 
+GPU and the memory cube. Conventional contact -based 
+interfaces are unreliable due to surface irregularity and 
+misalignment. This work utilizes a right -angle proximity 
+inductive coupling interface, enabling stable communication 
+over varying distances, including lateral offsets and 
+communication distance variations (Fig. 5). 
+Right-Angle Inductive Coupling Interface  
+This work employs an oblong coil design for the interface, 
+which maintains a sufficient coupling coefficient and reduces 
+crosstalk from adjacent coil pairs while reducing the footprint 
+compared to square coils [10]. The long and short sides are set 
+to 240 µm and 80 µm, respectively, enabling the realization of 
+50 channels with a pitch of 400 µm on a 22 mm-wide die as 
+assumed in the thermal simulation. 
+A limitation of oblong coils is their reduced tolerance to 
+misalignment, particularly along the short side of the base die 
+coil (Y-axis). In this direction, the small gap between the long 
+edges carrying antiparallel currents causes large cancellation 
+of signal coupling when the coil is displaced. Using a triple 
+overlaid coils design at the base die constructed in the same 
+two metal layers as the single coil, misalignment tolerance was 
+enhanced by 41% within the same footprint (Fig. 6). 
+Experimental Results and Discussion 
+To evaluate the MOSAIC implementation and its interface 
+performance, a test cube was fabricated with 0.18 μm MPW 
+shuttle chips (Fig. 7). The cube consists of eight stacked 2.4 
+mm × 2.4 mm daughter dies placed on a 2.5 mm × 5 mm base 
+die. Power is supplied through sidewall metal contacts via 
+solder and an FPC board. Assembly feasibility and coil 
+placement accuracy were verified using X -ray computed 
+tomography. The daughter-die coil is positioned over the 
+corresponding base-die coil within the acceptable alignment at 
+a communication distance of 17 µm (Fig. 8).   
+The interface test was performed using a loopback path 
+between the base die and the active daughter die (Fig. 9). A 4 
+Gbps PRBS27-1 signal was used to evaluate two 
+communication paths, and in both cases, the signal was 
+successfully recovered by activating the optimal coil in the 
+triple-stacked structure (Fig. 10), achieving an average energy 
+efficiency of 6.9 pJ/b. This result was obtained using a 0.18 µm 
+process, and further reduction in energy consumption and 
+higher data rates (e.g., 8 Gb/s at 0.5 pJ/bit) are expected with 
+more advanced process technologies [8, 11]. 
+Table I shows the comparison with HBM -on-GPU. 
+MOSAIC doubles the memory capacity at equivalent 
+bandwidth and peak temperature compared to the HBM-on-
+GPU baseline [2] and enables a larger number of stacked dies 
+under a higher GPU operating power environment than that 
+reported in [3]. In addition, further capacity scaling is expected 
+by thinning the silicon substrate. Thinning the 300 µm die to 
+100 µm enables a three-fold capacity increase with a negligible 
+0.04 ºC rise in peak temperature without significant crosstalk 
+noise in the contactless interface. Acknowledgements The 
+authors appreciate the technical efforts of RIKEN, Wako, Japan, T-
+Micro, Sendai, Japan, EBARA Corp., Tokyo, Japan, Rigaku Corp., 
+Tokyo, Japan, and Excillum AB, Stockholm, Sweden. This work was 
+partially supported by JST-R&D program for Edge-AI  JPMJES2514.
+ 
+Fig. 1.  Cross-sectional view of (a) HBM-on-GPU [2] and (b) 
+MOSAIC cube-on-GPU, and (c) a 3D representation of MOSAIC 
+cube-on-GPU with a contactless interface. 
+ 
+Fig. 2.  Simulation model and parameters. The schematics show top 
+and cross-sectional views of the 1/4 symmetry model. Tables detail 
+the layer properties and power consumption values. 
+  
+Fig. 3.  Thermal simulation results. MOSAIC enables doubling the 
+capacity at equivalent bandwidth and peak temperature compared to 
+the baseline. 
+ 
+Fig. 4. Assembly flow of MOSAIC. This TSV-free architecture 
+simplifies fabrication by utilizing sidewall metallization for power 
+delivery and a contactless interface for data transmission. 
+ 
+Fig. 5.  Communication interface overview. Interface challenges due 
+to physical irregularities, configuration of the proposed inductive 
+coupling interface, and the circuit schematic. 
+ Fig. 6.  Misalignment tolerance of the triple overlaid oblong coil 
+design along the Y-direction, showing a 41% improvement over the 
+single coil while maintaining the same footprint. 
+
+ 
+Fig. 7.  Prototype implementation. Assembly of stacked daughter dies 
+with sidewall solder/FPC and micrographs of the 0.18 µm CMOS 
+dies. 
+ 
+ 
+Fig. 8.  X-ray computed tomography images of the assembled cube: 
+(1) daughter die A in Fig. 7, (2) base die, and (3) cross-section, with 
+the region of coils highlighted. 
+ 
+Fig. 9.  Measurement environment. (a) Physical setup. (b) Schematic 
+of the loopback communication path between the base and daughter 
+dies used for interface testing. (c) Test conditions. 
+ 
+Fig. 10.  Measurement results at 4 Gbps. Eye diagrams and bathtub 
+curves for two paths show successful signal recovery with sufficient 
+timing margins. 
+ 
+TABLE I. Comparison with conventional HBM-on-GPU.  
+ 
+ IEDM’25 
+[2] 
+VLSI’24 
+[3] 
+This 
+work 
+With 
+thinned Si 
+Memory type HBM HBM MOSAIC MOSAIC 
+Memory 
+placement Memory on GPU 
+Memory cube 
+size 
+22mm × 
+11mm × 
+0.66mm 
+NA 
+22mm × 
+30mm × 
+5.5mm 
+22mm × 
+30mm × 
+5.5mm 
+Memory die 
+thickness 46µm Upper:20µm 
+Lower:60µm 300µm 100µm 
+# of stacked dies 
+per cube 12 20 
+(1) 
+98 
+(4.9) 
+294 
+(14.7) 
+# of cubes on 
+GPU 2 NA 1 1 
+GPU Power 45.5W/cm2 20W/cm2 45.5W/cm2 45.5W/cm2 
+Total capacity 144GB 
+(1) NA 294GB 
+(2.04) 
+882GB 
+(6.13) 
+Max temperature 80.0ºC 82.2ºC 81.3ºC 81.3ºC 
+Aggregated 
+bandwidth 4.8TB/s NA 4.9TB/s 4.9TB/s 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+References 
+[1] S. -S. Park et al., HPCA, 2024, pp. 970-982, doi: 
+10.1109/HPCA57654.2024.00078. 
+[2] Y. Chen et al., IEDM, 2025, doi: TBD. 
+[3] T. Takagi et al., Symp. on VLSI, 2024, pp. 1-2, doi: 
+10.1109/VLSITechnologyandCir46783.2024.10631317. 
+[4] M. Kawano et al., ECTC, 2025, pp. 1324-1330, doi: 
+10.1109/ECTC51687.2025.00227. 
+[5] H. -C. Huang et al., ECTC, 2025, pp. 1595-1600, doi:  
+10.1109/ECTC51687.2025.00272. 
+[6] https://www.nvidia.com/ja-jp/data-center/h100/ 
+[7] M. O’Connor et al., MICRO, 2017, pp. 41-54, doi: 
+10.1145/3123939.3124545. 
+[8] K. Shiba et al., SSC-L, 2023, vol. 6, pp. 65-68, doi: 
+10.1109/LSSC.2023.3252607. 
+[9] T. Kim et al., ECTC, 2023, pp. 767-771, doi: 
+10.1109/ECTC51909.2023.00133. 
+[10] Y. Mitarai et al., SSDM, 2025, doi: 
+10.7567/SSDM.2025.F-3-03. 
+[11] Y. Mitarai et al., APCCAS, 2025, doi: TBD. 

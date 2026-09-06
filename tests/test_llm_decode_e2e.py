@@ -66,8 +66,9 @@ def _thermal(name, rho, power):
         architecture=name, rho=rho,
         mapped_package_power_W=power.package_workload_total_W,
         expected_package_power_W=power.package_workload_total_W,
-        source_power_breakdown_W={"committed_E6_evidence":
-                                  power.package_workload_total_W},
+        source_power_breakdown_W={
+            "gpu": power.gpu_power_W,
+            "committed_E6_memory_evidence": power.memory_workload_total_W},
         power_closure_absolute_error_W=0.0,
         power_closure_relative_error=0.0,
         memory_Tmax_degC=memory_t, gpu_Tmax_degC=gpu_t,
@@ -147,6 +148,15 @@ def test_valid_rows_all_architectures_and_claim_boundaries(frozen):
         assert row.bandwidth_capability_status == "NOT_VALIDATED"
         assert row.write_energy_model_status == "NOT_VALIDATED"
         assert row.system_j_token_status == "NOT_AVAILABLE"
+
+
+def test_gpu_source_mismatch_rejected_even_when_package_total_matches(frozen):
+    args = _args(frozen)
+    args[-1] = args[-1].model_copy(update={
+        "source_power_breakdown_W": {"gpu": 200.0,
+            "memory": args[-2].package_workload_total_W - 200.0}})
+    with pytest.raises(ValueError, match="GPU source power mismatch"):
+        _assemble(args)
 
 
 @pytest.mark.parametrize("index,update", [

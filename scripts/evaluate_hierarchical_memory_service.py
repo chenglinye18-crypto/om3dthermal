@@ -10,6 +10,7 @@ from om3dthermal.experiment import (
     load_experiment_spec,
     load_moe_workload_spec,
     load_workload_spec,
+    resolve_scenario_matched_bandwidth_bits_per_second,
 )
 from om3dthermal.placement import (
     compare_fast_region_placements,
@@ -47,6 +48,8 @@ def main() -> int:
         root / "configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",
         project_root=root)
     scenario = experiment.scenario
+    matched_bw = resolve_scenario_matched_bandwidth_bits_per_second(
+        scenario, case.geometry.orthogonal)
     dense_base = load_workload_spec(
         root / "configs/workload/llama31_8b_decode_b1_s131072.yaml",
         project_root=root).decode
@@ -67,7 +70,7 @@ def main() -> int:
         dense_rows.append(_dense_case(
             dense, layout, bandwidth,
             legacy_bandwidth_bits_per_s=(
-                scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bw),
             compute_flops_per_s=scenario.effective_compute_flops_per_second,
             seeds=seeds,
         ))
@@ -78,7 +81,7 @@ def main() -> int:
             layout,
             bandwidth,
             legacy_matched_payload_bandwidth_bits_per_second=(
-                scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bw),
             effective_compute_flops_per_second=(
                 scenario.effective_compute_flops_per_second),
             random_seeds=seeds,
@@ -101,7 +104,7 @@ def main() -> int:
         "architecture_bandwidth_closure": bandwidth.as_dict(),
         "scenario": {
             "legacy_fixed_bandwidth_bits_per_s": (
-                scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bw),
             "legacy_bandwidth_status": scenario.bandwidth_status,
             "effective_compute_flops_per_s": (
                 scenario.effective_compute_flops_per_second),

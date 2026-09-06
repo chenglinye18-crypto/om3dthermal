@@ -87,8 +87,10 @@ venv to "make it work".
 om3dthermal is a workload-aware architecture/power/steady-state-thermal
 framework for HBM-on-GPU and M3D / orthogonal-memory research.  The canonical
 DAC E2E Conventional baseline is `configs/cases/conventional_hbm_2x1.yaml`.
-Conventional 2x2 cases under `configs/legacy/` are historical thermal
-validation benchmarks, not the main E2E baseline.
+Conventional 2x1 is the only Conventional baseline for DAC experiments,
+paper tables, current documentation, and run examples. Retired configurations
+under `configs/legacy/` are retained only as test fixtures and provenance;
+do not promote their results back into the current evaluation.
 
 ## Hard constraints
 
@@ -145,8 +147,7 @@ Do not add new physics merely because it is technically possible.
 
 For E2E non-physics changes, preserve the validated Conventional 2x1 GPU-PCG
 baseline (859596 cells, 2531340 edges, analytical package input about
-355.58349 W, Tmax about 81.93349 degC at the canonical tolerances).  The
-574 W / ~122.97 degC Conventional 2x2 result is a legacy thermal benchmark.
+355.58349 W, Tmax about 81.93349 degC at the canonical tolerances).
 Investigate unexpected changes; never update expected values merely to make
 tests pass.
 

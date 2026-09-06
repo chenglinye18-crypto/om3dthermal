@@ -3,13 +3,16 @@ name: orthogonal_m3d_igzo
 geometry:
   type: orthogonal_m3d
   orthogonal:
-    slab_count: 98
-    cube_length_x_mm: 30.0
+    slab_count: 106
+    cube_length_x_mm: 31.8
     slab_plane_y_mm: 22.0
     slab_height_z_mm: 5.5
     slab_pitch_x_um: 300.0
     slab_plane: y-z
     thickness_direction: global_x
+    io_channels_per_slab: 50
+    io_channel_rate_gbps: 8.0
+    io_provenance: MODELING_CHOICE
   m3d_stack:
     si_substrate_um: 292.546
     feol_um: 0.150
@@ -216,7 +219,7 @@ workload:
   control_address_reuse: 64
 
 power:
-  gpu: {model: fixed, power_W: 300.0}
+  gpu: {model: fixed, power_W: 269.84}
   memory: {model: analytical, status: CONDITIONAL_ASSUMPTION}
   refresh:
     enabled: true
@@ -231,7 +234,13 @@ power:
 thermal:
   geometry_source: canonical_case_geometry
   package_size_mm: [65.0, 65.0]
-  gpu_footprint_mm: [30.0, 22.0]
+  gpu_footprint_mm: [32.0, 24.0]
+  # Rev v2 A-arm (main result): the 1 mm y-edge strips between the 22 mm
+  # cube and the 24 mm GPU die are filled with mold resin, matching the
+  # conventional-case background material.  The B-arm ablation case
+  # (orthogonal_m3d_igzo_edge_si_bar.yaml) fills them with Thermal_Silicon
+  # to separate orthogonal-structure vs Si-bar thermal contributions.
+  edge_strip_material: Mold
   source_mapping:
     gpu: GPU_FEOL
     memory_internal_miv_interface: M3D_BITCELL_BEOL_STACK
@@ -249,6 +258,7 @@ thermal:
     Adhesive: 0.2
     BEOL_MXY: 1.5
     FEOL: 7.9
+    Thermal_Silicon: 140.0
     BSPDN: [83.0, 83.0, 71.0]
     Cu_Pillar_Bump: [0.54, 0.54, 13.25]
     Laminate: 13.0
@@ -268,6 +278,8 @@ thermal:
   solver: {alpha: 0.7, rtol: 1.0e-6}
 
 provenance:
+  platform_revision: REV_V2_H200_ANCHORED_2026_09_06
+  gpu_power_provenance: H200_ANCHORED_AFFINE_U1_POINT_74W_PLUS_5P10_PJBIT_X_4P8TBS
   geometry:
     cell_area_um2: PAPER_REPORTED
     bitcell_layer_pitch_nm: DERIVED_FROM_PAPER_FIGURE

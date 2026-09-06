@@ -156,6 +156,37 @@ class OrthogonalHBMBuilder:
         self.scene.stack_heights["orthogonal_memory_die_thickness"] = die.thickness
         self.scene.stack_heights["orthogonal_hbm_cube_height"] = orthogonal.cube_height
 
+        # Rev v2 dual-arm ablation: optional y-edge strips between the cube
+        # and the GPU die (A arm mold resin, B arm thermal Si bar).  The
+        # strips are passive package structure: they carry no power and are
+        # named without the "orthogonal_hbm:" prefix so region-wise Tmax
+        # extraction excludes them from both the GPU and memory regions.
+        if orthogonal.edge_strip_material is not None:
+            strip_specs = (
+                ("y_minus", gpu_fp.y0, cube.y0),
+                ("y_plus", cube.y1, gpu_fp.y1),
+            )
+            for side, strip_y0, strip_y1 in strip_specs:
+                if strip_y1 - strip_y0 < -_LENGTH_TOL:
+                    raise ValueError(
+                        "orthogonal cube extends past the GPU footprint; "
+                        "edge strips require the cube inside the GPU die")
+                if strip_y1 - strip_y0 <= _LENGTH_TOL:
+                    continue
+                self._add_box(
+                    name=f"orthogonal_hbm.edge_strip_{side}",
+                    material=orthogonal.edge_strip_material,
+                    x0=gpu_fp.x0, x1=gpu_fp.x1,
+                    y0=strip_y0, y1=strip_y1,
+                    z0=adhesive_z0, z1=cube_z1,
+                    component="orthogonal_hbm_edge_strip",
+                    source_path=f"orthogonal_hbm.edge_strip.{side}",
+                    tags={"role": "cube_edge_strip", "priority": 0},
+                    rotation=((1.0, 0.0, 0.0),
+                              (0.0, 1.0, 0.0),
+                              (0.0, 0.0, 1.0)),
+                )
+
         top_fp = cfg.footprints[orthogonal.top.footprint]
         self._horizontal._add_stack(
             orthogonal.top.stack, top_fp, cube_z1, "top",

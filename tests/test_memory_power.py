@@ -1287,13 +1287,15 @@ def test_active_cases_parse_and_resolve_system_power():
     hbm_geometry = resolve_case_geometry(hbm_case)
     hbm_system = resolve_system_power(
         hbm_case, project_root=ROOT, geometry=hbm_geometry)
-    assert hbm_system.gpu_power_W == 300.0
+    # Rev v2: H200-anchored affine u=1 point (was 300.0 W).
+    assert hbm_system.gpu_power_W == 269.84
     assert hbm_system.memory_result is not None
     hbm = hbm_system.memory_result
     assert hbm.diagnostics["activated_row_data_utilization"] == 0.10
     assert hbm.diagnostics["effective_rd_per_act"] == 6.4
-    assert hbm.P_refresh_W == pytest.approx(0.7691732487539762)
-    assert hbm.diagnostics["total_stored_bits"] == 927712935936
+    # Rev v2: refresh scales with capacity 116.0 -> 145.0 GB.
+    assert hbm.P_refresh_W == pytest.approx(0.9614665609424703)
+    assert hbm.diagnostics["total_stored_bits"] == 1159641169920  # rev v2: 135 GiB
     assert hbm.E_base_route_pj_bit == pytest.approx(
         0.109992140663163, abs=0.0)
     assert hbm.E_vertical_pj_bit > 0.0
@@ -1301,7 +1303,8 @@ def test_active_cases_parse_and_resolve_system_power():
     assert hbm.diagnostics["dies_stacked"] == 8
     assert hbm.diagnostics["physical_stack_count"] == 4
     assert hbm.diagnostics["dram_dies_per_stack"] == 12
-    assert hbm.diagnostics["packed_banks_per_die"] == 144
+    # Rev v2: 12.2x11.8 mm HBM3E-class die packs 180 banks (was 144).
+    assert hbm.diagnostics["packed_banks_per_die"] == 180
     assert hbm.E_memory_internal_pj_bit == pytest.approx(
         0.8676557831180526, abs=0.0)
     assert hbm.E_vertical_pj_bit == pytest.approx(
@@ -1319,7 +1322,7 @@ def test_active_cases_parse_and_resolve_system_power():
     assert m3d.E_vertical_pj_bit == 0.002445862111816407
     assert m3d.E_feol_route_pj_bit == 0.16705631334524151
     assert m3d.E_interface_pj_bit == 0.5
-    assert m3d.P_refresh_W == 98 * 0.0003484694872064
+    assert m3d.P_refresh_W == 106 * 0.0003484694872064  # rev v2: 106 slabs
     assert m3d.diagnostics["geometry_source_config"] == (
         "canonical_case:orthogonal_m3d_igzo")
 
@@ -1329,6 +1332,7 @@ def test_active_case_surface_is_minimal_and_single_file():
         "conventional_hbm_2x1.yaml",
         "orthogonal_si.yaml",
         "orthogonal_m3d_igzo.yaml",
+        "orthogonal_m3d_igzo_edge_si_bar.yaml",
     }
     assert {path.name for path in CASE_CONFIGS.glob("*.yaml")} == expected
     forbidden = {
@@ -1337,7 +1341,7 @@ def test_active_case_surface_is_minimal_and_single_file():
         raw_text = path.read_text(encoding="utf-8")
         raw = yaml.safe_load(raw_text)
         case = load_case_config(path)
-        assert case.power.gpu.power_W == 300.0
+        assert case.power.gpu.power_W == 269.84  # rev v2 H200-anchored
         assert case.architecture.geometry_source is None
         assert not any(token in raw_text for token in forbidden)
         assert "gpu" not in raw.get("thermal", {})
@@ -1355,7 +1359,7 @@ def test_active_case_system_mapping_uses_resolved_power():
         mapping = map_system_power_to_thermal(case, system)
         assert mapping.unresolved is False
         assert mapping.total_mapped_power_W == pytest.approx(
-            300.0 + system.resolved_total_memory_power_W)
+            269.84 + system.resolved_total_memory_power_W)  # rev v2 GPU power
 
 
 def test_m3d_si_unresolved_is_na_not_zero():
@@ -1499,7 +1503,8 @@ def test_conventional_full_row_same_boundary_remains_stable():
         + result.E_base_route_pj_bit + result.E_interface_pj_bit)
     # Refresh is deliberately enabled in the active case; the old split
     # logic-removed power input predated refresh accounting.
-    assert result.P_refresh_W == pytest.approx(0.7691732487539762)
+    # Rev v2: refresh scales with capacity 116.0 -> 145.0 GB.
+    assert result.P_refresh_W == pytest.approx(0.9614665609424703)
 
 
 def test_conventional_12hi_scales_only_dreamram_vertical_path():
@@ -1513,8 +1518,8 @@ def test_conventional_12hi_scales_only_dreamram_vertical_path():
         case, project_root=ROOT, geometry=geometry_12hi)
 
     assert geometry_12hi.memory_dies_per_region == 12
-    assert result_12hi.diagnostics["total_stored_bits"] == 927712935936
-    assert result_12hi.P_refresh_W == pytest.approx(0.7691732487539762)
+    assert result_12hi.diagnostics["total_stored_bits"] == 1159641169920  # rev v2
+    assert result_12hi.P_refresh_W == pytest.approx(0.9614665609424703)  # rev v2
     assert result_12hi.E_memory_internal_pj_bit == pytest.approx(
         result_8hi.E_memory_internal_pj_bit, abs=0.0)
     assert result_12hi.E_base_route_pj_bit == pytest.approx(
@@ -1571,7 +1576,7 @@ def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
     assert baseline.diagnostics["clusters_per_layer"] == 280
     assert baseline.diagnostics["subarrays_per_layer"] == 17920
     assert baseline.diagnostics["bits_per_layer"] == 4697620480
-    assert baseline.diagnostics["total_stored_bits"] == 98 * 37580963840
+    assert baseline.diagnostics["total_stored_bits"] == 106 * 37580963840  # rev v2
     assert baseline.diagnostics["placed_width_um"] == pytest.approx(
         21794.548876360117)
     assert baseline.diagnostics["placed_height_um"] == pytest.approx(

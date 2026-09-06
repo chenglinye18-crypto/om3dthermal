@@ -22,15 +22,21 @@ def run(output_dir: Path):
     topology=calculate_m3d_subarray(case.architecture.m3d_subarray,geo.m3d); feol=calculate_feol_route(case.architecture.feol_route,topology)
     physical=calculate_physical_access_latency(case.architecture.physical_access_latency,feol_route=feol,miv_length_per_layer_um=power.diagnostics['miv_length_per_layer_um'],miv_delay_per_layer_ns=power.diagnostics['miv_delay_per_layer_ns'],miv_status=power.diagnostics['miv_latency_status'],miv_parameter_status=power.diagnostics['miv_resistance_parameter_status'],miv_provenance=power.diagnostics['miv_resistance_provenance'])
     base=load_workload_spec(ROOT/"configs/workload/llama31_8b_decode_b1_s131072.yaml",project_root=ROOT).decode
-    gpu=load_experiment_spec(ROOT/"configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",project_root=ROOT).scenario.effective_compute_flops_per_second
+    experiment=load_experiment_spec(ROOT/"configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",project_root=ROOT)
+    gpu=experiment.scenario.effective_compute_flops_per_second
+    # Rev v2 scenario semantics: external boundary bandwidth is the slab IO
+    # capability capped at the scenario matched bandwidth (39.2 Tb/s).
+    _derivation=experiment.scenario.matched_bandwidth_derivation
+    _cap_bits=(_derivation.cap_bits_per_second if _derivation is not None else None)
+    cap_bps=(_cap_bits/8.0) if _cap_bits is not None else None
     rows=[]
     for n in (1,8,16):
         w=base.model_copy(update={'batch_size':n}); d=build_m3d_workload_page_demand(w,layout)
-        baseline=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NON_NMP_GPU',nmp_aggregate_tflops=None,gpu_compute_flops_per_s=gpu)
+        baseline=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NON_NMP_GPU',nmp_aggregate_tflops=None,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
         points=[]
         for p in (32.,64.,128.):
-            naive=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_NAIVE',nmp_aggregate_tflops=p,gpu_compute_flops_per_s=gpu)
-            local=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=p,gpu_compute_flops_per_s=gpu)
+            naive=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_NAIVE',nmp_aggregate_tflops=p,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
+            local=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=p,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
             points.append({'nmp_aggregate_tflops':p,'naive':naive.as_dict(),'locality_aware':local.as_dict(),
                 'nmp_gain':naive.timing.tokens_per_s/baseline.timing.tokens_per_s,
                 'placement_incremental_gain':local.timing.tokens_per_s/naive.timing.tokens_per_s,
@@ -41,13 +47,14 @@ def run(output_dir: Path):
                     'combined_A_gain': local.timing.tokens_per_s_serial / baseline.timing.tokens_per_s_serial,
                 }})
         hardware=canonical_nmp_hardware(layout.slab_count)
-        canonical_naive=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_NAIVE',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu)
-        canonical=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu)
+        canonical_naive=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_NAIVE',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
+        canonical=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
         hardware_bw_die=(bandwidth.local_service_groups_per_die*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*canonical.placement.local_access_latency_ns*1e-9))
         locality_placement=build_locality_only_placement(w,d,layout,
             bandwidth_per_die_bytes_per_s=hardware_bw_die,compute_per_die_flops_per_s=hardware.peak_flops_per_die)
         external_bytes=remaining_external_bytes_for_ownership(locality_placement.unit_loads,locality_placement.ownership)
-        external_ms=external_bytes/bandwidth.coil_bandwidth_bytes_per_s*1e3
+        external_bw_bps=(min(bandwidth.coil_bandwidth_bytes_per_s,cap_bps) if cap_bps is not None else bandwidth.coil_bandwidth_bytes_per_s)
+        external_ms=external_bytes/external_bw_bps*1e3
         activity=evaluate_nmp_die_activity(w,d,layout,bandwidth,local_access_latency_ns=canonical.placement.local_access_latency_ns,external_boundary_time_ms=external_ms,ownership=locality_placement.ownership)
         diagnostic_tps=n/(activity.decode_step_interval_ms*1e-3)
         balanced_placement=build_performance_balanced_placement(w,d,layout,

@@ -1,14 +1,17 @@
 from pathlib import Path
+import copy
 
 import pytest
 import yaml
 
 from om3dthermal.experiment import (
+    derive_orthogonal_slab_io_bandwidth_bits_per_second,
     load_architecture_spec,
     load_experiment_spec,
     load_platform_spec,
     load_workload_spec,
 )
+from om3dthermal.power import load_case_config
 
 
 ROOT = Path(__file__).parents[1]
@@ -42,7 +45,9 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
         and item.classification == "SOFTWARE_DERIVED"
         for item in workload.provenance
     )
-    assert platform.fixed_gpu_power_W == 300.0
+    # Rev v2 (2026-09-06): H200-anchored platform, affine u=1 operating
+    # point 74 W + 5.10 pJ/bit x 4.8 TB/s x 8 = 269.84 W (was 300.0).
+    assert platform.fixed_gpu_power_W == 269.84
     assert experiment.scenario.rho_values == (0.0, 1.0, 100.0, 1000.0)
     assert not hasattr(experiment.scenario, "thermal")
     assert experiment.output_policy == "ERROR_IF_EXISTS"
@@ -101,3 +106,59 @@ def test_m3d_semantic_audit_declares_only_parametric_sensitivities() -> None:
     assert sensitivity.interface_energy_pj_per_bit == (0.25, 0.5, 1.0)
     assert sensitivity.logic_background_w == (0.0, 5.0, 10.0, 20.0)
     assert sensitivity.status == "PARAMETRIC_SENSITIVITY"
+
+
+def test_formal_experiment_derives_matched_bandwidth_from_slab_io() -> None:
+    experiment = load_experiment_spec(EXPERIMENT, project_root=ROOT)
+    scenario = experiment.scenario
+    assert scenario.matched_payload_bandwidth_bits_per_second is None
+    derivation = scenario.matched_bandwidth_derivation
+    assert derivation is not None
+    assert derivation.derivation == "ORTHOGONAL_SLAB_IO"
+    assert derivation.architecture_id == "orthogonal_m3d_igzo"
+    assert derivation.cap_bits_per_second == pytest.approx(3.92e13)
+
+
+def test_matched_bandwidth_requires_exactly_one_source(tmp_path: Path) -> None:
+    raw = yaml.safe_load(EXPERIMENT.read_text(encoding="utf-8"))
+
+    both = copy.deepcopy(raw)
+    both["scenario"]["matched_payload_bandwidth_bits_per_second"] = 3.92e13
+    path = tmp_path / "both.yaml"
+    path.write_text(yaml.safe_dump(both), encoding="utf-8")
+    with pytest.raises(ValueError, match="exactly one"):
+        load_experiment_spec(path, project_root=ROOT)
+
+    neither = copy.deepcopy(raw)
+    del neither["scenario"]["matched_bandwidth_derivation"]
+    path = tmp_path / "neither.yaml"
+    path.write_text(yaml.safe_dump(neither), encoding="utf-8")
+    with pytest.raises(ValueError, match="exactly one"):
+        load_experiment_spec(path, project_root=ROOT)
+
+
+def test_slab_io_bandwidth_derivation_scales_with_slab_count() -> None:
+    case = load_case_config(
+        ROOT / "configs" / "cases" / "orthogonal_m3d_igzo.yaml")
+    orthogonal = case.geometry.orthogonal
+    assert orthogonal is not None
+    assert orthogonal.io_channels_per_slab == 50
+    assert orthogonal.io_channel_rate_gbps == 8.0
+    assert orthogonal.io_provenance == "MODELING_CHOICE"
+
+    derived = derive_orthogonal_slab_io_bandwidth_bits_per_second(
+        orthogonal, architecture_id=case.name)
+    # Rev v2: slab_count 98 -> 106 on the 32 mm GPU die.
+    assert derived == pytest.approx(106 * 50 * 8.0e9)
+    assert derived == pytest.approx(4.24e13)
+
+    more_slabs = orthogonal.model_copy(update={"slab_count": 112})
+    assert derive_orthogonal_slab_io_bandwidth_bits_per_second(
+        more_slabs, architecture_id=case.name) == pytest.approx(4.48e13)
+
+    no_io = orthogonal.model_copy(
+        update={"io_channels_per_slab": None, "io_channel_rate_gbps": None,
+                "io_provenance": None})
+    with pytest.raises(ValueError, match="slab IO fields"):
+        derive_orthogonal_slab_io_bandwidth_bits_per_second(
+            no_io, architecture_id=case.name)

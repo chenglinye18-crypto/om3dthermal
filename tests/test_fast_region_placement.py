@@ -130,9 +130,10 @@ def test_canonical_workloads_fit_and_fast_pack_beats_random(
 
 @pytest.mark.parametrize(
     ("requests", "expected"),
-    ((1, 10.072213443776443),
-     (8, 10.427075358422606),
-     (16, 11.276452163080243)),
+    # Rev v2 re-frozen: 106 slabs redistribute pages across slot classes.
+    ((1, 10.070685403196899),
+     (8, 10.379300101550944),
+     (16, 11.12039689287323)),
 )
 def test_fast_pack_canonical_latency_regression(canonical, requests, expected) -> None:
     layout, workload = canonical
@@ -187,7 +188,7 @@ def test_compact_multiplicity_closes_to_expanded_slots(canonical) -> None:
     assert sum(slot.multiplicity for slot in layout.slot_classes) == (
         layout.physical_slot_count)
     assert len(tuple(iter_physical_slots(layout))) == layout.physical_slot_count
-    assert layout.physical_slot_count == 219_520
+    assert layout.physical_slot_count == 237_440  # rev v2: 2240/slab x 106
 
 
 def test_fast_capacity_cutoff_closure(canonical) -> None:

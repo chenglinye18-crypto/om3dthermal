@@ -35,6 +35,7 @@ from om3dthermal.workload import (
 
 from .config import (
     ExperimentSpec,
+    derive_orthogonal_slab_io_bandwidth_bits_per_second,
     load_architecture_spec,
     load_experiment_spec,
     load_platform_spec,
@@ -102,6 +103,43 @@ def _resolved_architecture_payload(resolved) -> dict[str, Any]:
     }
 
 
+def _resolve_matched_bandwidth_bits_per_second(
+    scenario,
+    resolved_architectures,
+) -> tuple[float, float | None]:
+    """Resolve (applied, capability) matched payload bandwidth [bit/s].
+
+    Literal scenarios return (literal, None).  Derived scenarios compute
+    slab_count x io_channels_per_slab x io_channel_rate_gbps from the
+    referenced architecture's canonical case geometry; an optional cap pins
+    the applied value below the derived capability, with the difference
+    recorded as design margin.  The platform GPU decode-power peak bandwidth
+    is a separate hardware capability anchor (their ratio defines the
+    memory-bandwidth utilization u) and is intentionally not forced to equal
+    the scenario bandwidth.
+    """
+
+    derivation = scenario.matched_bandwidth_derivation
+    if derivation is None:
+        literal = scenario.matched_payload_bandwidth_bits_per_second
+        assert literal is not None  # guaranteed by scenario validation
+        return float(literal), None
+    matches = tuple(
+        item for item in resolved_architectures
+        if item.spec.architecture_id == derivation.architecture_id)
+    if len(matches) != 1:
+        raise ValueError(
+            "matched bandwidth derivation requires exactly one "
+            f"architecture {derivation.architecture_id!r} in the experiment")
+    capability = derive_orthogonal_slab_io_bandwidth_bits_per_second(
+        matches[0].case.geometry.orthogonal,
+        architecture_id=derivation.architecture_id)
+    applied = capability
+    if derivation.cap_bits_per_second is not None:
+        applied = min(capability, derivation.cap_bits_per_second)
+    return applied, capability
+
+
 def run_experiment(
     config_path: str | Path,
     *,
@@ -139,6 +177,10 @@ def run_experiment(
         resolve_architecture_spec(spec, project_root=root)
         for spec in architecture_specs
     )
+    (matched_bandwidth_bits_per_s,
+     matched_bandwidth_capability_bits_per_s) = (
+        _resolve_matched_bandwidth_bits_per_second(
+            experiment.scenario, resolved_architectures))
 
     capacities = []
     performances = []
@@ -161,7 +203,7 @@ def run_experiment(
             capacity,
             batch_size=workload_spec.decode.batch_size,
             matched_payload_bandwidth_bits_per_second=(
-                experiment.scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bandwidth_bits_per_s),
             effective_compute_flops_per_second=(
                 experiment.scenario.effective_compute_flops_per_second),
             bandwidth_status=experiment.scenario.bandwidth_status,
@@ -172,12 +214,17 @@ def run_experiment(
         for rho in experiment.scenario.rho_values:
             energy = evaluate_architecture_decode_memory_energy(
                 workload, capacity, system, rho=rho)
+            gpu_energy = (
+                evaluate_gpu_decode_energy(
+                    performance, energy, platform.gpu_decode_power)
+                if platform.gpu_decode_power is not None else None)
             power = evaluate_llm_decode_workload_power(
                 energy,
                 performance,
                 system,
                 unresolved_logic_background_policy=policies[
                     resolved.spec.architecture_id],
+                gpu_decode_energy=gpu_energy,
             )
             mapping = map_workload_power_to_thermal(
                 resolved.case, system, power)
@@ -197,9 +244,8 @@ def run_experiment(
             powers.append(power)
             thermals.append(thermal)
             rows.append(row)
-            if platform.gpu_decode_power is not None:
-                gpu_energies.append(evaluate_gpu_decode_energy(
-                    performance, energy, platform.gpu_decode_power))
+            if gpu_energy is not None:
+                gpu_energies.append(gpu_energy)
 
     validated_rows = validate_conditional_llm_decode_e2e_rows(
         rows,
@@ -224,6 +270,7 @@ def run_experiment(
                 sensitivity.interface_energy_pj_per_bit),
             logic_background_values_W=sensitivity.logic_background_w,
             thermal_runner=run_llm_decode_workload_thermal,
+            gpu_decode_power=platform.gpu_decode_power,
         )
 
     input_paths = {
@@ -256,13 +303,23 @@ def run_experiment(
         execution_finished_utc=datetime.now(timezone.utc).isoformat(),
         environment={
             "thermal_backend": thermals[0].thermal_backend,
+            "matched_bandwidth_bits_per_second": matched_bandwidth_bits_per_s,
+            "matched_bandwidth_capability_bits_per_second": (
+                matched_bandwidth_capability_bits_per_s),
+            "matched_bandwidth_resolution": (
+                "DERIVED_FROM_ORTHOGONAL_SLAB_IO"
+                if experiment.scenario.matched_bandwidth_derivation is not None
+                else "LITERAL"),
             "bandwidth_capability_status": "NOT_VALIDATED",
             "write_energy_model_status": "NOT_VALIDATED",
-            "gpu_energy_model_status": "NOT_AVAILABLE",
+            "gpu_energy_model_status": (
+                "ANALYTICAL_AFFINE_UTILIZATION_MODEL"
+                if gpu_energies else "NOT_AVAILABLE"),
             "system_j_token_status": "NOT_AVAILABLE",
             **({
                 "gpu_decode_energy_stage_status": (
                     "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY"),
+                "gpu_thermal_power_status": "SHARED_WITH_GPU_DECODE_ENERGY",
             } if gpu_energies else {}),
         },
     )

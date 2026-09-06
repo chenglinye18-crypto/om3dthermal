@@ -650,6 +650,10 @@ class OrthogonalHBMStructureConfig(BaseModel):
     top: StackPlacement
     adhesive: OrthogonalAdhesiveConfig
     memory_die: OrthogonalMemoryDieConfig
+    # Rev v2 dual-arm ablation: optional material for the y-edge strips
+    # between the cube and the GPU die (None keeps the legacy behaviour
+    # where the cube spans the full GPU footprint and no strips exist).
+    edge_strip_material: str | None = None
 
     @field_validator("cube_height")
     @classmethod
@@ -945,6 +949,8 @@ class SimulationConfig(BaseModel):
             orthogonal = self.orthogonal_hbm
             referenced_materials.add(orthogonal.background_material)
             referenced_materials.add(orthogonal.adhesive.material)
+            if orthogonal.edge_strip_material is not None:
+                referenced_materials.add(orthogonal.edge_strip_material)
             referenced_materials.update(
                 layer.material for layer in orthogonal.memory_die.layers)
         missing_materials = sorted(referenced_materials - self.materials.keys())
@@ -1566,6 +1572,7 @@ def _build_legacy_orthogonal_hbm(geometry: dict) -> dict:
         "cube_footprint": "mosaic_cube",
         "cube_height": cube_size[2],
         "background_material": block.get("background_material", "Mold"),
+        "edge_strip_material": block.get("edge_strip_material"),
         "foundation": {"footprint": "package", "stack": "foundation"},
         "gpu": {"footprint": "gpu", "stack": "gpu"},
         "top": {"footprint": "mosaic_cube", "stack": "top"},

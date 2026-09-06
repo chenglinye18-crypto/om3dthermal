@@ -14,6 +14,14 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# Rev v2 (2026-09-06): canonical cases are anchored to the H200-class
+# platform's affine u = 1 operating point instead of the legacy 300 W
+# nominal: 74 W measured idle floor + 5.10 pJ/bit x 4.8e12 B/s x 8
+# = 269.84 W.  See docs/research/platform_revision_v2_spec_2026-09-06.md
+# and configs/platform/gpu_package_h200_reference.yaml.
+CANONICAL_GPU_POWER_W = 269.84
+
+
 class BinaryProbability(StrictModel):
     p0: float = Field(ge=0.0, le=1.0)
     p1: float = Field(ge=0.0, le=1.0)
@@ -672,6 +680,22 @@ class CaseOrthogonalGeometryInput(StrictModel):
     slab_pitch_x_um: float = Field(gt=0.0)
     slab_plane: Literal["y-z"]
     thickness_direction: Literal["global_x"]
+    io_channels_per_slab: int | None = Field(default=None, gt=0)
+    io_channel_rate_gbps: float | None = Field(default=None, gt=0.0)
+    io_provenance: Literal["MODELING_CHOICE"] | None = None
+
+    @model_validator(mode="after")
+    def io_fields_grouped(self) -> "CaseOrthogonalGeometryInput":
+        present = (
+            self.io_channels_per_slab is not None,
+            self.io_channel_rate_gbps is not None,
+            self.io_provenance is not None,
+        )
+        if any(present) and not all(present):
+            raise ValueError(
+                "orthogonal slab IO requires io_channels_per_slab, "
+                "io_channel_rate_gbps and io_provenance together")
+        return self
 
 
 class CaseOrthogonalSiStackGeometryInput(StrictModel):
@@ -766,8 +790,19 @@ class CanonicalCaseConfig(MemoryPowerConfig):
             raise ValueError("architecture and canonical geometry type disagree")
         if self.power.gpu is None or self.power.memory is None:
             raise ValueError("canonical case requires GPU and memory power modes")
-        if self.power.gpu.power_W != 300.0:
-            raise ValueError("active canonical research cases require GPU=300 W")
+        # The GPU-power guard applies to runnable research cases only.
+        # Legacy unresolved cases (e.g. configs/legacy/unvalidated/) are
+        # historical references that cannot enter thermal/E2E anyway; for
+        # runnable cases the experiment runner additionally enforces
+        # case GPU power == platform.fixed_gpu_power_W.
+        if (self.power.memory.model != "unresolved"
+                and not math.isclose(
+                    self.power.gpu.power_W, CANONICAL_GPU_POWER_W,
+                    rel_tol=0.0, abs_tol=1e-9)):
+            raise ValueError(
+                "active canonical research cases require GPU="
+                f"{CANONICAL_GPU_POWER_W} W (H200-anchored affine u=1 "
+                "point, rev v2)")
         if (self.power.memory.model == "analytical"
                 and self.memory.backend != "dreamram"):
             raise ValueError("analytical memory power requires DreamRAM backend")

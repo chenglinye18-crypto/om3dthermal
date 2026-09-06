@@ -21,7 +21,10 @@ from om3dthermal.thermal.case_adapter import (
     extract_temperature_observables,
 )
 
-from .llm_decode_workload_power import LLMDecodeWorkloadPowerMetrics
+from .llm_decode_workload_power import (
+    GPU_WORKLOAD_POWER_STATUS,
+    LLMDecodeWorkloadPowerMetrics,
+)
 
 
 # Backward-compatible public name retained for existing tests/callers while
@@ -159,7 +162,7 @@ def map_workload_power_to_thermal(
     if system.memory_result is None:
         raise ValueError("resolved memory decomposition is required")
 
-    gpu = _finite_nonnegative("fixed_gpu_power_W", power.fixed_gpu_power_W)
+    gpu = _finite_nonnegative("gpu_power_W", power.gpu_power_W)
     dynamic = _finite_nonnegative(
         "memory_dynamic_access_power_W", power.memory_dynamic_access_power_W)
     refresh = _finite_nonnegative("refresh_power_W", power.refresh_power_W)
@@ -180,7 +183,10 @@ def map_workload_power_to_thermal(
         new_sources.append(source)
         audit_sources.append(audit)
 
-    add("gpu", gpu, "E5_FIXED_GPU_POWER_REPLACES_EXISTING_SOURCE")
+    add("gpu", gpu, (
+        "E8_WORKLOAD_GPU_POWER_SHARED_WITH_ENERGY_REPLACES_EXISTING_SOURCE"
+        if power.gpu_power_status == GPU_WORKLOAD_POWER_STATUS
+        else "E5_FIXED_GPU_POWER_REPLACES_EXISTING_SOURCE"))
 
     if case.geometry.type == "dreamram_hbm":
         result = system.memory_result

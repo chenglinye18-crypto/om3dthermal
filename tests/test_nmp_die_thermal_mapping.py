@@ -24,12 +24,12 @@ def test_die_identity_is_complete_deterministic_and_unique(frozen_n8):
     first = physical_nmp_die_regions(case)
     second = physical_nmp_die_regions(case)
     assert first == second
-    assert len(first) == len(power_map.die_powers) == 98
-    assert [row.die_id for row in first] == list(range(98))
-    assert [row.geometry_die_index for row in first] == list(range(1, 99))
-    assert len({row.region_id for row in first}) == 98
+    assert len(first) == len(power_map.die_powers) == 106  # rev v2
+    assert [row.die_id for row in first] == list(range(106))  # rev v2
+    assert [row.geometry_die_index for row in first] == list(range(1, 107))  # rev v2
+    assert len({row.region_id for row in first}) == 106  # rev v2
     assert first[0].region_id == "orthogonal_hbm:die_001"
-    assert first[-1].region_id == "orthogonal_hbm:die_098"
+    assert first[-1].region_id == "orthogonal_hbm:die_106"  # rev v2
 
 
 def test_each_identity_resolves_one_memory_and_one_feol_box(frozen_n8):
@@ -46,10 +46,10 @@ def test_all_per_die_carriers_and_package_power_close(frozen_n8):
     case, system, power_map, gain, placement = frozen_n8
     config, regions = compile_nmp_die_thermal_config(case, system, power_map)
     sources = config.thermal_power_sources.sources
-    assert len(regions) == 98
-    assert len(sources) == 1 + 3 * 98
-    assert system.gpu_power_W == pytest.approx(300.0)
-    assert sources[0].total_power == pytest.approx(300.0)
+    assert len(regions) == 106  # rev v2
+    assert len(sources) == 1 + 3 * 106  # rev v2
+    assert system.gpu_power_W == pytest.approx(269.84)  # rev v2 H200-anchored
+    assert sources[0].total_power == pytest.approx(269.84)  # rev v2
     assert sum(x.thermal_memory_carrier_W for x in power_map.die_powers) == pytest.approx(
         power_map.aggregate_memory_read_dynamic_W
         + power_map.aggregate_memory_write_dynamic_W + power_map.aggregate_refresh_W)
@@ -60,7 +60,7 @@ def test_all_per_die_carriers_and_package_power_close(frozen_n8):
     assert sum(source.total_power for source in sources[1:]) == pytest.approx(
         power_map.aggregate_total_W)
     assert sum(source.total_power for source in sources) == pytest.approx(
-        300.0 + power_map.aggregate_total_W)
+        269.84 + power_map.aggregate_total_W)  # rev v2 GPU power
     assert power_map.aggregate_refresh_W == pytest.approx(power_map.refresh_total_W)
     assert all(row.nmp_logic_overhead_factor == 1.0 for row in power_map.die_powers)
     assert gain == pytest.approx(3.950, rel=2e-3)
@@ -74,7 +74,7 @@ def test_residual_external_mapping_is_explicit_coarse_feol(frozen_n8):
     config, _ = compile_nmp_die_thermal_config(case, system, power_map)
     external = [source for source in config.thermal_power_sources.sources
                 if source.metadata.get("component_class") == "residual_external"]
-    assert len(external) == 98
+    assert len(external) == 106  # rev v2
     assert all(source.selector.tags == {"role": "feol"} for source in external)
     assert all(source.metadata["mapping_provenance"]
                == "RESIDUAL_EXTERNAL_THERMAL_MAPPING_APPROXIMATION"
@@ -112,10 +112,10 @@ def test_baseline_observables_are_finite_and_have_valid_maxima(frozen_n8):
     result = analyze_nmp_die_thermal_pipeline(
         requests=8, power_map=power_map, regions=regions, pipeline=pipeline,
         solver_backend="gpu_pcg")
-    assert len(result.dies) == 98
+    assert len(result.dies) == 106  # rev v2
     assert all(math.isfinite(row.die_temperature_degC) for row in result.dies)
     assert result.global_Tmax_degC >= 20.0
-    assert result.hottest_m3d_die_id == 97
-    assert 0 <= result.max_power_die_id < 98
+    assert result.hottest_m3d_die_id == 105  # rev v2: last of 106 dies
+    assert 0 <= result.max_power_die_id < 106  # rev v2
     assert math.isfinite(result.power_temperature_correlation)
     assert result.thermal_power_mapping_closure == "PASS"

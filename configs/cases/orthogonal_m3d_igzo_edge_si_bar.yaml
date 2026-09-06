@@ -1,0 +1,295 @@
+name: orthogonal_m3d_igzo_edge_si_bar
+
+geometry:
+  type: orthogonal_m3d
+  orthogonal:
+    slab_count: 106
+    cube_length_x_mm: 31.8
+    slab_plane_y_mm: 22.0
+    slab_height_z_mm: 5.5
+    slab_pitch_x_um: 300.0
+    slab_plane: y-z
+    thickness_direction: global_x
+    io_channels_per_slab: 50
+    io_channel_rate_gbps: 8.0
+    io_provenance: MODELING_CHOICE
+  m3d_stack:
+    si_substrate_um: 292.546
+    feol_um: 0.150
+    bitcell_layers: 8
+    bitcell_layer_pitch_nm: 288.0
+    beol_interconnect_um: 3.0
+    daa_um: 2.0
+    cell_area_um2: 0.023
+
+memory:
+  technology: igzo_2t0c
+  backend: dreamram
+  dreamram:
+    memory_config: third_party/DreamRAM/configs/mem/baseline/hbm3_baseline.json
+    technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
+  cell_model:
+    type: operation_table
+    source: IEDM2026_HaotongZhu_V5
+    replacement:
+      mapping_status: validated
+      components: []
+      energy_source: operation_table
+      component_energy_pj_per_bit: {}
+    operations:
+      read_0_pj_per_bit: 0.00060
+      read_1_pj_per_bit: 0.36800
+      write_00_pj_per_bit: 0.00030
+      write_01_pj_per_bit: 0.00037
+      write_10_pj_per_bit: 0.00058
+      write_11_pj_per_bit: 0.00024
+      refresh_0_pj_per_bit: 0.00090
+      refresh_1_pj_per_bit: 0.37000
+    size_scaling:
+      model: common_rc_linear_nrow
+      reference_n_rows: 512
+      reference_n_cols: 512
+      provenance: MODELING_CHOICE
+    operation_energy_provenance:
+      source: IEDM2026_HaotongZhu_V5
+      classification: PAPER_REPORTED
+      accounting_level: SPICE_EXTRACTED_MAT_LOCAL_OPERATION_ENERGY
+      sensing_included: true
+      distributed_rc_included: true
+      accounting_note: >-
+        Full-row SPICE includes distributed WWL/WBL/RWL/RBL RC and sensing.
+    background: {type: per_row, value_w: 4.26e-15}
+    retention_s: null
+
+architecture:
+  m3d_subarray:
+    type: tang_embedded_subarray
+    subarray: {n_rows: 512, n_cols: 512}
+    subarray_cluster:
+      subarrays_x: 8
+      subarrays_y: 8
+      grid: {nx: auto, ny: auto}
+      provenance: MODELING_CHOICE
+    spacing:
+      subarray_gap_x_f: 2.0
+      subarray_gap_y_f: 2.0
+      cluster_gap_x_f: 2.0
+      cluster_gap_y_f: 2.0
+      provenance: MODELING_CHOICE
+    global_peripheral:
+      row_selection_band_f: 4.0
+      column_write_selection_band_f: 2.0
+      row_selection_band_axis: x
+      column_write_selection_band_axis: y
+      provenance: MODELING_CHOICE
+    local_mux: {footprint_height_f: 4.0, provenance: MODELING_CHOICE}
+    interconnect:
+      global_rwl: &global_line
+        metal_width_nm: 100.0
+        metal_thickness_nm: 100.0
+        capacitance_fF_per_um: 0.30
+        resistance_ohm_per_um: 0.10
+        voltage_V: 1.0
+        activity_factor: 0.5
+        active_line_count: 1
+        provenance: MODELING_CHOICE
+      global_wwl:
+        <<: *global_line
+        activity_factor: 0.0
+      global_wbl:
+        <<: *global_line
+        activity_factor: 0.0
+    access:
+      accessed_subarrays_per_access: 256
+      accessed_clusters_per_access: 4
+      selected_bits_per_subarray: 1
+      provenance: MODELING_CHOICE
+    topology_provenance: MODELING_CHOICE
+  feol_route:
+    type: nearest_edge_io
+    edge: y_min
+    io_channels: 50
+    io_channel_distribution: uniform_centered_bins
+    wire:
+      capacitance_fF_per_um: 0.20
+      voltage_V: 0.80
+      activity_factor: 0.50
+      provenance: MODELING_CHOICE
+      resistance_ohm_per_um: 2.0
+      fixed_driver_resistance_ohm: 100.0
+      fixed_load_pF: 0.006
+      resistance_provenance:
+        classification: MODELING_CHOICE
+        status: CONDITIONAL_MODELING_CHOICE
+        source_note: >-
+          2 ohm/um is the current nominal effective distributed FEOL
+          interconnect resistance for architecture-level latency modeling. It
+          is not a measured FEOL value and is not derived from explicit metal
+          geometry.
+      driver_resistance_provenance:
+        classification: MODELING_CHOICE
+        status: CONDITIONAL_MODELING_CHOICE
+        source_note: fixed endpoint effective resistance placeholder
+      load_capacitance_provenance:
+        classification: MODELING_CHOICE_PLACEHOLDER
+        status: CONDITIONAL_MODELING_CHOICE
+        source_note: independent FEOL endpoint load placeholder; not measured
+    access_assumption: UNIFORM_CLUSTER_ACCESS
+    topology_provenance: MODELING_CHOICE
+    io_channel_count_source: EXISTING_INDUCTIVE_INTERFACE_REFERENCE
+  vertical:
+    type: miv
+    source: miv_topology
+    electrical_model: dreamram_length_scaled_reference
+    fixed_load_pF: 0.006
+    fixed_load_provenance: MODELING_CHOICE
+    miv_load_resistance_ohm: 100.0
+    miv_resistance_ohm_per_um: 10.0
+    miv_resistance_provenance:
+      classification: MODELING_CHOICE
+      status: CONDITIONAL_MODELING_CHOICE
+      note: >-
+        10 ohm/um is selected as the nominal effective distributed MIV
+        resistance for the current analytical latency model. It is not a
+        measured MIV value and is not derived from an explicitly modeled MIV
+        cross section.
+  base_route: {enabled: false, source: none}
+  interface:
+    type: contactless
+    source: constant
+    energy_pj_per_bit: 0.5
+    energy_status: PAPER_REPORTED_INDUCTIVE_LINK_ENERGY
+    included_components: [inductive_coupling_interface_aggregate]
+    excluded_components: []
+    unconfirmed_components: [clock, serialization_deserialization, driver_control]
+    source_boundary: >-
+      0.5 pJ/bit is the link energy reported for a 7-nm FinFET
+      encoding-less inductive-coupling interface at 12.8 Gb/s
+      (K. Shiba et al., IEEE SSC-L, vol. 6, pp. 65-68, 2023,
+      DOI: 10.1109/LSSC.2023.3252607), the same value adopted by
+      Mitarai et al. (MOSAIC, IEEE Symp. VLSI Circuits 2026) as the
+      I/O energy of a contactless die-to-die interface at 8 Gb/s.
+      The TX/RX/coil link path is covered by the measurement;
+      whether clock distribution and SerDes are included is not
+      established by repository evidence, so clock and
+      serialization remain unconfirmed components and the value is
+      still swept in sensitivity analyses.
+  physical_access_latency:
+    mat_latency_ns: 10.0
+    mat_classification: MODELING_CHOICE_PLACEHOLDER
+    mat_status: NOT_CAPABILITY_VALIDATED
+    mat_note: Fixed MAT read-latency placeholder; no layer/position dependence.
+    interface_latency_ns: 0.0
+    interface_classification: MODELING_PLACEHOLDER
+    interface_status: NOT_YET_CALIBRATED
+    interface_included_in_total: true
+    interface_note: >-
+      0 ns means no additional calibrated interface latency is currently
+      available. It is not a claim that the physical interface has zero
+      latency.
+  memory_service:
+    model: HIERARCHICAL_BANDWIDTH_MODEL
+    die_count_source: GEOMETRY_MEMORY_REGION_COUNT
+    coil:
+      links_per_die: 50
+      data_rate_gbps_per_link: 8.0
+      classification: DERIVED_FROM_ARCHITECTURE
+      parameter_classification: MODELING_CHOICE
+      link_count_source: ARCHITECTURE_CONTACTLESS_LINK_COUNT
+    internal:
+      model: FIRST_ORDER_PARALLEL_MEMORY_SERVICE_MODEL
+      service_unit: FEOL_IO_CHANNEL_ALIGNED_CLUSTER_ACCESS_GROUP
+      parallel_units_per_slab_source: FEOL_IO_CHANNEL_COUNT
+      parallel_slabs_source: GEOMETRY_MEMORY_REGION_COUNT
+      clusters_per_service_source: M3D_ACCESSED_CLUSTERS_PER_ACCESS
+      read_payload_source: M3D_DELIVERED_BITS_PER_ACCESS
+      service_cycle_source: FIRST_ORDER_SERVICE_CYCLE_APPROXIMATION
+      service_cycle_scale: 1.0
+      classification: MODELING_CHOICE
+    gpu_internal:
+      bandwidth_bytes_per_s: null
+      status: GPU_INTERNAL_BW_NOT_MODELED_AS_BINDING
+  logic_background_w: null
+
+workload:
+  read_bandwidth_gbps: 39200
+  write_bandwidth_gbps: 0
+  read_data: {p0: 0.5, p1: 0.5}
+  refresh_data: {p0: 0.5, p1: 0.5}
+  control_address_reuse: 64
+
+power:
+  gpu: {model: fixed, power_W: 269.84}
+  memory: {model: analytical, status: CONDITIONAL_ASSUMPTION}
+  refresh:
+    enabled: true
+    model: operation_table_retention
+    retention_reference_s: 20.0
+    retention_reference_source: TANG_IEDM2023_IGZO_2T0C
+    retention_reference_provenance: PAPER_REPORTED
+    refresh_safety_factor: 1.0
+    refresh_interval_provenance: MODELING_CHOICE
+  background: {enabled: false}
+
+thermal:
+  geometry_source: canonical_case_geometry
+  package_size_mm: [65.0, 65.0]
+  gpu_footprint_mm: [32.0, 24.0]
+  # Rev v2 B-arm (ablation control): identical to the A-arm main case
+  # (orthogonal_m3d_igzo.yaml) except the 1 mm y-edge strips between the
+  # 22 mm cube and the 24 mm GPU die are Thermal_Silicon bars instead of
+  # mold resin.  The A/B Tmax difference isolates the Si-bar conduction
+  # contribution from the orthogonal-structure contribution.
+  edge_strip_material: Thermal_Silicon
+  source_mapping:
+    gpu: GPU_FEOL
+    memory_internal_miv_interface: M3D_BITCELL_BEOL_STACK
+    feol_route: M3D_BITCELL_BEOL_STACK
+    approximation: MODELING_CHOICE_HOMOGENIZED_EQUAL_K_BITCELL_BEOL
+  materials:
+    Lid: 400.0
+    TIM: 9.71
+    M3D_Si: 140.0
+    M3D_FEOL: 7.9
+    M3D_Bitcell: 0.85
+    M3D_BEOL: 0.85
+    M3D_Bitcell_BEOL: 0.85
+    M3D_DAA: 0.2
+    Adhesive: 0.2
+    BEOL_MXY: 1.5
+    FEOL: 7.9
+    Thermal_Silicon: 140.0
+    BSPDN: [83.0, 83.0, 71.0]
+    Cu_Pillar_Bump: [0.54, 0.54, 13.25]
+    Laminate: 13.0
+    Mold: 3.0
+  common_stack:
+    foundation_um: 300.0
+    gpu: {cu_pillar_um: 70.0, bspdn_um: 1.715, feol_um: 0.15, beol_um: 1.4}
+    tim_um: 200.0
+    lid_um: 3000.0
+  adhesive: {thickness_um: 1.0}
+  solve_status: NOT_RUN_BY_CONFIG_UNIFICATION
+  mesh: {dx_mm: 0.5, dy_mm: 0.5, dz_max_um: 100.0}
+  boundary:
+    ambient_degC: 20.0
+    lid_top_htc_W_m2K: 30000.0
+    laminate_bottom_htc_W_m2K: 200.0
+  solver: {alpha: 0.7, rtol: 1.0e-6}
+
+provenance:
+  platform_revision: REV_V2_H200_ANCHORED_2026_09_06
+  gpu_power_provenance: H200_ANCHORED_AFFINE_U1_POINT_74W_PLUS_5P10_PJBIT_X_4P8TBS
+  geometry:
+    cell_area_um2: PAPER_REPORTED
+    bitcell_layer_pitch_nm: DERIVED_FROM_PAPER_FIGURE
+    bitcell_layers: PAPER_SUPPORTED_MODELING_CHOICE
+    slab_and_pitch: INHERITED_ORTHOGONAL_MOSAIC_MODEL
+    slab_thickness_closure: DERIVED_FROM_GEOMETRY_CLOSURE
+  architecture:
+    subarray_cluster: MODELING_CHOICE
+    miv_electrical_model: DREAMRAM_TSV_LENGTH_SCALED_REFERENCE
+    feol_route: MODELING_CHOICE
+    coil_bandwidth: DERIVED_FROM_ARCHITECTURE
+    internal_bandwidth: DERIVED_FROM_PHYSICAL_LATENCY_AND_PARALLELISM_MODEL
+  bandwidth_status: LEGACY_MATCHED_REFERENCE_RETAINED_FOR_COMPARISON

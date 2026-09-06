@@ -38,8 +38,78 @@ class M3DParameterSensitivitySpec(_StrictFrozenModel):
         return result
 
 
+class MatchedBandwidthDerivationSpec(_StrictFrozenModel):
+    """Derive the matched payload bandwidth from orthogonal slab IO.
+
+    bandwidth = slab_count x io_channels_per_slab x io_channel_rate_gbps,
+    read from the referenced architecture's canonical case geometry.
+    An optional cap pins the applied scenario bandwidth below the derived
+    capability; the difference is design margin (ideal-vs-real headroom,
+    e.g. GPU-side interface limits) and is recorded in run provenance.
+    """
+
+    derivation: Literal["ORTHOGONAL_SLAB_IO"]
+    architecture_id: str = Field(min_length=1)
+    cap_bits_per_second: float | None = Field(default=None, gt=0.0)
+
+
+def derive_orthogonal_slab_io_bandwidth_bits_per_second(
+    orthogonal,
+    *,
+    architecture_id: str = "unknown",
+) -> float:
+    """bandwidth = slab_count x channels_per_slab x channel_rate [bit/s].
+
+    ``orthogonal`` is the canonical case orthogonal-geometry input carrying
+    the slab IO fields; any object with the same attributes works.
+    """
+
+    if (
+        orthogonal is None
+        or orthogonal.io_channels_per_slab is None
+        or orthogonal.io_channel_rate_gbps is None
+    ):
+        raise ValueError(
+            "matched bandwidth derivation requires slab IO fields "
+            "(io_channels_per_slab, io_channel_rate_gbps) in the "
+            f"canonical case geometry of {architecture_id!r}")
+    return (
+        orthogonal.slab_count
+        * orthogonal.io_channels_per_slab
+        * orthogonal.io_channel_rate_gbps
+        * 1e9)
+
+
+def resolve_scenario_matched_bandwidth_bits_per_second(
+    scenario,
+    orthogonal,
+) -> float:
+    """Resolve the applied matched payload bandwidth for a scenario.
+
+    Literal scenarios return the literal; derived scenarios compute the
+    orthogonal slab-IO capability from ``orthogonal`` (the referenced
+    architecture's canonical case geometry) and apply the optional cap.
+    Shared by the formal runner support scripts so a slab-count or cap
+    change does not require manual script edits.
+    """
+
+    derivation = scenario.matched_bandwidth_derivation
+    if derivation is None:
+        literal = scenario.matched_payload_bandwidth_bits_per_second
+        assert literal is not None  # guaranteed by scenario validation
+        return float(literal)
+    capability = derive_orthogonal_slab_io_bandwidth_bits_per_second(
+        orthogonal, architecture_id=derivation.architecture_id)
+    applied = capability
+    if derivation.cap_bits_per_second is not None:
+        applied = min(capability, derivation.cap_bits_per_second)
+    return applied
+
+
 class ExperimentScenarioSpec(_StrictFrozenModel):
-    matched_payload_bandwidth_bits_per_second: float = Field(gt=0.0)
+    matched_payload_bandwidth_bits_per_second: float | None = Field(
+        default=None, gt=0.0)
+    matched_bandwidth_derivation: MatchedBandwidthDerivationSpec | None = None
     bandwidth_status: Literal[
         "MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED"
     ]
@@ -51,6 +121,17 @@ class ExperimentScenarioSpec(_StrictFrozenModel):
         str, Literal["REQUIRE_RESOLVED", "EXISTING_PLACEHOLDER_ZERO"]
     ]
     m3d_parameter_sensitivity: M3DParameterSensitivitySpec | None = None
+
+    @model_validator(mode="after")
+    def _bandwidth_exactly_one_source(self) -> "ExperimentScenarioSpec":
+        has_literal = self.matched_payload_bandwidth_bits_per_second is not None
+        has_derivation = self.matched_bandwidth_derivation is not None
+        if has_literal == has_derivation:
+            raise ValueError(
+                "matched bandwidth requires exactly one of "
+                "matched_payload_bandwidth_bits_per_second or "
+                "matched_bandwidth_derivation")
+        return self
 
     @field_validator("rho_values")
     @classmethod

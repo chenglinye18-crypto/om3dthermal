@@ -11,12 +11,14 @@ from om3dthermal.evaluator import (
     LLMDecodePerformanceMetrics,
     LLMDecodeWorkloadThermalMetrics,
     evaluate_architecture_decode_memory_energy,
+    evaluate_gpu_decode_energy,
     evaluate_llm_decode_workload_power,
     map_workload_power_to_thermal,
     run_llm_decode_workload_thermal,
 )
 from om3dthermal.power.config import CanonicalCaseConfig
 from om3dthermal.power.system import ResolvedSystemPower
+from om3dthermal.platform import AffineGPUDecodePowerSpec
 from om3dthermal.workload import LLMDecodeMetrics
 
 
@@ -62,6 +64,7 @@ def run_m3d_parameter_sensitivity(
     interface_energy_values_pj_per_bit: Sequence[float],
     logic_background_values_W: Sequence[float],
     thermal_runner: Callable = run_llm_decode_workload_thermal,
+    gpu_decode_power: AffineGPUDecodePowerSpec | None = None,
 ) -> M3DParameterSensitivityResult:
     """Run interface-only energy and logic-only power/thermal sensitivities."""
     if case.geometry.type != "orthogonal_m3d":
@@ -91,6 +94,9 @@ def run_m3d_parameter_sensitivity(
 
     nominal_energy = evaluate_architecture_decode_memory_energy(
         workload, capacity, system, rho=1.0)
+    gpu_energy = (
+        evaluate_gpu_decode_energy(performance, nominal_energy, gpu_decode_power)
+        if gpu_decode_power is not None else None)
     logic_rows = []
     for value in logic_background_values_W:
         power = evaluate_llm_decode_workload_power(
@@ -99,6 +105,7 @@ def run_m3d_parameter_sensitivity(
             system,
             unresolved_logic_background_policy=SENSITIVITY_STATUS,
             logic_background_sensitivity_W=value,
+            gpu_decode_energy=gpu_energy,
         )
         mapping = map_workload_power_to_thermal(case, system, power)
         thermal = thermal_runner(mapping)

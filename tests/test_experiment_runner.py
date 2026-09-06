@@ -1,11 +1,17 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 import om3dthermal.experiment.runner as runner_module
 from om3dthermal.evaluator import LLMDecodeWorkloadThermalMetrics
-from om3dthermal.experiment import RESULT_FILES, run_experiment
+from om3dthermal.experiment import (
+    RESULT_FILES,
+    MatchedBandwidthDerivationSpec,
+    run_experiment,
+)
+from om3dthermal.power import load_case_config
 
 
 ROOT = Path(__file__).parents[1]
@@ -107,7 +113,7 @@ def test_result_bundle_preserves_conditional_claim_boundaries(formal_run) -> Non
 
 
 def test_formal_runner_evaluates_gpu_decode_energy_stage(formal_run) -> None:
-    """The E8 affine GPU energy stage runs alongside the frozen E7 rows."""
+    """E8 supplies the GPU power used by E5, E6 and the E7 rows."""
     gpu_rows = formal_run.gpu_decode_energy
     assert gpu_rows is not None
     assert len(gpu_rows) == len(formal_run.rows) == 12
@@ -115,14 +121,16 @@ def test_formal_runner_evaluates_gpu_decode_energy_stage(formal_run) -> None:
     for gpu in gpu_rows:
         assert gpu.evaluation_status == (
             "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY")
-        # Matched-bandwidth scenario is memory-bound, so u == 1 and the
-        # affine power reproduces the fixed 300 W baseline exactly.
+        # Matched-bandwidth scenario is memory-bound; the 4.9 TB/s payload
+        # slightly exceeds the H200 4.8 TB/s peak, so u clamps to 1 and the
+        # affine power reproduces the fixed 269.84 W baseline exactly.
         assert gpu.memory_bandwidth_utilization == pytest.approx(1.0)
-        assert gpu.utilization_clamped is False
-        assert gpu.gpu_decode_power_W == pytest.approx(300.0)
+        assert gpu.utilization_clamped is True
+        assert gpu.gpu_decode_power_W == pytest.approx(269.84)
         assert gpu.gpu_energy_j_per_token == pytest.approx(
-            300.0 * gpu.token_time_s)
+            269.84 * gpu.token_time_s)
         row = e7[(gpu.architecture, gpu.rho)]
+        assert row.gpu_power_W == gpu.gpu_decode_power_W
         assert gpu.system_energy_j_per_token == pytest.approx(
             gpu.gpu_energy_j_per_token
             + row.memory_dynamic_energy_j_per_token)
@@ -135,6 +143,92 @@ def test_formal_runner_evaluates_gpu_decode_energy_stage(formal_run) -> None:
         (output / "provenance.json").read_text(encoding="utf-8"))
     assert provenance["environment"]["gpu_decode_energy_stage_status"] == (
         "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY")
+
+
+@pytest.mark.parametrize("bandwidth_scale", [1.0, 0.5])
+@pytest.mark.parametrize("batch_size", [1, 2])
+def test_runner_shares_gpu_operating_point_in_energy_power_and_thermal(
+        tmp_path, monkeypatch, bandwidth_scale, batch_size):
+    original_experiment = runner_module.load_experiment_spec
+    original_workload = runner_module.load_workload_spec
+
+    def experiment(*args, **kwargs):
+        spec = original_experiment(*args, **kwargs)
+        return spec.model_copy(update={"scenario": spec.scenario.model_copy(update={
+            "matched_payload_bandwidth_bits_per_second": 39.2e12 * bandwidth_scale,
+            "matched_bandwidth_derivation": None})})
+
+    def workload(*args, **kwargs):
+        spec = original_workload(*args, **kwargs)
+        return spec.model_copy(update={"decode": spec.decode.model_copy(update={
+            "batch_size": batch_size})})
+
+    monkeypatch.setattr(runner_module, "load_experiment_spec", experiment)
+    monkeypatch.setattr(runner_module, "load_workload_spec", workload)
+    monkeypatch.setattr(runner_module, "run_llm_decode_workload_thermal", _fake_thermal)
+    result = run_experiment(CONFIG, project_root=ROOT,
+                            output_dir_override=tmp_path / "shared_gpu")
+    power_rows = json.loads((result.output_dir / "power.json").read_text())
+    thermal_rows = json.loads((result.output_dir / "thermal.json").read_text())
+    utilization = min(1.0, (4.9 / 4.8) * bandwidth_scale)
+    expected_gpu = 74.0 + 195.84 * utilization
+    for row, gpu, power, thermal in zip(
+            result.rows, result.gpu_decode_energy, power_rows, thermal_rows):
+        assert row.gpu_power_W == pytest.approx(expected_gpu)
+        assert power["fixed_gpu_power_W"] == 269.84  # reference, not an added source
+        assert power["gpu_power_W"] == gpu.gpu_decode_power_W == row.gpu_power_W
+        assert thermal["source_power_breakdown_W"]["gpu"] == row.gpu_power_W
+        assert gpu.gpu_energy_j_per_token * row.aggregate_tokens_per_second == (
+            pytest.approx(row.gpu_power_W))
+        assert row.package_power_W == pytest.approx(
+            row.gpu_power_W + row.memory_total_power_W)
+        # E8's energy scope excludes memory static power; account for it once.
+        static_memory = (power["refresh_power_W"] + power["memory_background_power_W"]
+                         + power["logic_background_effective_W"])
+        assert row.package_power_W == pytest.approx(
+            gpu.system_energy_j_per_token * row.aggregate_tokens_per_second
+            + static_memory)
+        assert thermal["mapped_package_power_W"] == pytest.approx(row.package_power_W)
+
+
+def test_runner_without_gpu_model_retains_explicit_fixed_reference(monkeypatch):
+    original = runner_module.load_platform_spec
+
+    def platform(*args, **kwargs):
+        return original(*args, **kwargs).model_copy(update={"gpu_decode_power": None})
+
+    monkeypatch.setattr(runner_module, "load_platform_spec", platform)
+    monkeypatch.setattr(runner_module, "run_llm_decode_workload_thermal", _fake_thermal)
+    result = run_experiment(CONFIG, project_root=ROOT, write_bundle=False)
+    assert result.gpu_decode_energy is None
+    assert all(row.gpu_power_W == 269.84 for row in result.rows)
+    assert all(row.gpu_energy_model_status == "NOT_AVAILABLE" for row in result.rows)
+
+
+def test_m3d_sensitivity_uses_same_reduced_gpu_power_as_main_rows(monkeypatch):
+    original = runner_module.load_experiment_spec
+    mappings = []
+
+    def experiment(*args, **kwargs):
+        spec = original(*args, **kwargs)
+        return spec.model_copy(update={"scenario": spec.scenario.model_copy(update={
+            "matched_payload_bandwidth_bits_per_second": 19.6e12,
+            "matched_bandwidth_derivation": None})})
+
+    def thermal(mapping):
+        mappings.append(mapping)
+        return _fake_thermal(mapping)
+
+    monkeypatch.setattr(runner_module, "load_experiment_spec", experiment)
+    monkeypatch.setattr(runner_module, "run_llm_decode_workload_thermal", thermal)
+    result = run_experiment(AUDIT_CONFIG, project_root=ROOT, write_bundle=False)
+    assert len(mappings) == 5  # nominal plus four logic-background points
+    for mapping in mappings:
+        gpu = next(source for source in mapping.sources if source.name == "gpu")
+        assert gpu.power_W == pytest.approx(173.96)
+        assert "SHARED_WITH_ENERGY" in gpu.mapping_provenance
+    for row in result.m3d_parameter_sensitivity.logic_background_rows:
+        assert row.package_total_power_W - row.memory_total_power_W == pytest.approx(173.96)
 
 
 def test_result_bundle_persists_workload_demand_boundary(formal_run) -> None:
@@ -184,3 +278,48 @@ def test_runner_executes_configured_m3d_parameter_sensitivity(monkeypatch) -> No
             for row in sensitivity.interface_rows] == [0.25, 0.5, 1.0]
     assert [row.logic_background_power_W
             for row in sensitivity.logic_background_rows] == [0.0, 5.0, 10.0, 20.0]
+
+
+def test_runner_records_derived_matched_bandwidth_provenance(formal_run) -> None:
+    environment = formal_run.provenance.environment
+    assert environment["matched_bandwidth_resolution"] == (
+        "DERIVED_FROM_ORTHOGONAL_SLAB_IO")
+    assert environment["matched_bandwidth_bits_per_second"] == (
+        pytest.approx(3.92e13))
+    assert environment["matched_bandwidth_capability_bits_per_second"] == (
+        pytest.approx(4.24e13))
+
+
+def test_capped_derivation_pins_bandwidth_below_derived_capability() -> None:
+    case = load_case_config(ROOT / "configs" / "cases" / "orthogonal_m3d_igzo.yaml")
+    orthogonal_106 = case.geometry.orthogonal.model_copy(
+        update={"slab_count": 106})
+    case_106 = case.model_copy(update={
+        "geometry": case.geometry.model_copy(
+            update={"orthogonal": orthogonal_106})})
+    resolved = SimpleNamespace(
+        spec=SimpleNamespace(architecture_id="orthogonal_m3d_igzo"),
+        case=case_106)
+
+    capped = SimpleNamespace(
+        matched_payload_bandwidth_bits_per_second=None,
+        matched_bandwidth_derivation=MatchedBandwidthDerivationSpec(
+            derivation="ORTHOGONAL_SLAB_IO",
+            architecture_id="orthogonal_m3d_igzo",
+            cap_bits_per_second=3.92e13))
+    applied, capability = (
+        runner_module._resolve_matched_bandwidth_bits_per_second(
+            capped, (resolved,)))
+    assert capability == pytest.approx(106 * 50 * 8.0e9)
+    assert applied == pytest.approx(3.92e13)
+
+    uncapped = SimpleNamespace(
+        matched_payload_bandwidth_bits_per_second=None,
+        matched_bandwidth_derivation=MatchedBandwidthDerivationSpec(
+            derivation="ORTHOGONAL_SLAB_IO",
+            architecture_id="orthogonal_m3d_igzo"))
+    applied, capability = (
+        runner_module._resolve_matched_bandwidth_bits_per_second(
+            uncapped, (resolved,)))
+    assert capability == pytest.approx(4.24e13)
+    assert applied == pytest.approx(4.24e13)

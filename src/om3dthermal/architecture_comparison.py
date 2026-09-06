@@ -124,9 +124,19 @@ def compile_case_thermal(
         repeated_dram_count = dram_die_count - 1
         group_names = ["hbm_left", "hbm_right"]
         centers = layout["group_centers_mm"]
+        # HBM-on-GPU: the memory zone spans the whole GPU die; the thermal
+        # silicon bar fills the inter-group gap.  Both are derived from the
+        # case geometry so footprint revisions stay single-sourced.
+        gpu_fp = [float(v) for v in case.thermal["gpu_footprint_mm"]]
+        group_x = float(layout["visible_group_footprint_mm"][0])
+        si_width = 2.0 * abs(float(centers[0][0])) - group_x
+        if si_width <= 0.0:
+            raise ValueError(
+                "thermal silicon gap does not close: group centers "
+                f"{centers} vs group width {group_x} mm")
         raw["geometry"].update({
-            "memory_zone": {"size": ["30 mm", "22 mm"]},
-            "thermal_silicon": {"size": ["8 mm", "22 mm"]},
+            "memory_zone": {"size": [f"{gpu_fp[0]} mm", f"{gpu_fp[1]} mm"]},
+            "thermal_silicon": {"size": [f"{si_width} mm", f"{gpu_fp[1]} mm"]},
             "hbm": {
                 "size": [f"{layout['visible_group_footprint_mm'][0]} mm",
                          f"{layout['visible_group_footprint_mm'][1]} mm"],
@@ -191,6 +201,12 @@ def compile_case_thermal(
                 "power_per_die": "0 W",
             },
         }
+        # Rev v2 dual-arm ablation: optional 1 mm y-edge strips between the
+        # cube and the GPU die (A arm Mold, B arm Thermal_Silicon).
+        edge_strip_material = case.thermal.get("edge_strip_material")
+        if edge_strip_material is not None:
+            raw["orthogonal_hbm"]["edge_strip_material"] = str(
+                edge_strip_material)
         if case.geometry.type == "orthogonal_si":
             s = case.geometry.orthogonal_si_stack
             assert s is not None

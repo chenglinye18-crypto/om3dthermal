@@ -23,7 +23,7 @@ def test_path_semantics_and_locality(inputs):
     non=evaluate_nmp_locality_case(w,d,l,p,b,case='NON_NMP_GPU',nmp_aggregate_tflops=None,gpu_compute_flops_per_s=g)
     naive=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_NAIVE',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
     local=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
-    assert independent_physical_die_count(l)==98
+    assert independent_physical_die_count(l)==106  # rev v2: 106 slabs
     assert non.placement.long_feol_edge_included and non.traffic.weight_bulk_external_bytes>0 and non.traffic.kv_bulk_external_bytes>0
     assert not naive.placement.long_feol_edge_included and naive.traffic.weight_bulk_external_bytes==0
     assert naive.traffic.direct_die_to_die_bytes==local.traffic.direct_die_to_die_bytes==0
@@ -34,7 +34,7 @@ def test_path_semantics_and_locality(inputs):
 def test_topology_local_groups_are_decoupled_from_coils(inputs):
     l,b,p,w,d,g=inputs
     assert b.local_service_groups_per_die == l.clusters_per_slab // b.clusters_per_service == 70
-    assert b.total_local_service_groups == 98 * 70
+    assert b.total_local_service_groups == 106 * 70  # rev v2
     assert b.read_payload_bytes_per_service == 32
     current=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
     # Altering external-resource metadata and its aggregate link rate cannot
@@ -65,8 +65,12 @@ def test_non_nmp_separates_raw_internal_and_external_pipeline(inputs):
 def test_nmp_local_timing_includes_frozen_one_ns_route(inputs):
     l,b,p,w,d,g=inputs
     result=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
-    assert result.timing.local_memory_ms == pytest.approx(1.66354, abs=0.00002)
-    assert result.timing.nmp_compute_crossover_tflops == pytest.approx(49.700, abs=0.002)
+    # Rev v2: internal service bandwidth scales with 106 slabs
+    # (1.66354 ms x 98/106).
+    assert result.timing.local_memory_ms == pytest.approx(1.5379922403137316, abs=0.00002)
+    # Rev v2: crossover scales with the internal bandwidth (49.700 x
+    # 106/98).
+    assert result.timing.nmp_compute_crossover_tflops == pytest.approx(53.757, abs=0.002)
 
 @pytest.mark.parametrize('batch',[1,8,16])
 def test_flops_scale_and_more_nmp_compute_never_hurts(inputs,batch):

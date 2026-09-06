@@ -32,10 +32,12 @@ def test_formal_serving_path_reads_current_architecture_capacity_and_skips_therm
         "orthogonal_m3d_igzo",
         "modern_high_capacity_hbm",
     }
+    # Rev v2: conventional 116->145 GB and M3D 98->106 slabs raise the
+    # resident-request ceilings (5->7 and 25->28 respectively).
     expected_max = {
-        "conventional_hbm_2x1": 5,
+        "conventional_hbm_2x1": 7,
         "orthogonal_si": 13,
-        "orthogonal_m3d_igzo": 25,
+        "orthogonal_m3d_igzo": 28,
         "modern_high_capacity_hbm": 15,
     }
     for architecture, maximum in expected_max.items():

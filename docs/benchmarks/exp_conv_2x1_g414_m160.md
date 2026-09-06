@@ -1,6 +1,7 @@
 # exp_conv_2x1_g414_m160 and exp_conv_2x1_g300_m160
 
-This layout is derived from the canonical 2x2 HBM case. The left and right
+This is a historical fixed-power geometry fixture, not the current analytical
+DAC baseline (`configs/cases/conventional_hbm_2x1.yaml`). The left and right
 groups remain separated by the central 8 x 22 mm Thermal Silicon column. Within
 each side, the former top and bottom 11 x 11 mm HBM footprints are merged along
 global y into one continuous 11 x 22 mm group.

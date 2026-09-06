@@ -10,6 +10,7 @@ from om3dthermal.experiment import (
     load_experiment_spec,
     load_moe_workload_spec,
     load_workload_spec,
+    resolve_scenario_matched_bandwidth_bits_per_second,
 )
 from om3dthermal.placement import (
     compare_fast_region_placements,
@@ -33,12 +34,14 @@ from om3dthermal.workload import (
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    layout = _physical_layout(root)
+    layout, case = _physical_layout(root)
     experiment = load_experiment_spec(
         root / "configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",
         project_root=root,
     )
     scenario = experiment.scenario
+    matched_bw = resolve_scenario_matched_bandwidth_bits_per_second(
+        scenario, case.geometry.orthogonal)
     mixtral = load_moe_workload_spec(
         root / "configs/workload/mixtral_8x7b_v01_decode_b1_s32768.yaml",
         project_root=root,
@@ -62,7 +65,7 @@ def main() -> int:
             moe_workload,
             layout,
             matched_payload_bandwidth_bits_per_second=(
-                scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bw),
             effective_compute_flops_per_second=(
                 scenario.effective_compute_flops_per_second),
             random_seeds=seeds,
@@ -79,7 +82,7 @@ def main() -> int:
             dense_placement,
             layout,
             matched_payload_bandwidth_bits_per_second=(
-                scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bw),
             effective_compute_flops_per_second=(
                 scenario.effective_compute_flops_per_second),
         )
@@ -99,7 +102,7 @@ def main() -> int:
     output = {
         "scenario": {
             "matched_payload_bandwidth_bits_per_second": (
-                scenario.matched_payload_bandwidth_bits_per_second),
+                matched_bw),
             "bandwidth_status": scenario.bandwidth_status,
             "effective_compute_flops_per_second": (
                 scenario.effective_compute_flops_per_second),
@@ -137,7 +140,7 @@ def _physical_layout(root: Path):
         latency,
         slab_count=geometry.memory_region_count,
         expected_total_bits=power.diagnostics["total_stored_bits"],
-    )
+    ), case
 
 
 if __name__ == "__main__":

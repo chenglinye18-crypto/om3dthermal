@@ -52,18 +52,27 @@ def _frozen_case_inputs(requests: int):
         project_root=ROOT).decode
     workload = base.model_copy(update={"batch_size": requests})
     demand = build_m3d_workload_page_demand(workload, layout)
-    gpu_flops = load_experiment_spec(
+    experiment = load_experiment_spec(
         ROOT / "configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",
-        project_root=ROOT).scenario.effective_compute_flops_per_second
+        project_root=ROOT)
+    gpu_flops = experiment.scenario.effective_compute_flops_per_second
+    # Rev v2 scenario semantics: external boundary bandwidth capped at the
+    # scenario matched bandwidth (39.2 Tb/s).
+    _derivation = experiment.scenario.matched_bandwidth_derivation
+    _cap_bits = (_derivation.cap_bits_per_second
+                 if _derivation is not None else None)
+    cap_bps = (_cap_bits / 8.0) if _cap_bits is not None else None
     baseline = evaluate_nmp_locality_case(
         workload, demand, layout, physical, bandwidth, case="NON_NMP_GPU",
-        nmp_aggregate_tflops=None, gpu_compute_flops_per_s=gpu_flops)
+        nmp_aggregate_tflops=None, gpu_compute_flops_per_s=gpu_flops,
+        external_bandwidth_cap_bytes_per_s=cap_bps)
     hardware = canonical_nmp_hardware(layout.slab_count)
     canonical = evaluate_nmp_locality_case(
         workload, demand, layout, physical, bandwidth,
         case="NMP_LOCALITY_AWARE_PLACEMENT",
         nmp_aggregate_tflops=hardware.aggregate_peak_flops / 1e12,
-        gpu_compute_flops_per_s=gpu_flops)
+        gpu_compute_flops_per_s=gpu_flops,
+        external_bandwidth_cap_bytes_per_s=cap_bps)
     bandwidth_per_die = (
         bandwidth.local_service_groups_per_die * bandwidth.read_payload_bytes_per_service
         / (bandwidth.service_cycle_scale * canonical.placement.local_access_latency_ns * 1e-9))

@@ -144,9 +144,15 @@ def _traffic(case: Case, demand: M3DWorkloadPageDemand, units: tuple[DenseDecode
 
 def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPageDemand,
         layout: PhysicalCapacityLayout, physical: PhysicalAccessLatency, bandwidth: ArchitectureBandwidthClosure, *,
-        case: Case, nmp_aggregate_tflops: float | None, gpu_compute_flops_per_s: float) -> NMPFinalResult:
+        case: Case, nmp_aggregate_tflops: float | None, gpu_compute_flops_per_s: float,
+        external_bandwidth_cap_bytes_per_s: float | None = None) -> NMPFinalResult:
     units=build_dense_decode_placement_units(workload); placement=_placement(case,units,layout,physical); traffic=_traffic(case,demand,units,placement,layout)
+    # Rev v2 scenario semantics: the external boundary bandwidth is the slab
+    # IO capability, optionally capped at the scenario matched bandwidth
+    # (the uncapped capability is design margin, not the operating point).
     external_bw=bandwidth.coil_bandwidth_bytes_per_s
+    if external_bandwidth_cap_bytes_per_s is not None:
+        external_bw=min(external_bw,external_bandwidth_cap_bytes_per_s)
     if case == "NON_NMP_GPU":
         local_bw=resolve_internal_service_bandwidth(bandwidth,placement.local_access_latency_ns)
         local_ms=(traffic.weight_bulk_external_bytes+traffic.kv_bulk_external_bytes)/local_bw*1e3
@@ -160,7 +166,7 @@ def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPage
             workload.batch_size/(total_serial*1e-3),workload.batch_size/(total_pipeline*1e-3))
         return NMPFinalResult(placement,traffic,timing)
     if nmp_aggregate_tflops is None or nmp_aggregate_tflops<=0: raise ValueError("NMP case requires positive aggregate TFLOPS")
-    # Full 98-die local service capacity with path-correct MAT+MIV latency.
+    # Full slab-count local service capacity with path-correct MAT+MIV latency.
     # NMP local service is array-topology derived.  It must not reuse the
     # 50 external coil/FEOL IO lanes per die.
     local_bw=(layout.slab_count*bandwidth.local_service_groups_per_die*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*placement.local_access_latency_ns*1e-9))

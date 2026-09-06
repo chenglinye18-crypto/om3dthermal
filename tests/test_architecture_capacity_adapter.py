@@ -32,10 +32,14 @@ ARCHITECTURES = (
     "orthogonal_si",
     "orthogonal_m3d_igzo",
 )
+# Rev v2 (2026-09-06) re-frozen capacities: conventional 108.0 -> 135.0 GiB
+# (4x 36.24 GB HBM3E-class stacks = 145.0 GB), M3D 428.75 -> 463.75 GiB
+# (106 slabs x 22x5.5 mm plane = 497.9 GB).  Drift cause: platform revision
+# v2 geometry (docs/research/platform_revision_v2_spec_2026-09-06.md).
 EXPECTED_GIB = {
-    "conventional_hbm_2x1": 108.0,
+    "conventional_hbm_2x1": 135.0,
     "orthogonal_si": 234.28125,
-    "orthogonal_m3d_igzo": 428.75,
+    "orthogonal_m3d_igzo": 463.75,
 }
 
 
@@ -116,7 +120,7 @@ def test_architecture_comparison_compatibility_uses_public_resolver(
     compatibility = architecture_comparison._resolved_capacity(
         case, geometry, system)
     assert called is True
-    assert compatibility["system_capacity_GiB"] == 108.0
+    assert compatibility["system_capacity_GiB"] == 135.0  # rev v2 re-frozen
 
 
 def test_same_workload_and_first_table_are_feasible(

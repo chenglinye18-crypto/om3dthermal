@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from om3dthermal.experiment import load_experiment_spec, load_moe_workload_spec
+from om3dthermal.experiment import (
+    derive_orthogonal_slab_io_bandwidth_bits_per_second,
+    load_experiment_spec,
+    load_moe_workload_spec,
+)
 from om3dthermal.placement import (
     evaluate_nmp_feasibility,
     evaluate_published_moe_hierarchical_e2e,
@@ -73,10 +77,20 @@ def architecture():
     profile = load_fiddler_published_profile(
         PROFILE, PROFILE.with_suffix(".metadata.json"))
     experiment = load_experiment_spec(EXPERIMENT, project_root=ROOT)
+    # Scenario semantics (rev v2): the matched payload bandwidth is the slab
+    # IO capability capped by the experiment scenario cap; the uncapped
+    # capability is design margin, not the operating point.
+    capability_bw = derive_orthogonal_slab_io_bandwidth_bits_per_second(
+        case.geometry.orthogonal, architecture_id=case.name)
+    derivation = experiment.scenario.matched_bandwidth_derivation
+    cap_bw = (derivation.cap_bits_per_second
+              if derivation is not None else None)
+    matched_bw = (min(capability_bw, cap_bw)
+                  if cap_bw is not None else capability_bw)
     return (
         case, geometry, power, topology, feol, latency, layout, bandwidth,
         base, profile, experiment.scenario.effective_compute_flops_per_second,
-        experiment.scenario.matched_payload_bandwidth_bits_per_second,
+        matched_bw,
     )
 
 
@@ -216,10 +230,12 @@ def test_gpu_only_baseline_is_reused_unchanged(n1):
         assert baseline.expert_weight_bytes_crossing_coil_per_decode_step == (
             21 * 2**30)
         assert baseline.activation_bytes_crossing_coil_per_decode_step == 0.0
+    # Rev v2 re-frozen: 106 slabs scale the aggregate internal memory
+    # service bandwidth (was 6.1336760222277 ms / 163.034369010708).
     assert result.gpu_only_p0.current_total_step_time_ms == pytest.approx(
-        6.1336760222277)
+        5.670758072828326)
     assert result.gpu_only_p0.current_tokens_per_s == pytest.approx(
-        163.034369010708)
+        176.3432661307739)
 
 
 def test_p0_p1_p2_internal_bandwidth_is_propagated(n1):
@@ -239,8 +255,11 @@ def test_p0_p1_p2_internal_bandwidth_is_propagated(n1):
 
 def test_batch_sweep_regimes_and_determinism(architecture):
     summaries = []
+    # Rev v2 re-frozen: higher aggregate internal bandwidth moves the
+    # memory-saturation boundary up (batch 1: 16->32 TFLOPS; batch 8:
+    # no longer saturates within the sweep grid).
     for batch, useful, saturating in (
-            (1, 16.0, 16.0), (8, 128.0, 128.0), (16, None, None)):
+            (1, 16.0, 32.0), (8, 128.0, None), (16, None, None)):
         (*_, layout, bandwidth, base, profile,
          gpu_compute, legacy_bw) = architecture
         workload = base.model_copy(update={"batch_size": batch})
@@ -263,7 +282,10 @@ def test_batch_sweep_regimes_and_determinism(architecture):
         assert tuple(point.effective_nmp_tflops for point in first.points) == (
             8.0, 16.0, 32.0, 64.0, 128.0)
         summaries.append(first)
-    assert summaries[0].points[1].p2_over_p0_throughput_gain > 0.12
+    # Rev v2: 106 slabs raise aggregate internal bandwidth, so the
+    # placement-policy gain over the random baseline shrinks
+    # (0.12x guard relaxed to 0.10x; value now ~0.1056).
+    assert summaries[0].points[1].p2_over_p0_throughput_gain > 0.10
     assert summaries[1].points[-1].p2_over_p0_throughput_gain > 0.03
     assert summaries[2].points[-1].p2_over_p0_throughput_gain < 1e-6
 

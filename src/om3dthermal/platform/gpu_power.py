@@ -11,9 +11,9 @@ u     = gpu_side_bytes_per_token / (BW_peak * T_token)
 
 At ``u = 1`` (the matched-bandwidth, memory-bottleneck scenario) the affine
 model reproduces the existing fixed 300 W baseline exactly; the fixed
-baseline is therefore the ``u = 1`` special case of this model.  The thermal
-path is untouched: the fixed GPU power remains the thermal source, and this
-model only produces energy-accounting outputs.
+baseline is therefore the ``u = 1`` special case of this model. The formal
+runner shares the evaluated GPU power with workload power and thermal source
+mapping. The steady-state physical operator and solver remain unchanged.
 
 Parameter values are parametric nominals chosen inside the ranges reported
 by the measured-reference anchors recorded in provenance; they are not a
@@ -40,13 +40,15 @@ class AffineGPUDecodePowerSpec(BaseModel):
     peak_decode_power_W: float = Field(gt=0.0)
     peak_memory_bandwidth_bytes_per_s: float = Field(gt=0.0)
     static_power_status: Literal[
-        "PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE"
+        "PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE",
+        "MEASURED_REFERENCE_H200_SXM_IDLE_FLOOR",
     ]
     peak_power_status: Literal[
         "PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE"
     ]
     bandwidth_status: Literal[
-        "MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED"
+        "MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED",
+        "VENDOR_SPEC_H200_PEAK_HBM3E_BANDWIDTH",
     ]
     model_form_status: Literal[
         "MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING"

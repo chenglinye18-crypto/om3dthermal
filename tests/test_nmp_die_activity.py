@@ -19,9 +19,9 @@ def test_hardware_freeze_and_local_route(payload):
     assert h["macs_per_die"]==h["active_mac_ceiling_per_die"]==512
     assert h["clock_hz"]==1e9
     assert h["peak_flops_per_die"]==512*1e9*2==1.024e12
-    assert h["aggregate_peak_flops"]==h["peak_flops_per_die"]*98
+    assert h["aggregate_peak_flops"]==h["peak_flops_per_die"]*106  # rev v2: 106 dies
     assert a["local_route_delay_ns"]==1.0
-    old_bw=(70*32/((a["local_access_latency_ns"]-1.0)*1e-9))*98
+    old_bw=(70*32/((a["local_access_latency_ns"]-1.0)*1e-9))*106  # rev v2
     assert a["aggregate_local_bandwidth_bytes_per_s"] < old_bw
     assert payload["rows"][0]["non_nmp_gpu"]["timing"]["external_bandwidth_bytes_per_s"]==4.9e12
 
@@ -50,7 +50,7 @@ def test_performance_balanced_constraints_and_closures(payload):
         assert bp["operator_die_spans"]==lp["operator_die_spans"]
         assert balanced["remaining_external_bytes"]==locality["remaining_external_bytes"]
         assert max(bp["service_time_ms_per_die"])<=max(lp["service_time_ms_per_die"])*(1+1e-12)
-        assert max(bp["service_time_ms_per_die"])/(sum(bp["service_time_ms_per_die"])/98)<=max(lp["service_time_ms_per_die"])/(sum(lp["service_time_ms_per_die"])/98)*(1+1e-12)
+        assert max(bp["service_time_ms_per_die"])/(sum(bp["service_time_ms_per_die"])/106)<=max(lp["service_time_ms_per_die"])/(sum(lp["service_time_ms_per_die"])/106)*(1+1e-12)  # rev v2
         assert row["points"][0]["locality_aware"]["traffic"]["direct_die_to_die_bytes"]==0
 
 def test_performance_balanced_allocator_is_deterministic(payload):
@@ -99,7 +99,7 @@ def test_per_die_power_and_energy_closure(payload):
     for row in payload["rows"]:
         power=row["B_PREP_DIE_POWER_MAP"]; primitive=power["primitives"]; die=power["die_powers"]
         activity=row["A_FINAL_CANONICAL_GAIN"]["activity"]["activities"]
-        assert len(die)==98 and power["power_component_double_count_gate"]=="PASS"
+        assert len(die)==106 and power["power_component_double_count_gate"]=="PASS"  # rev v2
         assert sum(x["refresh_W"] for x in die)==pytest.approx(power["refresh_total_W"])
         refresh.append(tuple(x["refresh_W"] for x in die))
         assert all(x["nmp_logic_overhead_factor"]==1 and x["nmp_dynamic_W"]==pytest.approx(x["mac_dynamic_W"]) for x in die)
@@ -121,7 +121,10 @@ def test_per_die_power_and_energy_closure(payload):
     assert refresh[0]==refresh[1]==refresh[2]
 
 def test_a_canonical_gains_unchanged_by_power_map(payload):
-    assert [r["A_FINAL_CANONICAL_GAIN"]["combined_A_gain"] for r in payload["rows"]]==pytest.approx([2.565,3.950,3.744],abs=.001)
+    # Rev v2 re-frozen with the scenario bandwidth cap (39.2 Tb/s):
+    # batches 1/8 are external-boundary dominated and nearly unchanged;
+    # batch 16 gains from the 106-die internal bandwidth (was 3.744).
+    assert [r["A_FINAL_CANONICAL_GAIN"]["combined_A_gain"] for r in payload["rows"]]==pytest.approx([2.565293472024693,3.9500358437115155,4.277286327132819],abs=.001)
 
 @pytest.mark.parametrize("index",[0,1,2])
 def test_per_die_activity_energy_and_service_closure(payload,index):

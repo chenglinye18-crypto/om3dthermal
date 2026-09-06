@@ -3,8 +3,20 @@
 日期：2026-09-05
 状态：8.1–8.3 已实现（platform/gpu_power.py、platform YAML `gpu_decode_power`
 块、evaluator/llm_decode_gpu_energy.py 与 runner 接入；测试 31 项通过）。
-E8 阶段输出挂在 summary.json 的 `gpu_decode_energy` 键下，冻结 E7 行与
-热路径不变。8.4–8.7 待评审后实施。
+E8 阶段输出挂在 summary.json 的 `gpu_decode_energy` 键下。
+2026-09-05 修订：正式 runner 先计算 E8，再将同一 GPU 功率传入 E5 封装
+功率、E6 热源与 E7 输出；M3D logic-background 敏感性也共用该工作点。
+冻结的是物理算子、求解器及原基线回归值，不是所有 workload 都强制 300 W。
+8.4–8.7 的其余工作仍待完成。
+
+新增输出语义：`power.json.gpu_power_W` 是实际使用的解析功率；
+`fixed_gpu_power_W` 仅保留原配置参考，不能再作为动态路径热输入。
+校验 `GPU J/token × aggregate tok/s = GPU W = GPU thermal source W`，
+禁止跨 architecture/rho/时间/能耗工作点混用。没有 E8 模型的兼容调用仍使用
+显式固定功率。这里的“动态”指 workload 利用率决定的稳态平均功率，不是瞬态。
+
+E8 能耗仍仅覆盖 GPU + memory dynamic；refresh/background/logic 由 E5 加一次。
+因此不能要求 E8 当前 J/token × tok/s 直接等于包含这些静态项的封装总功率。
 目标：将 `GPU_ENERGY_MODEL = NOT_AVAILABLE` 升级为
 `ANALYTICAL_CALIBRATED_BY_MEASURED_REFERENCE`，使 E2E 表可以输出系统级
 J/token（含 GPU），覆盖 baseline 与 FEOL-MAC offload 两种场景。

@@ -103,13 +103,24 @@ The formal scenario remains conditional:
   a `PARAMETRIC_SENSITIVITY` value, never a validated nominal;
 - GPU decode energy and system J/token exist only as the optional E8
   affine-utilization stage (`ANALYTICAL_AFFINE_UTILIZATION_MODEL` with
-  `PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE`); the frozen E7 row
-  keeps `gpu_energy_model_status = NOT_AVAILABLE` and the thermal path keeps
-  the fixed 300 W GPU power source — at u = 1 the affine model reproduces
-  that fixed baseline exactly;
+  `PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE`). The runner evaluates
+  E8 before E5/E6 and shares its GPU power with the package total, thermal
+  source and E7 row, including logic-background sensitivities. At u = 1 the
+  canonical platform still recovers the 300 W reference. Without an E8 model,
+  compatibility callers retain explicitly marked fixed power;
 - the read-shaped write spatial distribution is sensitivity-only.
 
 No directory structure or PASS status upgrades those scientific claims.
+
+`power.json` distinguishes `gpu_power_W` (the evaluated source used for both
+the package total and thermal mapping) from `fixed_gpu_power_W` (the original
+case reference, never added again). The GPU contribution closes as
+`gpu_energy_j_per_token * aggregate_tokens_per_second = gpu_power_W`.
+E8's `system_energy_j_per_token` still covers GPU plus memory dynamic energy;
+memory refresh/background/logic power remains in E5 and the thermal total.
+Consequently package power equals E8 scoped J/token times aggregate throughput
+**plus** those memory static components. This is steady-state workload-average
+power, not transient simulation or a new GPU power-model calibration.
 
 ## Compatibility and migration rule
 

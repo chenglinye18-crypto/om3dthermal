@@ -13,6 +13,7 @@ from om3dthermal.evaluator import (
     ArchitectureDecodeMemoryEnergyMetrics,
     LLMDecodePerformanceMetrics,
     evaluate_architecture_decode_memory_energy,
+    evaluate_gpu_decode_energy,
     evaluate_llm_decode_performance,
     evaluate_llm_decode_workload_power,
 )
@@ -30,6 +31,7 @@ from om3dthermal.workload import (
     evaluate_architecture_capacity_feasibility,
     evaluate_llm_decode,
 )
+from om3dthermal.experiment.config import load_platform_spec
 
 
 ROOT = Path(__file__).parents[1]
@@ -138,6 +140,74 @@ def test_memory_and_package_power_close_without_old_access_double_counting() -> 
     assert result.memory_workload_total_W == 6 + 2 + 3 + 0
     assert result.package_workload_total_W == 7 + result.memory_workload_total_W
     assert result.memory_workload_total_W != 10 + 6 + 2 + 3
+
+
+@pytest.fixture
+def gpu_operating_point():
+    spec = load_platform_spec(
+        ROOT / "configs/platform/gpu_package_h200_reference.yaml",
+        project_root=ROOT).gpu_decode_power.model_copy(update={
+            "peak_memory_bandwidth_bytes_per_s": 4.0})
+    energy, performance = _energy(), _performance(aggregate=1.0)
+    gpu = evaluate_gpu_decode_energy(performance, energy, spec)
+    return energy, performance, gpu
+
+
+def test_affine_power_replaces_fixed_gpu_reference_once(gpu_operating_point):
+    energy, performance, gpu = gpu_operating_point
+    power = evaluate_llm_decode_workload_power(
+        energy, performance, _system(gpu=300),
+        unresolved_logic_background_policy="REQUIRE_RESOLVED", gpu_decode_energy=gpu)
+    # Rev v2: the fixture's utilization is 0.5, so the affine power is
+    # 74 W + (269.84 - 74) x 0.5 = 171.92 W (was 200 W under the legacy
+    # 100 W / 300 W nominals).
+    assert power.gpu_power_W == 171.92
+    assert power.fixed_gpu_power_W == 300.0
+    assert power.package_workload_total_W == 171.92 + power.memory_workload_total_W
+    assert power.gpu_power_status == "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY"
+
+
+@pytest.mark.parametrize("update, message", [
+    ({"rho": 2.0}, "identity mismatch"),
+    ({"architecture": "wrong"}, "identity mismatch"),
+    ({"token_time_s": 2.0}, "operating point mismatch"),
+    ({"memory_dynamic_energy_j_per_token": 4.0}, "operating point mismatch"),
+    ({"gpu_energy_j_per_token": 300.0}, "do not close"),
+    ({"gpu_decode_power_W": float("nan")}, "finite"),
+    ({"gpu_decode_power_W": -1.0}, "non-negative"),
+    ({"evaluation_status": "BLOCKED_BY_CAPACITY"}, "requires evaluated GPU energy"),
+])
+def test_inconsistent_gpu_energy_cannot_feed_thermal_power(
+        gpu_operating_point, update, message):
+    energy, performance, gpu = gpu_operating_point
+    with pytest.raises(ValueError, match=message):
+        evaluate_llm_decode_workload_power(
+            energy, performance, _system(gpu=300),
+            unresolved_logic_background_policy="REQUIRE_RESOLVED",
+            gpu_decode_energy=gpu.model_copy(update=update))
+
+
+def test_inconsistent_token_time_and_throughput_are_rejected(gpu_operating_point):
+    energy, performance, gpu = gpu_operating_point
+    with pytest.raises(ValueError, match="token time and aggregate throughput"):
+        evaluate_llm_decode_workload_power(
+            energy, performance.model_copy(update={"aggregate_tokens_per_second": 2}),
+            _system(gpu=300), unresolved_logic_background_policy="REQUIRE_RESOLVED",
+            gpu_decode_energy=gpu)
+
+
+def test_blocked_gpu_energy_keeps_all_power_outputs_absent():
+    energy, performance = _energy(feasible=False), _performance(feasible=False)
+    spec = load_platform_spec(
+        ROOT / "configs/platform/gpu_package_h200_reference.yaml",
+        project_root=ROOT).gpu_decode_power
+    gpu = evaluate_gpu_decode_energy(performance, energy, spec)
+    power = evaluate_llm_decode_workload_power(
+        energy, performance, _system(gpu=300),
+        unresolved_logic_background_policy="REQUIRE_RESOLVED", gpu_decode_energy=gpu)
+    assert power.gpu_power_W is None
+    assert power.fixed_gpu_power_W is None
+    assert power.package_workload_total_W is None
 
 
 def test_m3d_placeholder_preserves_raw_none_and_marks_lower_bound() -> None:
@@ -311,7 +381,9 @@ def test_rho_one_anchor_and_memory_total_close_for_three_architectures(frozen) -
         assert row.memory_workload_total_W == pytest.approx(
             system.resolved_total_memory_power_W, abs=1e-10)
     m3d = next(row for row in rows if row.architecture == "orthogonal_m3d_igzo")
-    assert m3d.memory_workload_total_W == pytest.approx(33.5603645761)
+    # Rev v2 re-frozen: refresh scales with capacity 428.75 -> 463.75 GiB
+    # (was 33.5603645761 W).
+    assert m3d.memory_workload_total_W == pytest.approx(33.5631523320)
     assert m3d.logic_background_raw_W is None
     assert m3d.logic_background_effective_W == 0
 

@@ -55,7 +55,7 @@ def test_runner_integration_returns_only_canonical_points(integrated):
 
 
 def test_capacity_residency_and_headroom_close(integrated):
-    assert all(row.total_physical_capacity_bytes == 428.75 * 2**30
+    assert all(row.total_physical_capacity_bytes == 463.75 * 2**30
                for row in integrated.cases)
     assert all(row.logical_working_set_bytes <= row.allocated_working_set_bytes
                <= row.total_physical_capacity_bytes for row in integrated.cases)
@@ -77,7 +77,7 @@ def test_traffic_boundary_and_reduction_close(integrated):
 
 def test_all_four_performance_points_and_throughput_close(integrated):
     gains = {1: 2.56529347202469, 8: 3.95003584371152,
-             16: 3.74409028630852}
+             16: 4.277286327132819}
     for row in integrated.cases:
         for step, throughput in (
                 (row.non_nmp_step_ms, row.non_nmp_tokens_per_s),
@@ -92,8 +92,8 @@ def test_all_four_performance_points_and_throughput_close(integrated):
 
 
 def test_power_energy_and_frozen_hardware_close(integrated):
-    powers = {1: 32.4502005092269, 8: 60.5992178172216,
-              16: 58.7575858482535}
+    powers = {1: 32.45298826512444, 8: 60.60200557311935,
+              16: 67.12318034713768}
     for row in integrated.cases:
         assert row.aggregate_m3d_nmp_power_W == pytest.approx(
             row.read_W + row.write_W + row.mac_W + row.refresh_W

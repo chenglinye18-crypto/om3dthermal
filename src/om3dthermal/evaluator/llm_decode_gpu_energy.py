@@ -2,10 +2,11 @@
 
 This stage consumes the committed E4 (conditional memory energy) and the
 matched-reference performance result, and adds GPU-side decode energy and a
-system-level J/token figure **without** touching the frozen E7 row or the
-thermal path:
+scoped GPU-plus-memory-dynamic J/token figure. The formal runner evaluates
+this stage before workload power and thermal mapping so they share one GPU
+operating point:
 
-* the frozen fixed GPU power remains the thermal source;
+* the GPU thermal source uses this stage's evaluated GPU power;
 * at ``u = 1`` (memory-bottleneck matched scenario) the affine power equals
   the configured peak decode power, which the canonical platform sets equal
   to the fixed 300 W baseline — the old fixed assumption is recovered as the
@@ -63,7 +64,9 @@ class GPUDecodeEnergyMetrics(BaseModel):
     parameter_provenance_status: Literal[
         "PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE"]
     bandwidth_status: Literal[
-        "MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED"]
+        "MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED",
+        "VENDOR_SPEC_H200_PEAK_HBM3E_BANDWIDTH",
+    ]
     system_energy_scope_status: Literal[
         "GPU_PLUS_MEMORY_DYNAMIC_ONLY__EXCLUDES_HOST_CPU_DRAM_COOLING_NETWORK"]
     utilization_semantics_status: Literal[

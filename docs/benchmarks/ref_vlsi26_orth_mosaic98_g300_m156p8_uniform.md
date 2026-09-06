@@ -3,8 +3,10 @@
 This benchmark is the first paper-aligned geometry/material baseline for a
 MOSAIC memory cube above the canonical GPU package. It is not a calibrated
 temperature reproduction. The package, GPU stack, TIM, lid, ambient, HTC,
-boundary conditions, and matrix-free thermal-resistance-network relaxation path are unchanged from the canonical
-`exp_conv_2x2_g414_m160` baseline.
+boundary conditions, and matrix-free thermal-resistance-network relaxation path
+were inherited from the historical package validation fixture. This record is
+geometry/material provenance only. Current DAC comparisons use
+`configs/cases/conventional_hbm_2x1.yaml` and the production GPU-PCG path.
 
 ## PAPER_REPORTED
 

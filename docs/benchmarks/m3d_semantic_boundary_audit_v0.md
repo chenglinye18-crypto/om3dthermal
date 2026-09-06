@@ -8,7 +8,7 @@ change the frozen thermal mesh, operator, solver, or matched 39.2 Tb/s scenario.
 
 | visible groups | stacks/group | total stacks | dies/stack | capacity/stack | system capacity | provenance |
 |---:|---:|---:|---:|---:|---:|---|
-| 2 | 2 | 4 | 12 | 27.0 GiB | 108.0 GiB | `exp_conv_2x1_*` metadata derives each continuous 11x22 mm thermal group from two 11x11 mm physical stack equivalents; the parent 2x2 benchmark defines a 10.8x10.8 mm DRAM die per physical stack. Capacity uses DreamRAM integer bank-tile packing on that physical die footprint. |
+| 2 | 2 | 4 | 12 | 27.0 GiB | 108.0 GiB | `configs/cases/conventional_hbm_2x1.yaml` defines two continuous thermal groups with two physical stack equivalents per group and a 10.8x10.8 mm capacity-instance region. Capacity uses DreamRAM integer bank-tile packing on that physical die footprint. |
 
 The former 114.75 GiB value came from packing 306 banks into each full
 10.8x21.8 mm thermal-visible group, treating two groups as two physical stacks:

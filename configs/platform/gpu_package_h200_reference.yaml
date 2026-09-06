@@ -1,16 +1,20 @@
 schema_version: 1
-platform_id: gpu_package_300w_reference
-fixed_gpu_power_W: 300.0
+platform_id: gpu_package_h200_reference
+# Rev v2 (2026-09-06): H200-anchored platform.  The fixed value equals the
+# affine model's u = 1 operating point (74 W + 5.10 pJ/bit x 4.8 TB/s x 8
+# = 269.84 W) so the legacy fixed-baseline path and the affine path agree
+# at the matched-bandwidth scenario.
+fixed_gpu_power_W: 269.84
 gpu_power_status: FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL
 package_profile_status: EXISTING_CANONICAL_CASE_THERMAL_PACKAGE
 gpu_decode_power:
   model: AFFINE_UTILIZATION_MODEL
-  static_power_W: 100.0
-  peak_decode_power_W: 300.0
-  peak_memory_bandwidth_bytes_per_s: 4.9e12
-  static_power_status: PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE
+  static_power_W: 74.0
+  peak_decode_power_W: 269.84
+  peak_memory_bandwidth_bytes_per_s: 4.8e12
+  static_power_status: MEASURED_REFERENCE_H200_SXM_IDLE_FLOOR
   peak_power_status: PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE
-  bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
+  bandwidth_status: VENDOR_SPEC_H200_PEAK_HBM3E_BANDWIDTH
   model_form_status: MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING
   provenance:
     - record_id: ml_energy_llama31_8b_h100_v0
@@ -39,18 +43,44 @@ gpu_decode_power:
       notes: >-
         250 W to 175 W power cap reduces energy by ~23% while increasing
         inference time by only ~6.7%, evidencing memory-bound decode.
-    - record_id: affine_param_nominals_v0
-      classification: MODELING_CHOICE
-      source: docs/research/gpu_power_model_spec_2026-09-05.md
-      status: PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE
+    - record_id: h200_sxm_platform_spec_v0
+      classification: MATCHED_REFERENCE
+      source: NVIDIA H200 SXM datasheet (catalogued in docs/research/HBM_benchmark_landscape_2026-08-25.md)
+      source_location: TDP 700 W; HBM3e 141 GB; peak bandwidth 4.8 TB/s; BF16 dense 989.5 TFLOPS
+      status: VENDOR_SPEC_PLATFORM_ANCHOR
       notes: >-
-        P_static = 100 W lies inside the idle/static range reported for
-        300-700 W-class data-center GPUs by the measured anchors;
-        P_peak_decode = 300 W makes the u = 1 memory-bottleneck point
-        reproduce the existing fixed 300 W thermal baseline exactly;
-        BW_peak = 4.9e12 B/s equals the matched-reference scenario bandwidth.
-        Values are swept in sensitivity analyses and are not a per-GPU
-        calibration.
+        Project GPU is H200 SXM-class silicon; TDP, peak bandwidth, and peak
+        compute are vendor specifications.
+    - record_id: h200_sxm_idle_floor_v0
+      classification: MATCHED_REFERENCE
+      source: ai-gpu-energy-optimizer whitepaper (72+ hardware tests)
+      source_location: H200 SXM idle floor measurement
+      status: MEASURED_REFERENCE_IDLE_FLOOR_74W
+      notes: >-
+        H200 SXM measured idle floor ~74 W (post-load HBM3e ghost power
+        +79-136 W; H200 NVL measured idle ~121 W retained as sensitivity
+        upper bound).  P_static = 74 W is applied to H200, baseline, and
+        proposed rows identically.  See
+        docs/research/gpu_platform_table_2026-09-06.csv (idle_power_anchor
+        section).
+    - record_id: e_decode_dynamic_rev_v2_v0
+      classification: SOFTWARE_DERIVED
+      source: docs/research/gpu_platform_table_2026-09-06.csv; arXiv:2604.10852v1 Fig.8
+      source_location: decode power fraction 45-60% TDP on A100/H100-class GPUs
+      status: DERIVED_BOARD_LEVEL_RANGE_WITH_DIE_ONLY_MODEL_PARAMETER
+      notes: >-
+        Board-level e_decode_dynamic = (P_decode - P_static)/(BW x 8) spans
+        6.28-9.01 pJ/bit for H200 (decode 315-420 W = 45-60% of 700 W TDP,
+        P_static 74 W, BW 4.8 TB/s).  The board-level value includes HBM
+        dynamic energy; because the E2E model books memory energy separately
+        (E4), the affine model parameter is the die-only value: subtracting
+        the HBM per-bit read energy (1.397 pJ/bit DreamRAM nominal) gives
+        4.88-7.61 pJ/bit.  The nominal 5.10 pJ/bit (legacy continuity) lies
+        inside that range, giving P_peak_decode = 74 + 5.10e-12 x 4.8e12 x 8
+        = 269.84 W.  The same parameter is used for the proposed M3D row:
+        identical GPU silicon implies an identical GPU-side parameter and
+        memory-technology differences are booked entirely on the E4 side.
+        Range endpoints are used in sensitivity analyses.
 host_offload:
   status: RESOLVED
   host_memory_bandwidth_GBps: 460.8
@@ -76,8 +106,17 @@ host_offload:
       status: VENDOR_REPORTED_MEASURED_PINNED_H2D_NOMINAL_ANCHOR
       transformation: eta = 56.2 / min(460.8, 64.0) = 0.878125
       notes: End-to-end H2D measurement on an H100 server with a single-socket AMD EPYC 9004 platform; not an om3dthermal local measurement.
+    - record_id: nvlink_c2c_sensitivity_v0
+      classification: MATCHED_REFERENCE
+      source: NVIDIA Grace Hopper Architecture In-Depth / GH200 whitepaper
+      source_location: NVLink-C2C 900 GB/s bidirectional, 450 GB/s per direction
+      status: VENDOR_SPEC_ROBUSTNESS_SENSITIVITY_ONLY
+      notes: >-
+        C2C 450 GB/s per direction is a robustness sensitivity, not the main
+        baseline; even at 450 GB/s the host link stays ~11x below the 4.9 TB/s
+        scenario HBM bandwidth so the capacity-bottleneck conclusion holds.
 provenance:
-  - record_id: fixed_gpu_300w
+  - record_id: h200_anchored_rev_v2
     classification: MATCHED_REFERENCE
-    source: existing canonical three-architecture baseline
-    status: NOT_A_WORKLOAD_GPU_ENERGY_MODEL
+    source: docs/research/platform_revision_v2_spec_2026-09-06.md
+    status: H200_ANCHORED_PLATFORM_REV_V2

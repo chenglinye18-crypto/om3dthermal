@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from om3dthermal.experiment import load_experiment_spec, load_workload_spec
+from om3dthermal.experiment import (
+    derive_orthogonal_slab_io_bandwidth_bits_per_second,
+    load_experiment_spec,
+    load_workload_spec,
+)
 from om3dthermal.placement import (
     compare_fast_region_placements,
     compare_placement_serving_performance,
@@ -33,6 +37,9 @@ CASE = ROOT / "configs/cases/orthogonal_m3d_igzo.yaml"
 WORKLOAD = ROOT / "configs/workload/llama31_8b_decode_b1_s131072.yaml"
 EXPERIMENT = (
     ROOT / "configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
+MATCHED_BW_BITS_PER_S = derive_orthogonal_slab_io_bandwidth_bits_per_second(
+    load_case_config(CASE).geometry.orthogonal,
+    architecture_id="orthogonal_m3d_igzo")
 
 
 @pytest.fixture(scope="module")
@@ -77,7 +84,7 @@ def _evaluate(canonical, requests: int, fraction: float):
     return evaluate_tier_service_placement(
         workload, demand, layout, bandwidth, placement.fast_pack,
         matched_external_bandwidth_bits_per_second=(
-            scenario.matched_payload_bandwidth_bits_per_second),
+            MATCHED_BW_BITS_PER_S),
         effective_compute_flops_per_second=(
             scenario.effective_compute_flops_per_second),
         local_service_fraction=fraction,
@@ -96,9 +103,10 @@ def test_no_tier_is_global_physical_worst_case(canonical):
 
 @pytest.mark.parametrize(
     ("requests", "expected"),
-    ((1, 10.072213443776443),
-     (8, 10.427075358422606),
-     (16, 11.276452163080243)),
+    # Rev v2 re-frozen: 106 slabs redistribute pages across slot classes.
+    ((1, 10.070685403196899),
+     (8, 10.379300101550944),
+     (16, 11.12039689287323)),
 )
 def test_fast_pack_latency_reuses_existing_placement(canonical, requests, expected):
     result, _, _, placement = _evaluate(canonical, requests, 0.5)
@@ -149,7 +157,7 @@ def test_e2e_speedup_is_monotonic_in_local_fraction(canonical, requests):
     sweep = sweep_local_service_fraction(
         workload, demand, layout, bandwidth, placement.fast_pack,
         matched_external_bandwidth_bits_per_second=(
-            scenario.matched_payload_bandwidth_bits_per_second),
+            MATCHED_BW_BITS_PER_S),
         effective_compute_flops_per_second=(
             scenario.effective_compute_flops_per_second),
     )
@@ -178,7 +186,7 @@ def test_compute_bottleneck_truncates_placement_gain(canonical):
     result = evaluate_tier_service_placement(
         workload, demand, layout, bandwidth, placement.fast_pack,
         matched_external_bandwidth_bits_per_second=(
-            scenario.matched_payload_bandwidth_bits_per_second),
+            MATCHED_BW_BITS_PER_S),
         effective_compute_flops_per_second=1.0e12,
         local_service_fraction=1.0,
     )
@@ -196,7 +204,7 @@ def test_existing_external_streaming_negative_control_remains_small(canonical):
     existing = compare_placement_serving_performance(
         workload, demand, placement, layout,
         matched_payload_bandwidth_bits_per_second=(
-            scenario.matched_payload_bandwidth_bits_per_second),
+            MATCHED_BW_BITS_PER_S),
         effective_compute_flops_per_second=(
             scenario.effective_compute_flops_per_second),
     )

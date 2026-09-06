@@ -6,7 +6,11 @@ import argparse
 import json
 from pathlib import Path
 
-from om3dthermal.experiment import load_experiment_spec, load_moe_workload_spec
+from om3dthermal.experiment import (
+    load_experiment_spec,
+    load_moe_workload_spec,
+    resolve_scenario_matched_bandwidth_bits_per_second,
+)
 from om3dthermal.placement import (
     evaluate_published_moe_hierarchical_e2e,
     sweep_nmp_feasibility,
@@ -83,6 +87,10 @@ def run(output_dir: Path) -> dict[str, object]:
     profile = load_fiddler_published_profile(
         profile_path, profile_path.with_suffix(".metadata.json"))
 
+    scenario = experiment.scenario
+    matched_bw_bps = resolve_scenario_matched_bandwidth_bits_per_second(
+        scenario, case.geometry.orthogonal)
+
     sweeps = []
     one_context = None
     for batch in (1, 8, 16):
@@ -93,8 +101,7 @@ def run(output_dir: Path) -> dict[str, object]:
             workload,
             layout,
             bandwidth,
-            legacy_matched_payload_bandwidth_bits_per_second=(
-                experiment.scenario.matched_payload_bandwidth_bits_per_second),
+            legacy_matched_payload_bandwidth_bits_per_second=matched_bw_bps,
             effective_compute_flops_per_second=gpu_compute,
             random_seeds=tuple(range(20)),
         )

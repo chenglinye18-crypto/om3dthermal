@@ -33,3 +33,6 @@ third_party/DreamRAM/
 
 # Audit / regression scripts (kept locally; not version-controlled)
 /_audit_*.py
+
+# Local literature PDFs (kept locally; not version-controlled)
+/tmp/pdfs/

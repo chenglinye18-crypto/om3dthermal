@@ -5,7 +5,7 @@ architecture_configs:
   - configs/architecture/conventional_hbm_2x1.yaml
   - configs/architecture/orthogonal_si.yaml
   - configs/architecture/orthogonal_m3d_igzo.yaml
-platform_config: configs/platform/gpu_package_300w_reference.yaml
+platform_config: configs/platform/gpu_package_h200_reference.yaml
 workload_config: configs/workload/llama31_8b_decode_b1_s131072.yaml
 serving:
   requested_requests: [1, 2, 4, 8, 16, 32]
