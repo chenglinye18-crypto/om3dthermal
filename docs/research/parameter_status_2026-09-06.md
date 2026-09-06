@@ -9,7 +9,7 @@
 | 参数 | 值 | 分级 | 出处 / 说明 |
 |---|---|---|---|
 | 接口能耗 | 0.5 pJ/bit | PAPER_REPORTED | Shiba SSC-L 2023，能找到的最小接口能耗文献值（commit 1b60079） |
-| GPU 仿射功耗模型形式 | P = P_static + (P_peak − P_static)·u | MODELING_CHOICE（形式有三个实测锚点） | docs/research/gpu_power_model_spec_2026-09-05.md；E8 已接入 runner（commit 197bcb1） |
+| GPU decode bandwidth-boundary 模型 | P = P_static + e_decode·8·min(B_demand,B_gpu_peak) | MODELING_CHOICE（形式有三个实测锚点） | docs/research/gpu_power_model_spec_2026-09-05.md；E8 已接入 runner |
 | matched 带宽派生机制 | slab_count × 50 ch × 8 Gbps，带 cap = 39.2 Tb/s | MODELING_CHOICE（派生 + 封顶） | 98 slabs → 39.2 Tb/s；106 slabs 能力 42.4 Tb/s 但场景带宽钉在 39.2（98-slab 等效），多出部分作设计冗余；代码已落地（`cap_bits_per_second`），改 slab 数不需要再手动同步 |
 | 带宽冗余表述 | 场景带宽固定 4.9 TB/s，M3D 实际能力 5.3 TB/s 的余量在文字中说明（理想 vs 实际、GPU 侧接口受限） | 写作决策 | 2026-09-06 讨论结论（推翻早前"算出来多少就是多少"） |
 | M3D 读能耗（模型值） | 0.855 pJ/bit | 模型分解：内部 0.186 + 垂直 0.002 + FEOL 0.167 + 接口 0.5 | canonical case `orthogonal_m3d_igzo` 解析输出 |
@@ -26,10 +26,10 @@
 | 参数 | 现状 | 需要做什么 |
 |---|---|---|
 | P_static（GPU 静息功耗） | **74 W**（H200 SXM 实测 idle floor，白皮书 72+ 次实测；H200 NVL 121 W 留作敏感性上界）；baseline/proposed 与 H200 同值 | ✅ 已定并实施：platform YAML（gpu_package_h200_reference.yaml）static=74 W |
-| e_decode 动态（仿射模型参数） | 模型主值 5.10 pJ/bit（die-only，三架构同值同硅片论证），落在扣后区间 4.88–7.61 内 | ✅ 已定并实施：**固定不变量（板级动态）** H200 锚定区间 **6.28–9.01 pJ/bit**；板级值含 HBM 动态能耗，E2E 在 E4 单独记存储能耗；CSV rev v2 只记 static_power_W + e_decode_dynamic 两个模型参数 |
-| P_peak_decode | **269.84 W**（=74 + 5.10e-12×4.8e12×8） | ✅ 已实施：派生量，platform YAML 三字段自洽（fixed=peak=269.84） |
+| e_decode 动态 | **5.10 pJ/bit** GPU-side effective decode coefficient（三架构同值同硅片） | ✅ 已定并实施：由实测 decode 动态功耗反推并扣除 E4 单独计账的 memory energy；不是 memory-I/O energy |
+| P_decode_at_bw_peak | **269.84 W**（=74 + 5.10e-12×4.8e12×8） | ✅ 已实施：派生/校验量，不是独立物理参数 |
 | GPU 峰值带宽（平台侧） | **4.8 TB/s**（H200 厂商值） | ✅ 已实施；场景带宽 cap 4.9 TB/s → u = 4.9/4.8 ≈ 1.02 截断于 1，测试断言 utilization_clamped=True 已重冻结 |
-| e_compute（compute-bound 能耗不变量） | 0.531 pJ/FLOP（H200，prefill 75% TDP 档） | 算子分工实施后才真正使用（GPU 只接 attention）；届时确认是否取 75% 还是 100% TDP 档 |
+| compute-power coefficient | 不属于当前 GPU decode power model | 不新增 `e_compute`；算力只保留在既有性能瓶颈判断中 |
 | M3D slab IO 的物理论证 | 50 ch/slab、8 Gbps/ch 是设计值 | 论文中补一句通道数 × pin rate 的可行性问题（preempt 审稿人） |
 | B 臂热几何 | ✅ 代码已实施（edge_strip_material 机制 + Thermal_Silicon 材料 140 W/mK） | 剩余：A/B 双臂热求解运行 |
 | 冻结基线数字 | 859596 cells / 355.58 W / Tmax 81.93 °C 对应旧几何旧功率；`test_llm_decode_e2e.py` THERMAL/SIZES 表保持旧值未动 | 剩余：全量 formal 实验（三架构×rho）重跑产生真实 GPU-PCG 新值后重新冻结（spec §4 第 3 步） |

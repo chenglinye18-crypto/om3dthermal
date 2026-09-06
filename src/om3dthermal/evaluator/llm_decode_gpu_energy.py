@@ -1,4 +1,4 @@
-"""GPU decode energy evaluator (E8) — affine utilization model, baseline path.
+"""GPU decode energy evaluator (E8) — bandwidth-bounded baseline path.
 
 This stage consumes the committed E4 (conditional memory energy) and the
 matched-reference performance result, and adds GPU-side decode energy and a
@@ -7,10 +7,8 @@ this stage before workload power and thermal mapping so they share one GPU
 operating point:
 
 * the GPU thermal source uses this stage's evaluated GPU power;
-* at ``u = 1`` (memory-bottleneck matched scenario) the affine power equals
-  the configured peak decode power, which the canonical platform sets equal
-  to the fixed 300 W baseline — the old fixed assumption is recovered as the
-  special case of this model;
+* the GPU-side bandwidth demand is resolved by the canonical platform helper;
+  demand beyond the GPU peak cannot increase bandwidth-dependent power;
 * system J/token is the sum of GPU energy and the conditional memory dynamic
   energy.  It excludes host CPU/DRAM, cooling, and networking, and it is
   analytical with measured-reference-range parameters, not a measurement.
@@ -22,7 +20,10 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from om3dthermal.platform import AffineGPUDecodePowerSpec
+from om3dthermal.platform import (
+    AffineGPUDecodePowerSpec,
+    resolve_gpu_decode_power,
+)
 
 from .llm_decode_architecture_energy import (
     ArchitectureDecodeMemoryEnergyMetrics,
@@ -50,6 +51,10 @@ class GPUDecodeEnergyMetrics(BaseModel):
 
     memory_bandwidth_utilization: float | None
     utilization_clamped: bool | None
+    bandwidth_demand_bytes_per_s: float | None
+    bandwidth_actual_bytes_per_s: float | None
+    bandwidth_saturated: bool | None
+    gpu_dynamic_power_W: float | None
     gpu_decode_power_W: float | None
     token_time_s: float | None
     gpu_energy_j_per_token: float | None
@@ -103,6 +108,10 @@ def evaluate_gpu_decode_energy(
             **common,
             memory_bandwidth_utilization=None,
             utilization_clamped=None,
+            bandwidth_demand_bytes_per_s=None,
+            bandwidth_actual_bytes_per_s=None,
+            bandwidth_saturated=None,
+            gpu_dynamic_power_W=None,
             gpu_decode_power_W=None,
             token_time_s=None,
             gpu_energy_j_per_token=None,
@@ -119,20 +128,28 @@ def evaluate_gpu_decode_energy(
     token_time_s = performance.token_equivalent_time_s
     gpu_side_bytes = (
         performance.read_bytes_per_token + performance.write_bytes_per_token)
-    utilization = gpu_side_bytes / (
-        spec.peak_memory_bandwidth_bytes_per_s * token_time_s)
-    clamped = utilization > 1.0
-    utilization = min(utilization, 1.0)
-    gpu_power_W = (
-        spec.static_power_W
-        + (spec.peak_decode_power_W - spec.static_power_W) * utilization)
+    bandwidth_demand = gpu_side_bytes / token_time_s
+    operating_point = resolve_gpu_decode_power(
+        static_power_W=spec.static_power_W,
+        e_decode_J_per_bit=spec.e_decode_J_per_bit,
+        bandwidth_demand_bytes_per_s=bandwidth_demand,
+        peak_bandwidth_bytes_per_s=(
+            spec.peak_memory_bandwidth_bytes_per_s),
+    )
+    gpu_power_W = operating_point.gpu_power_W
     gpu_energy = gpu_power_W * token_time_s
     memory_energy = energy.memory_dynamic_energy_j_per_token
 
     return GPUDecodeEnergyMetrics(
         **common,
-        memory_bandwidth_utilization=utilization,
-        utilization_clamped=clamped,
+        memory_bandwidth_utilization=operating_point.bandwidth_utilization,
+        utilization_clamped=operating_point.bandwidth_saturated,
+        bandwidth_demand_bytes_per_s=(
+            operating_point.bandwidth_demand_bytes_per_s),
+        bandwidth_actual_bytes_per_s=(
+            operating_point.bandwidth_actual_bytes_per_s),
+        bandwidth_saturated=operating_point.bandwidth_saturated,
+        gpu_dynamic_power_W=operating_point.gpu_dynamic_power_W,
         gpu_decode_power_W=gpu_power_W,
         token_time_s=token_time_s,
         gpu_energy_j_per_token=gpu_energy,

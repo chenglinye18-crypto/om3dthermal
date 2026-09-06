@@ -105,9 +105,10 @@ The formal scenario remains conditional:
   affine-utilization stage (`ANALYTICAL_AFFINE_UTILIZATION_MODEL` with
   `PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE`). The runner evaluates
   E8 before E5/E6 and shares its GPU power with the package total, thermal
-  source and E7 row, including logic-background sensitivities. At u = 1 the
-  canonical platform still recovers the 300 W reference. Without an E8 model,
-  compatibility callers retain explicitly marked fixed power;
+  source and E7 row, including logic-background sensitivities. The canonical
+  bandwidth-saturated point is 269.84 W; demand above 4.8 TB/s cannot increase
+  bandwidth-dependent GPU power. Without an E8 model, compatibility callers
+  retain explicitly marked fixed power;
 - the read-shaped write spatial distribution is sensitivity-only.
 
 No directory structure or PASS status upgrades those scientific claims.

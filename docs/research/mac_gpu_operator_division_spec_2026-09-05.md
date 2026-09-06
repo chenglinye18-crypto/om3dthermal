@@ -73,7 +73,7 @@ GPU 承担 82% FLOPs，是系统的注意力引擎，不存在"GPU 多余"问题
 
 | 项 | 无 offload（现 E7+E8） | 新划分（估算） |
 |---|---:|---:|
-| GPU E/token | 2.03 J（u=1, 300 W × 6.77 ms） | ~1.05 J（300 W × 3.51 ms） |
+| GPU E/token | 由 269.84 W bandwidth-saturated decode 工作点 × token time 派生 | 同一 bandwidth-boundary 模型按实际带宽派生 |
 | Memory E/token | 0.227 J（全部流量 × 0.855 pJ/bit） | ~0.14 J（KV 走全路径 0.855；权重走 MAT-local ~0.2） |
 | MAC E/token | — | ~0.008 J（15 GFLOP × ~0.5 pJ/FLOP 级锚点） |
 | **系统 J/token** | **~2.26 J** | **~1.2 J（~1.9×）** |
@@ -84,7 +84,7 @@ E_mac_per_op 锚点与敏感性按 GPU spec §5 处理。
 ### 3.3 热
 
 attention 计算功率回到 GPU die——GPU 热源叙事与 E8/热模型自洽
-（GPU 300 W 固定热输入不变，保守）；MAC 侧功率仅权重 GEMV 部分，
+（GPU 热输入使用 E8 解析的同一工作点）；MAC 侧功率仅权重 GEMV 部分，
 per-die NMP 功率图相应下降。热结论方向不变，需重跑确认。
 
 ## 4. 代码改动点（确认后实施）

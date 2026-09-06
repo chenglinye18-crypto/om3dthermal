@@ -19,7 +19,7 @@
 - 当前 `39.2 Tb/s = 4.9 TB/s` 与H200整GPU的4.8 TB/s接近，但不是两个当前HBM3E stack能够提供的带宽。
 - 当前Conventional 2x1软件配置把两个11x22 mm可见热区域解释为两个物理stack，因而反推出每stack约61.6 GB、2.45 TB/s；但其legacy来源明确把每个11x22 mm区域定义为两个沿y合并的11x11 mm stack-equivalent。当前per-stack语义存在冲突，系统总容量可作为matched analytical value，不能据此声称两颗commodity stack capability。
 - DreamRAM对容量、带宽和面积做过外部验证，但其论文明确显示公开HBM3/HBM2E目标没有可比的访问能量数据；当前1.3677 pJ/bit是**analytical nominal**，不是测量验证值。
-- 最新整GPU HBM3E已经达到256-288 GB和6-8 TB/s，因此只对比144 GB HBM会被认为偏旧。论文至少应增加一个“current high-capacity HBM3E”敏感度锚点，但不能把其1000-1400 W整卡热设计直接塞入当前300 W双stack热模型。
+- 最新整GPU HBM3E已经达到256-288 GB和6-8 TB/s，因此只对比144 GB HBM会被认为偏旧。论文至少应增加一个“current high-capacity HBM3E”敏感度锚点，但不能把其1000-1400 W整卡热设计直接塞入本项目的 decode 热模型。
 
 ## 2. 先统一四种常被混淆的数字
 
@@ -155,9 +155,9 @@ DreamRAM analytical read-energy nominal
 validated silicon read energy
 ```
 
-### 5.3 当前Conventional 2x1实际上是什么
+### 5.3 2026-08-25 时 Conventional 2x1 的历史状态
 
-当前软件配置解析为：
+当时软件配置解析为（已被 rev v2 取代）：
 
 ```text
 2 thermal-visible merged groups
@@ -272,9 +272,11 @@ R_{scan}=\frac{BW_{peak}}{Capacity}
 
 作用：证明没有只挑旧HBM。
 
-### Layer B - Canonical thermal reference
+### Layer B - Historical thermal reference
 
-保留当前Conventional 2x1和MOSAIC-derived 300 W geometry，用于严格的空间thermal comparison。必须明确它是future/matched reference，不是H200复现。
+该文档当时保留 Conventional 2x1 和 MOSAIC-derived 300 W geometry 作为
+空间 thermal comparison；当前 canonical 已迁移到 H200-anchored 269.84 W
+bandwidth-saturated decode operating point。
 
 ### Layer C - Silicon anchors
 

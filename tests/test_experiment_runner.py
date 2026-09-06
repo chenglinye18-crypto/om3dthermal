@@ -122,10 +122,14 @@ def test_formal_runner_evaluates_gpu_decode_energy_stage(formal_run) -> None:
         assert gpu.evaluation_status == (
             "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY")
         # Matched-bandwidth scenario is memory-bound; the 4.9 TB/s payload
-        # slightly exceeds the H200 4.8 TB/s peak, so u clamps to 1 and the
-        # affine power reproduces the fixed 269.84 W baseline exactly.
+        # slightly exceeds the H200 4.8 TB/s peak, so actual bandwidth clamps
+        # to 4.8 TB/s and power remains at the derived 269.84 W point.
         assert gpu.memory_bandwidth_utilization == pytest.approx(1.0)
         assert gpu.utilization_clamped is True
+        assert gpu.bandwidth_demand_bytes_per_s == pytest.approx(4.9e12)
+        assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(4.8e12)
+        assert gpu.bandwidth_saturated is True
+        assert gpu.gpu_dynamic_power_W == pytest.approx(195.84)
         assert gpu.gpu_decode_power_W == pytest.approx(269.84)
         assert gpu.gpu_energy_j_per_token == pytest.approx(
             269.84 * gpu.token_time_s)
@@ -170,11 +174,17 @@ def test_runner_shares_gpu_operating_point_in_energy_power_and_thermal(
                             output_dir_override=tmp_path / "shared_gpu")
     power_rows = json.loads((result.output_dir / "power.json").read_text())
     thermal_rows = json.loads((result.output_dir / "thermal.json").read_text())
-    utilization = min(1.0, (4.9 / 4.8) * bandwidth_scale)
-    expected_gpu = 74.0 + 195.84 * utilization
+    bandwidth_demand = 4.9e12 * bandwidth_scale
+    bandwidth_actual = min(bandwidth_demand, 4.8e12)
+    expected_gpu = 74.0 + 5.10e-12 * 8.0 * bandwidth_actual
     for row, gpu, power, thermal in zip(
             result.rows, result.gpu_decode_energy, power_rows, thermal_rows):
         assert row.gpu_power_W == pytest.approx(expected_gpu)
+        assert gpu.bandwidth_demand_bytes_per_s == pytest.approx(
+            bandwidth_demand)
+        assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(
+            bandwidth_actual)
+        assert gpu.bandwidth_saturated is (bandwidth_demand > 4.8e12)
         assert power["fixed_gpu_power_W"] == 269.84  # reference, not an added source
         assert power["gpu_power_W"] == gpu.gpu_decode_power_W == row.gpu_power_W
         assert thermal["source_power_breakdown_W"]["gpu"] == row.gpu_power_W

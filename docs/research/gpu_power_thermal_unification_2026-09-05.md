@@ -27,11 +27,13 @@ E8 的 scoped system J/token 仍是 GPU + memory dynamic，不包含 memory refr
 
 新增覆盖低利用率、满利用率、B=1/2 的 aggregate token 时间语义、无 E8 的固定参考兼容、敏感性路径、工作点混用拒绝、GPU 能耗与功率不守恒拒绝、即使封装总功率相同也拒绝错误 GPU 热源。
 
-## 两个真实 GPU-PCG 工作点
+## 两个历史 GPU-PCG 接线验证点（已被 rev v2 参数取代）
 
-同一 Conventional 2x1、B=1、S=131072、rho=1。第二点只在临时实验 YAML 将 matched payload bandwidth 减半，平台 GPU 模型参数仍为 100/300 W 和 4.9 TB/s。这是接线验证情景，不是性能/能效改进实验。
+以下数值只记录 2026-09-05 的旧 100/300 W、4.9 TB/s 参数接线验证，
+不是当前 canonical 结果。当前模型使用 74 W、5.10 pJ/bit、4.8 TB/s，
+bandwidth-saturated decode 工作点为 269.84 W。
 
-| 量 | 当前满带宽点 | 半带宽验证点 |
+| 量 | 历史满带宽点 | 历史半带宽验证点 |
 |---|---:|---:|
 | 接口带宽 Tb/s | 39.2 | 19.6 |
 | GPU 利用率 | 1 | 0.5 |

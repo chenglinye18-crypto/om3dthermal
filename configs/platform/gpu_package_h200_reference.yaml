@@ -1,19 +1,20 @@
 schema_version: 1
 platform_id: gpu_package_h200_reference
-# Rev v2 (2026-09-06): H200-anchored platform.  The fixed value equals the
-# affine model's u = 1 operating point (74 W + 5.10 pJ/bit x 4.8 TB/s x 8
-# = 269.84 W) so the legacy fixed-baseline path and the affine path agree
-# at the matched-bandwidth scenario.
+# Rev v2 GPU decode operating point. fixed_gpu_power_W is compatibility-only;
+# the dynamic path derives power from static power, the GPU-side effective
+# decode coefficient, and actual bandwidth capped at the GPU peak.
 fixed_gpu_power_W: 269.84
 gpu_power_status: FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL
 package_profile_status: EXISTING_CANONICAL_CASE_THERMAL_PACKAGE
 gpu_decode_power:
   model: AFFINE_UTILIZATION_MODEL
   static_power_W: 74.0
+  e_decode_J_per_bit: 5.10e-12
+  # Compatibility/reporting check only; not an independent physical input.
   peak_decode_power_W: 269.84
   peak_memory_bandwidth_bytes_per_s: 4.8e12
   static_power_status: MEASURED_REFERENCE_H200_SXM_IDLE_FLOOR
-  peak_power_status: PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE
+  peak_power_status: DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH
   bandwidth_status: VENDOR_SPEC_H200_PEAK_HBM3E_BANDWIDTH
   model_form_status: MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING
   provenance:
@@ -73,12 +74,14 @@ gpu_decode_power:
         6.28-9.01 pJ/bit for H200 (decode 315-420 W = 45-60% of 700 W TDP,
         P_static 74 W, BW 4.8 TB/s).  The board-level value includes HBM
         dynamic energy; because the E2E model books memory energy separately
-        (E4), the affine model parameter is the die-only value: subtracting
-        the HBM per-bit read energy (1.397 pJ/bit DreamRAM nominal) gives
+        (E4), the model parameter is the GPU-side effective decode value:
+        subtracting the HBM per-bit read energy (1.397 pJ/bit DreamRAM) gives
         4.88-7.61 pJ/bit.  The nominal 5.10 pJ/bit (legacy continuity) lies
         inside that range, giving P_peak_decode = 74 + 5.10e-12 x 4.8e12 x 8
         = 269.84 W.  The same parameter is used for the proposed M3D row:
-        identical GPU silicon implies an identical GPU-side parameter and
+        It must not be interpreted as memory-I/O energy. The same parameter
+        is used for the proposed M3D row: identical GPU silicon implies an
+        identical GPU-side parameter and
         memory-technology differences are booked entirely on the E4 side.
         Range endpoints are used in sensitivity analyses.
 host_offload:

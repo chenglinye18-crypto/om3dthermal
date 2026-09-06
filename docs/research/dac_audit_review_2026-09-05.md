@@ -70,7 +70,7 @@ GPU 代码明确将参数视为文献范围内的 nominal，且写明并非某 G
 
 当前 E8 只相加 GPU 与 memory dynamic energy，明确排除 host、cooling 等；还需说明 memory background/refresh、controller/PHY 的纳入与重叠边界。尤其 GPU 文献功耗的测量域是否包含 memory，需核实，避免再次加 memory 时重复记账。
 
-原问题是 GPU 能耗路径采用仿射功耗，而热路径固定 300 W。2026-09-05 按用户要求修正：正式 runner 将 E8 前移，E5/E6/E7 共用其 GPU 功率；M3D logic-background 敏感性同步接入。u=1 保留原 300 W 锚点，u<1 使用当前模型给出的功率。物理求解器与原基线期望值未改；没有 E8 模型的兼容调用保留明确标注的固定功率。该修正解决接线一致性，不升级仿射模型的实测可信度。
+原问题是 GPU 能耗与热路径工作点不一致。正式 runner 已将 E8 前移，E5/E6/E7 与 M3D logic-background 敏感性共用其 GPU 功率。2026-09-07 进一步冻结 bandwidth boundary：`B_actual=min(B_demand,4.8 TB/s)`，canonical 饱和 decode 功率为 269.84 W，超峰值需求不再外推功率。物理求解器未改；没有 E8 模型的兼容调用仍保留明确标注的固定功率。该修正解决接线与边界语义，不升级模型的实测可信度。
 
 最终每个结果行核对 P_accounted = E_accounted/token × tokens/s，未计入热源或能耗的项单列。1.2 J/token 目前只是 hand-check，不能进入论文摘要。
 

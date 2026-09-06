@@ -45,9 +45,14 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
         and item.classification == "SOFTWARE_DERIVED"
         for item in workload.provenance
     )
-    # Rev v2 (2026-09-06): H200-anchored platform, affine u=1 operating
+    # Rev v2 (2026-09-06): H200-anchored bandwidth-saturated operating
     # point 74 W + 5.10 pJ/bit x 4.8 TB/s x 8 = 269.84 W (was 300.0).
     assert platform.fixed_gpu_power_W == 269.84
+    assert platform.gpu_decode_power.e_decode_J_per_bit == 5.10e-12
+    assert platform.gpu_decode_power.derived_peak_decode_power_W == pytest.approx(
+        269.84)
+    assert platform.gpu_decode_power.peak_power_status == (
+        "DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH")
     assert experiment.scenario.rho_values == (0.0, 1.0, 100.0, 1000.0)
     assert not hasattr(experiment.scenario, "thermal")
     assert experiment.output_policy == "ERROR_IF_EXISTS"

@@ -14,17 +14,15 @@
 | BF16 dense 峰值算力 | 100 TFLOPS（名义） | 989.5 TFLOPS | VENDOR_SPEC |
 | GPU 峰值 HBM 带宽（平台侧） | 4.9 TB/s | 4.8 TB/s | VENDOR_SPEC |
 | P_static | 100 W（旧名义） | **74 W**（H200 SXM 实测 idle floor；NVL 121 W 作敏感性上界）；baseline/proposed/H200 三行同值 | MEASURED_REFERENCE：ai-gpu-energy-optimizer 白皮书（72+ 次实测）；h200-gpu-benchmark-suite |
-| e_decode（动态，仿射参数） | 隐含 5.10 pJ/bit | **板级动态 6.28–9.01 pJ/bit**（含 HBM 动态能耗；E4 已单记存储能耗，模型参数须扣存储 per-bit：baseline 扣 1.397 → die-only 4.88–7.61；M3D 扣 0.855 → 5.42–8.15）；旧名义 5.10 仍在扣后区间内 | DERIVED from MEASURED（decode 315–420 W − 74 W）÷ 4.8 TB/s |
-| P_peak_decode | 300 W | **派生量** P = P_static + e_decode·BW·8；e 取板级端点 → 315–420 W（=45–60% TDP），与实测 frac 自洽，不再独立设定 | 由 P_static + e_decode 推出 |
+| e_decode（GPU-side effective decode coefficient） | 隐含 5.10 pJ/bit | **5.10 pJ/bit nominal**；由实测 decode 动态功耗反推，并扣除 E4 已单独计账的 memory energy；不是单纯 memory-I/O energy | DERIVED_FROM_MEASURED_REFERENCE，扣存区间内的 nominal |
+| P_decode_at_bw_peak | 300 W | **269.84 W 派生/校验量** = 74 + 5.10e-12×8×4.8e12；不是独立物理参数 | SOFTWARE_DERIVED |
 | host 链路 | PCIe Gen5 64 GB/s 单向 | 不变（主结果）；+ NVLink-C2C 450 GB/s 敏感性 | VENDOR_SPEC；docs/research/gpu_platform_table_2026-09-06.csv |
 | host DDR5 | 460.8 GB/s, η=0.878 | 不变 | MATCHED_REFERENCE |
 | 场景 matched 带宽 | 39.2 Tb/s 字面值 | 派生 + cap = 39.2 Tb/s（已落地） | MODELING_CHOICE；106-slab 能力 42.4 Tb/s 作冗余 |
 
-开放项：无功耗取点待定项——按 2026-09-06 讨论，**固定不变量是
-P_static=74 W + e_decode 板级动态 6.28–9.01 pJ/bit，P 全部派生**；
-E2E 模型参数须从板级值扣除 E4 已单记的存储 per-bit（baseline
-die-only 4.88–7.61 / M3D 5.42–8.15），旧代码名义 5.10 pJ/bit 仍在
-扣后区间内，区间端点做敏感性。
+开放项：无功耗取点待定项。canonical nominal 冻结为 `P_static=74 W`、
+`e_decode=5.10 pJ/bit`、`B_gpu_peak=4.8 TB/s`。`e_decode` 是扣除 E4
+memory energy 后的 GPU-side effective coefficient；P 全部由实际带宽派生。
 
 ## 2. 几何变更
 
@@ -57,7 +55,8 @@ die-only 4.88–7.61 / M3D 5.42–8.15），旧代码名义 5.10 pJ/bit 仍在
 | M3D case 几何 | configs/cases/orthogonal_m3d_igzo.yaml | slab_count 106、cube_length_x_mm 31.8、gpu_footprint_mm [32,24]、thermal.edge_strip_material: Mold | YAML | ✅ 已实施（463.75 GiB = 497.9 GB） |
 | B 臂 case | configs/cases/orthogonal_m3d_igzo_edge_si_bar.yaml | 新建；edge_strip_material: Thermal_Silicon（140 W/mK），其余同 A 臂 | YAML | ✅ 已实施（建场景验证：2 条 1 mm 边条，A=Mold / B=Thermal_Silicon） |
 | orthogonal_si 对照 | configs/cases/orthogonal_si.yaml | 仅 power_W 300→269.84，几何冻结作 MOSAIC 文献对照 | YAML | ✅ 已实施 |
-| 平台 YAML | configs/platform/gpu_package_h200_reference.yaml | 新建 H200 锚定平台（fixed 269.84 W、static 74 W、peak bw 4.8e12）；旧 300w 文件已 git rm | YAML | ✅ 已实施 |
+| 平台 YAML | configs/platform/gpu_package_h200_reference.yaml | H200 锚定平台（static 74 W、e_decode 5.10 pJ/bit、peak bw 4.8e12、派生峰值 269.84 W）；旧 300w 文件已 git rm | YAML | ✅ 已实施 |
+| GPU decode bandwidth boundary | src/om3dthermal/platform/gpu_power.py + evaluator/llm_decode_gpu_energy.py | `B_actual=min(B_demand,B_peak)` 单一解析路径；超峰值后 dynamic power 保持 195.84 W | **代码** | ✅ 已实施 |
 | 300 W 校验 | src/om3dthermal/power/config.py | CANONICAL_GPU_POWER_W = 269.84 常量；校验器改 isclose + 豁免 unresolved legacy 案例 | **代码** | ✅ 已实施 |
 | B 臂热几何 | src/om3dthermal/geometry/orthogonal_hbm.py + config.py + architecture_comparison.py | edge strip 发射（y 两侧 1 mm、x 全 GPU 宽、component=orthogonal_hbm_edge_strip）；conventional 硬编码（30/22/8 mm）全部派生化 | **代码** | ✅ 已实施 |
 | 带宽 cap 派生 | src/om3dthermal/placement/nmp_locality_e2e.py + 2 个 scripts | external_bandwidth_cap_bytes_per_s 参数；从 scenario matched_bandwidth_derivation.cap（39.2e13 bits/s）÷8 = 4.9e12 传入 | **代码** | ✅ 已实施 |
@@ -91,7 +90,7 @@ die-only 4.88–7.61 / M3D 5.42–8.15），旧代码名义 5.10 pJ/bit 仍在
   81.93349 °C 等）**保持旧值未动**：该测试的热指标是注入式冻结锚点，
   新冻结值必须等 §4 第 3 步 formal 重跑产生真实 GPU-PCG 结果后再替换。
 - 主要漂移（全部已按新物理值重冻结断言，非凑通过）：
-  - GPU 功率：300 → 269.84 W（P_static 74 + 动态 195.84 = e_decode
+  - canonical GPU 饱和 decode 功率：269.84 W（P_static 74 + 动态 195.84 = e_decode
     5.10 pJ/bit × 4.8 TB/s × 8）；半带宽点 200 → 173.96 W
   - 容量：conventional 108 → 135.0 GiB；M3D 428.75 → 463.75 GiB
   - slab 数 98 → 106；带宽能力 39.2 → 42.4 Tb/s（场景 cap 39.2 Tb/s 不变，

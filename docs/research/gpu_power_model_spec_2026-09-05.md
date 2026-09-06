@@ -1,167 +1,101 @@
-# GPU 功耗/能效三级仿射模型 — Analytical Spec v0
+# GPU decode bandwidth-boundary power model
 
-日期：2026-09-05
-状态：8.1–8.3 已实现（platform/gpu_power.py、platform YAML `gpu_decode_power`
-块、evaluator/llm_decode_gpu_energy.py 与 runner 接入；测试 31 项通过）。
-E8 阶段输出挂在 summary.json 的 `gpu_decode_energy` 键下。
-2026-09-05 修订：正式 runner 先计算 E8，再将同一 GPU 功率传入 E5 封装
-功率、E6 热源与 E7 输出；M3D logic-background 敏感性也共用该工作点。
-冻结的是物理算子、求解器及原基线回归值，不是所有 workload 都强制 300 W。
-8.4–8.7 的其余工作仍待完成。
+日期：2026-09-05；2026-09-07 bandwidth-boundary 收口。
 
-新增输出语义：`power.json.gpu_power_W` 是实际使用的解析功率；
-`fixed_gpu_power_W` 仅保留原配置参考，不能再作为动态路径热输入。
-校验 `GPU J/token × aggregate tok/s = GPU W = GPU thermal source W`，
-禁止跨 architecture/rho/时间/能耗工作点混用。没有 E8 模型的兼容调用仍使用
-显式固定功率。这里的“动态”指 workload 利用率决定的稳态平均功率，不是瞬态。
+状态：已实现。canonical 解析位于
+`src/om3dthermal/platform/gpu_power.py::resolve_gpu_decode_power`；E8、formal
+runner、workload/package power 和 thermal GPU source 共用同一个解析工作点。
+这是稳态 decode 平均功耗模型，不是瞬态模型。
 
-E8 能耗仍仅覆盖 GPU + memory dynamic；refresh/background/logic 由 E5 加一次。
-因此不能要求 E8 当前 J/token × tok/s 直接等于包含这些静态项的封装总功率。
-目标：将 `GPU_ENERGY_MODEL = NOT_AVAILABLE` 升级为
-`ANALYTICAL_CALIBRATED_BY_MEASURED_REFERENCE`，使 E2E 表可以输出系统级
-J/token（含 GPU），覆盖 baseline 与 FEOL-MAC offload 两种场景。
+## 1. 冻结的物理定义
 
----
-
-## 1. 设计原则
-
-- 一阶透明公式，可 hand-check；不引入 cycle simulator，不引入新物理。
-- 所有参数标注 provenance：`MEASURED_REFERENCE`（文献实测锚点）/
-  `MODELING_CHOICE`（模型形式选择）/ `MEASURED_LOCAL`（本机 4070 SUPER
-  验证，仅用于模型形式 sanity check，不用于 nominal 取值）。
-- nominal 取值只来自数据中心级 GPU（H100 类）的文献实测；本机测量只验证
-  曲线形状。
-- 每个标量结论都配敏感性区间，结论稳健性不依赖点值。
-
-## 2. 模型形式
-
-decode 相（memory-bound）GPU 功耗对其动态活动近似仿射：
+GPU decode 功耗只由 GPU 侧实际服务的带宽决定：
 
 ```text
-P_gpu = P_static + (P_peak − P_static) × u
-u     = GPU 侧实际搬运字节率 / GPU 峰值显存带宽        (decode 相)
-u     = GPU 侧实际 FLOP 率 / 峰值 FLOP 率              (compute-bound 相，v0 不用)
-E_gpu/token = P_gpu(u) × T_token
+B_actual = min(B_demand, B_gpu_peak)
+bit_rate_actual = 8 * B_actual
+P_gpu_dynamic = e_decode * bit_rate_actual
+P_gpu = P_static + P_gpu_dynamic
 ```
 
-证据基础（`MEASURED_REFERENCE`）：
-
-- TokenPowerBench（AAAI 2026）：prefill/decode 分相实测，decode 相峰值功率
-  比 prefill 低 ~90 W，decode 相功率平稳——支持"decode 相用单一 u 参数化"；
-- ML.ENERGY longitudinal analysis（Chung et al.）：GPU power draw 是
-  utilization 的直接指示器；小 batch 下静态功耗占比升高、J/token 恶化——
-  支持仿射形式与 P_static 项的存在；
-- From Words to Watts（HPEC 2023）：250→175 W power cap 下推理时间仅增
-  6.7%，能耗降 23%——decode 对功耗帽不敏感（memory-bound），间接支持
-  u 由带宽而非功耗帽决定。
-
-## 3. 参数与锚点
-
-| 参数 | 含义 | Nominal 来源 | 敏感性 |
-|---|---|---|---|
-| `P_static` | GPU 静态/idle 功耗 | ML.ENERGY / TokenPowerBench 实测区间（H100 类） | ±30% |
-| `P_peak` | decode 相满载功耗 | 同上；TokenPowerBench decode 相实测 | ±30% |
-| `BW_peak` | GPU 峰值显存带宽 | 平台描述符既有值（39.2 Tb/s matched 场景下为平台事实） | 不扫 |
-| `T_token` | 每 token 时间 | 现有 E2E evaluator 输出 | 不扫 |
-
-数值锚点（`MEASURED_REFERENCE`，引用用）：
-
-- Llama 3.1 8B on H100：batch 64 约 0.12–0.20 J/token（ML.ENERGY
-  longitudinal，vLLM V2/V3 区间）——与本项目冻结 workload 同族模型，
-  是系统 J/token 的直接 sanity anchor；
-- Llama 2 70B on 8×H200（MLPerf Inference v4.1 closed）：offline 34,864
-  tok/s @ 700 W/GPU ≈ GPU 侧 0.16 J/token——高度优化大批量下界参考；
-- LLaMA 65B on A100 类（From Words to Watts）：3–4 J/token 量级——
-  旧代际/小批量上界参考。
-
-## 4. Baseline（无 offload）场景
+等价的分段式为：
 
 ```text
-u_base = read_bytes_per_token / (BW_peak × T_token)
+B_demand <  B_gpu_peak: P_gpu = P_static + e_decode * 8 * B_demand
+B_demand >= B_gpu_peak: P_gpu = P_static + e_decode * 8 * B_gpu_peak
 ```
 
-现有 E2E 已输出 `read_bytes_per_token` 与 `T_token`（memory time），
-u_base 是派生量，不需要新测量。在 39.2 Tb/s matched 场景下
-u_base ≈ 1（带宽即瓶颈），E_gpu/token ≈ P_gpu(u≈1) × T_token——
-这等价于现表中的固定 300 W 假设的精细化版本，可用于解释现有结果的
-一致性。
+边界连续。超过 `B_gpu_peak` 后，bandwidth-dependent dynamic power 保持常数；
+性能和服务速率继续由既有 bandwidth bottleneck 模型限制，功耗模型不对需求带宽
+作超峰值线性外推。
 
-## 5. FEOL-MAC offload 场景
+`bandwidth_saturated` 冻结为严格超限语义：仅当
+`B_demand > B_gpu_peak` 时为 `true`。在精确边界处 utilization 为 1，
+但 `bandwidth_saturated=false`。
 
-卸载后 GPU 不再搬运被 offload 的权重流，剩下的流量为 KV、激活与
-非卸载算子权重：
+## 2. 参数、单位和 accounting boundary
+
+| 量 | canonical nominal | 状态 |
+|---|---:|---|
+| `P_static` | 74 W | H200 SXM measured-reference idle floor |
+| `e_decode` | 5.10 pJ/bit | GPU-side effective decode coefficient |
+| `B_gpu_peak` | 4.8 TB/s | H200 vendor peak HBM3e bandwidth |
+| `P_decode_at_bw_peak` | 269.84 W | 派生/校验量 |
 
 ```text
-gpu_remaining_bytes/token = KV_read + KV_write + activations
-                          + non_offloaded_weight_bytes
-u_off  = gpu_remaining_bytes/token / (BW_peak × T_token_off)
-E_gpu/token = [P_static + (P_peak − P_static) × u_off] × T_token_off
+P_decode_at_bw_peak
+= 74 + 5.10e-12 * 8 * 4.8e12
+= 269.84 W
 ```
 
-- `gpu_remaining_bytes_per_decode_step` 已在
-  `placement/nmp_feasibility.py` 的 workload closure 中存在，直接复用；
-- `T_token_off` 取现有 NMP/placement evaluator 的时序输出；
-- memory 侧新增 MAC 能耗：`E_mac/token = MACs/token × E_mac_per_op`，
-  `E_mac_per_op` 用文献 pJ/MAC 锚点（候选：ISSCC 类 MAC 实测值，IGZO TFT
-  MAC 若无可引值则用相近节点 Si 值 + 大敏感性），标注
-  `MODELING_CHOICE / NOT_HARDWARE_VALIDATED`；
-- 系统 J/token = E_gpu/token + E_mem/token（现有 E4 输出）+ E_mac/token。
+`e_decode` 从实测 decode 动态功耗反推，并扣除了 E4 memory energy 模块已经
+单独计账的部分。它是 GPU-side effective decode coefficient，不能重新解释为
+单纯 memory-I/O energy。模型不含 `e_compute`，也不按 token 定义功率；W、B/s
+和 bit/s 是基本量。token time 仅用于将每 token GPU 流量换算成 `B_demand`，以及
+将已解析的 W 换算成 J/token。
 
-## 6. 本机测量（MEASURED_LOCAL，可选，仅验证模型形式）
+YAML 中为兼容性保留 `peak_decode_power_W`，但 schema 强制它等于
+`P_static + e_decode * 8 * B_gpu_peak`。它不是可独立标定或扫描的物理参数。
 
-- 硬件：RTX 4070 SUPER（12 GB GDDR6X，220 W 级）。12 GB 装不下 fp16
-  LLaMA-8B（16 GB），用 Q8/Q4 GGUF（llama.cpp）或 LLaMA-3.2-3B fp16；
-- 方法：照抄 From Words to Watts——pynvml/nvidia-smi 100 ms 采样，
-  prefill/decode 分相，扫 batch ∈ {1, 2, 4, 8, 16} 与 context；
-- 产出：P(batch) 曲线形状（验证仿射 + P_static 占比）、decode 相功率
-  平稳性（验证单 u 参数化）；
-- 纪律：4070 是 GDDR6X 消费卡，绝对值不外推；论文中仅作为
-  "model form validated against local measurement" 一句话证据。
-
-## 7. 输出与 claim boundary 升级
-
-实现后 E2E 表新增字段：
+## 3. Canonical data flow and closure
 
 ```text
-gpu_power_model_status = ANALYTICAL_CALIBRATED_BY_MEASURED_REFERENCE
-gpu_static_power_provenance = MEASURED_REFERENCE (ML.ENERGY / TokenPowerBench)
-gpu_model_form = AFFINE_UTILIZATION_MODEL (MODELING_CHOICE)
-system_j_per_token = E_gpu + E_mem (+ E_mac)
-system_j_per_token_status = ANALYTICAL_WITH_MEASURED_ANCHORS
+performance bytes/token + token time
+  -> B_demand
+  -> resolve_gpu_decode_power (唯一 clamp / power 解析路径)
+  -> E8 gpu_decode_power_W
+  -> workload/package gpu_power_W
+  -> thermal source "gpu"
 ```
 
-E2E_ARCHITECTURE.md 的 claim boundary 中
-"GPU energy and complete system J/token are unavailable" 一条相应改写；
-4070 测量若完成，追加 `model_form_validation = MEASURED_LOCAL_CONSUMER_GPU`。
+动态路径不得重新读取 legacy fixed power。`fixed_gpu_power_W` 只为没有 E8
+模型的兼容调用和 case/platform 一致性检查保留；formal runner 配置 E8 时，GPU
+energy、package power、E2E row 和 thermal source 必须使用完全相同的
+`gpu_decode_power_W`。
 
-## 8. 实现拆分（评审通过后）
+闭环关系：
 
-| # | 任务 | 依赖 |
-|---|---|---|
-| 8.1 | `src/om3dthermal/platform/gpu_power.py`：仿射模型 + 参数 schema | 无 |
-| 8.2 | `configs/platform/gpu_package_300w_reference.yaml` 增加 P_static/P_peak/BW_peak 与 provenance 字段 | 8.1 |
-| 8.3 | E2E evaluator 增加 u 计算与 E_gpu/token 输出（baseline 路径） | 8.1 |
-| 8.4 | NMP/placement 路径接入 u_off 与 E_mac/token | 8.3 + 现有 nmp closure |
-| 8.5 | 敏感性：P_static/P_peak ±30%，E_mac_per_op 区间扫描 | 8.4 |
-| 8.6 | （可选）4070 SUPER 本地测量脚本与报告 | 无，独立 |
-| 8.7 | 文档与 claim boundary 升级；测试：单调性（u 升 → E_gpu 升）、边界（u=0 → P_static；u≥1 截断）、closure | 全部 |
+```text
+gpu_energy_j_per_token * aggregate_tokens_per_second = gpu_power_W
+package_power_W = gpu_power_W + memory_total_power_W
+thermal.source_power_breakdown_W["gpu"] = gpu_power_W
+```
 
-## 9. 引用清单
+E8 的 `system_energy_j_per_token` 仅覆盖 GPU + memory dynamic energy；memory
+refresh/background/logic 仍由 E5 各加一次，因此不能把这些静态项重复加入 E8。
 
-- S. Samsi et al., "From Words to Watts: Benchmarking the Energy Costs of
-  Large Language Model Inference," IEEE HPEC 2023. arXiv:2310.03003
-- C. Niu et al., "Benchmarking the Power Consumption of LLM Inference"
-  (TokenPowerBench), AAAI 2026. arXiv:2512.03024
-- J. W. Chung et al., "The ML.ENERGY Benchmark," + ML.ENERGY longitudinal
-  analysis blog (ml.energy), Llama 3.1 8B/70B on H100
-- MLPerf Inference v4.1 closed results, Llama 2 70B on 8×H200
-  (mlcommons.org; NVIDIA developer blog 2024-08-28)
-- A. Tschand et al., "MLPerf Power: Benchmarking the Energy Efficiency of
-  Machine Learning Systems," 2025. arXiv:2410.12032
+## 4. Hand checks
 
-## 10. 明确不做
+| Demand | Actual | Dynamic | Total | Saturated |
+|---|---:|---:|---:|---|
+| `0.5 * B_peak = 2.4 TB/s` | 2.4 TB/s | 97.92 W | 171.92 W | false |
+| `B_peak = 4.8 TB/s` | 4.8 TB/s | 195.84 W | 269.84 W | false |
+| `1.2 * B_peak = 5.76 TB/s` | 4.8 TB/s | 195.84 W | 269.84 W | true |
 
-- 不做 GPU cycle simulator / 功耗 trace 级建模；
-- 不做 prefill 相建模（v0 只覆盖 decode；prefill 能量在论文中单独说明）；
-- 不把 4070 测量值用于 nominal；
-- 不声称 IGZO MAC 能耗已验证（文献锚点 + 大敏感性）。
+## 5. Claim boundary
+
+模型形式是一阶、透明的 `MODELING_CHOICE`，参数由 measured references 锚定，
+不构成某一具体 workload/GPU 的逐点实测复现。冻结范围是 GPU decode power
+accounting 与 bandwidth boundary；不引入 compute-power 模型，不改变 workload
+FLOP、memory physical energy、NMP placement、MAC/GPU operator division 或 thermal
+solver。

@@ -34,7 +34,7 @@ workload:
   row_policy: {activated_row_data_utilization: 0.10}
 
 power:
-  # Rev v2: GPU power follows the H200-anchored affine u=1 operating point
+  # Rev v2: GPU power follows the H200-anchored saturated decode point
   # (74 W static + 5.10 pJ/bit x 4.8 TB/s x 8 = 269.84 W) so this case can
   # share the H200-anchored platform; MOSAIC-Si geometry stays frozen as
   # the literature reference comparison.

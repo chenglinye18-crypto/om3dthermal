@@ -1287,7 +1287,7 @@ def test_active_cases_parse_and_resolve_system_power():
     hbm_geometry = resolve_case_geometry(hbm_case)
     hbm_system = resolve_system_power(
         hbm_case, project_root=ROOT, geometry=hbm_geometry)
-    # Rev v2: H200-anchored affine u=1 point (was 300.0 W).
+    # Rev v2: H200-anchored bandwidth-saturated point (was 300.0 W).
     assert hbm_system.gpu_power_W == 269.84
     assert hbm_system.memory_result is not None
     hbm = hbm_system.memory_result

@@ -11,18 +11,29 @@ from om3dthermal.evaluator.llm_decode_gpu_energy import (
 from om3dthermal.evaluator.llm_decode_performance import (
     LLMDecodePerformanceMetrics,
 )
-from om3dthermal.platform import AffineGPUDecodePowerSpec
+from om3dthermal.platform import (
+    AffineGPUDecodePowerSpec,
+    resolve_gpu_decode_power,
+)
 from om3dthermal.provenance import ProvenanceRecord
 
 
-def _spec(bandwidth_bytes_per_s: float = 1e12) -> AffineGPUDecodePowerSpec:
+STATIC_POWER_W = 74.0
+E_DECODE_J_PER_BIT = 5.10e-12
+PEAK_BANDWIDTH_BYTES_PER_S = 4.8e12
+PEAK_DECODE_POWER_W = 269.84
+
+
+def _spec() -> AffineGPUDecodePowerSpec:
     return AffineGPUDecodePowerSpec(
         model="AFFINE_UTILIZATION_MODEL",
-        static_power_W=100.0,
-        peak_decode_power_W=300.0,
-        peak_memory_bandwidth_bytes_per_s=bandwidth_bytes_per_s,
+        static_power_W=STATIC_POWER_W,
+        e_decode_J_per_bit=E_DECODE_J_PER_BIT,
+        peak_decode_power_W=PEAK_DECODE_POWER_W,
+        peak_memory_bandwidth_bytes_per_s=PEAK_BANDWIDTH_BYTES_PER_S,
         static_power_status="PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE",
-        peak_power_status="PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE",
+        peak_power_status=(
+            "DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH"),
         bandwidth_status="MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED",
         model_form_status=(
             "MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING"),
@@ -100,35 +111,103 @@ def _energy(*, capacity_feasible: bool = True,
     )
 
 
-def test_memory_bottleneck_recovers_fixed_baseline_power() -> None:
-    """At u = 1 the affine model reproduces the fixed 300 W baseline."""
+def _resolve(demand: float):
+    return resolve_gpu_decode_power(
+        static_power_W=STATIC_POWER_W,
+        e_decode_J_per_bit=E_DECODE_J_PER_BIT,
+        bandwidth_demand_bytes_per_s=demand,
+        peak_bandwidth_bytes_per_s=PEAK_BANDWIDTH_BYTES_PER_S,
+    )
+
+
+def test_below_bandwidth_boundary() -> None:
+    result = _resolve(0.5 * PEAK_BANDWIDTH_BYTES_PER_S)
+    assert result.bandwidth_demand_bytes_per_s == 2.4e12
+    assert result.bandwidth_actual_bytes_per_s == 2.4e12
+    assert result.bandwidth_utilization == pytest.approx(0.5)
+    assert result.bandwidth_saturated is False
+    assert result.gpu_dynamic_power_W == pytest.approx(97.92)
+    assert result.gpu_power_W == pytest.approx(171.92)
+
+
+def test_exact_bandwidth_boundary_is_not_strictly_saturated() -> None:
+    result = _resolve(PEAK_BANDWIDTH_BYTES_PER_S)
+    assert result.bandwidth_actual_bytes_per_s == PEAK_BANDWIDTH_BYTES_PER_S
+    assert result.bandwidth_utilization == pytest.approx(1.0)
+    assert result.bandwidth_saturated is False
+    assert result.gpu_power_W == pytest.approx(PEAK_DECODE_POWER_W)
+
+
+def test_above_bandwidth_boundary_is_capped() -> None:
+    result = _resolve(1.2 * PEAK_BANDWIDTH_BYTES_PER_S)
+    assert result.bandwidth_demand_bytes_per_s == pytest.approx(5.76e12)
+    assert result.bandwidth_actual_bytes_per_s == PEAK_BANDWIDTH_BYTES_PER_S
+    assert result.bandwidth_utilization == pytest.approx(1.0)
+    assert result.bandwidth_saturated is True
+    assert result.gpu_power_W == pytest.approx(PEAK_DECODE_POWER_W)
+
+
+def test_power_is_continuous_at_bandwidth_boundary() -> None:
+    left = _resolve(PEAK_BANDWIDTH_BYTES_PER_S * (1.0 - 1e-9))
+    boundary = _resolve(PEAK_BANDWIDTH_BYTES_PER_S)
+    assert left.gpu_power_W == pytest.approx(
+        boundary.gpu_power_W, rel=1e-9)
+
+
+def test_power_is_monotonic_then_constant_across_bandwidth_boundary() -> None:
+    demands = [
+        0.0,
+        0.25 * PEAK_BANDWIDTH_BYTES_PER_S,
+        0.5 * PEAK_BANDWIDTH_BYTES_PER_S,
+        PEAK_BANDWIDTH_BYTES_PER_S,
+        1.2 * PEAK_BANDWIDTH_BYTES_PER_S,
+        2.0 * PEAK_BANDWIDTH_BYTES_PER_S,
+    ]
+    powers = [_resolve(demand).gpu_power_W for demand in demands]
+    assert powers[0] < powers[1] < powers[2] < powers[3]
+    assert powers[3:] == pytest.approx([PEAK_DECODE_POWER_W] * 3)
+
+
+def test_peak_decode_power_is_a_derived_schema_check() -> None:
+    with pytest.raises(ValueError, match="must equal the derived value"):
+        AffineGPUDecodePowerSpec.model_validate(
+            _spec().model_dump() | {"peak_decode_power_W": 270.0})
+
+
+def test_energy_evaluator_uses_canonical_boundary_operating_point() -> None:
+    token_time = 1000.0 / PEAK_BANDWIDTH_BYTES_PER_S
     result = evaluate_gpu_decode_energy(
-        _performance(token_time_s=1e-9), _energy(), _spec())
+        _performance(token_time_s=token_time), _energy(), _spec())
     assert result.evaluation_status == "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY"
     assert result.memory_bandwidth_utilization == pytest.approx(1.0)
     assert result.utilization_clamped is False
-    assert result.gpu_decode_power_W == pytest.approx(300.0)
-    assert result.gpu_energy_j_per_token == pytest.approx(300.0 * 1e-9)
+    assert result.bandwidth_demand_bytes_per_s == pytest.approx(4.8e12)
+    assert result.bandwidth_actual_bytes_per_s == pytest.approx(4.8e12)
+    assert result.bandwidth_saturated is False
+    assert result.gpu_dynamic_power_W == pytest.approx(195.84)
+    assert result.gpu_decode_power_W == pytest.approx(269.84)
+    assert result.gpu_energy_j_per_token == pytest.approx(269.84 * token_time)
     assert result.system_energy_j_per_token == pytest.approx(
-        300.0 * 1e-9 + 1e-7)
+        269.84 * token_time + 1e-7)
 
 
-def test_compute_bound_lowers_utilization_and_power() -> None:
-    """u < 1 pulls GPU power toward the static end of the affine range."""
+def test_longer_token_time_lowers_byte_rate_and_power() -> None:
+    """A longer token time lowers byte rate and bandwidth-dependent power."""
     result = evaluate_gpu_decode_energy(
-        _performance(token_time_s=2e-9), _energy(), _spec())
+        _performance(token_time_s=2.0 * 1000.0 / PEAK_BANDWIDTH_BYTES_PER_S),
+        _energy(), _spec())
     assert result.memory_bandwidth_utilization == pytest.approx(0.5)
-    assert result.gpu_decode_power_W == pytest.approx(200.0)
-    assert result.gpu_energy_j_per_token == pytest.approx(200.0 * 2e-9)
+    assert result.gpu_decode_power_W == pytest.approx(171.92)
 
 
 def test_utilization_is_clamped_at_one() -> None:
     result = evaluate_gpu_decode_energy(
-        _performance(token_time_s=1e-9), _energy(),
-        _spec(bandwidth_bytes_per_s=5e11))
+        _performance(token_time_s=1000.0 / (1.2 * PEAK_BANDWIDTH_BYTES_PER_S)),
+        _energy(), _spec())
     assert result.memory_bandwidth_utilization == 1.0
     assert result.utilization_clamped is True
-    assert result.gpu_decode_power_W == pytest.approx(300.0)
+    assert result.bandwidth_saturated is True
+    assert result.gpu_decode_power_W == pytest.approx(269.84)
 
 
 def test_capacity_infeasible_blocks_all_numeric_outputs() -> None:
@@ -140,6 +219,10 @@ def test_capacity_infeasible_blocks_all_numeric_outputs() -> None:
     assert result.gpu_energy_j_per_token is None
     assert result.system_energy_j_per_token is None
     assert result.memory_bandwidth_utilization is None
+    assert result.bandwidth_demand_bytes_per_s is None
+    assert result.bandwidth_actual_bytes_per_s is None
+    assert result.bandwidth_saturated is None
+    assert result.gpu_dynamic_power_W is None
 
 
 def test_architecture_mismatch_is_rejected() -> None:

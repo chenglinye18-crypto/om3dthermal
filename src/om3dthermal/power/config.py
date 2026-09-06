@@ -15,7 +15,7 @@ class StrictModel(BaseModel):
 
 
 # Rev v2 (2026-09-06): canonical cases are anchored to the H200-class
-# platform's affine u = 1 operating point instead of the legacy 300 W
+# platform's H200-anchored bandwidth-saturated decode operating point
 # nominal: 74 W measured idle floor + 5.10 pJ/bit x 4.8e12 B/s x 8
 # = 269.84 W.  See docs/research/platform_revision_v2_spec_2026-09-06.md
 # and configs/platform/gpu_package_h200_reference.yaml.
@@ -801,7 +801,7 @@ class CanonicalCaseConfig(MemoryPowerConfig):
                     rel_tol=0.0, abs_tol=1e-9)):
             raise ValueError(
                 "active canonical research cases require GPU="
-                f"{CANONICAL_GPU_POWER_W} W (H200-anchored affine u=1 "
+                f"{CANONICAL_GPU_POWER_W} W (H200-anchored bandwidth-saturated "
                 "point, rev v2)")
         if (self.power.memory.model == "analytical"
                 and self.memory.backend != "dreamram"):

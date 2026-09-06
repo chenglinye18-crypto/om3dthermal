@@ -75,19 +75,18 @@ Tmax 81.925634 °C；差异来自先前容量几何变更所影响的刷新功�
 
 ### 3.3 E8：GPU decode 仿射能耗（commit 197bcb1）
 
-模型：`P_gpu = P_static + (P_peak − P_static)·u`，u = GPU 侧字节率 / 峰值带宽。
+当前 canonical 模型：`P_gpu = P_static + e_decode·8·min(B_demand,B_peak)`。
 
-- 参数（`configs/platform/gpu_package_300w_reference.yaml`）：
-  P_static = 100 W，P_peak = 300 W，BW_peak = 4.9 TB/s；
-  状态 `PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE`。
+- 参数（`configs/platform/gpu_package_h200_reference.yaml`）：
+  P_static = 74 W，e_decode = 5.10 pJ/bit，BW_peak = 4.8 TB/s；
+  满带宽派生功率为 269.84 W。
 - 证据锚点（MEASURED_REFERENCE）：ML.ENERGY longitudinal（Llama 3.1 8B on H100）、
   TokenPowerBench（AAAI 2026，decode 相功率平稳且低于 prefill ~90 W）、
   From Words to Watts（HPEC 2023，decode 对功耗帽不敏感）。
-- baseline（u≈1）结果：E_gpu ≈ 300 W × 6.77 ms ≈ **2.03 J/token**；
-  系统 J/token ≈ **2.26 J**（GPU 2.03 + 存储 0.227），
-  claim 升级为 `ANALYTICAL_CALIBRATED_BY_MEASURED_REFERENCE`。
+- 满带宽点：P_gpu = **269.84 W**；具体 E_gpu/token 由该解析功率乘以
+  当前 runner 的 token time 得到。
 - 实现：`platform/gpu_power.py` + `evaluator/llm_decode_gpu_energy.py`，
-  runner 已接入；u=1 时精确恢复旧 300 W 固定假设（回归安全）。
+  runner 已接入；超过 GPU 峰值带宽后 dynamic power 不再增长。
 
 - 2026-09-05 修订：E8 前移至热求解之前，GPU W 同时用于能耗、封装总功率
   和 GPU 热源；`fixed_gpu_power_W` 仅保留配置参考，实际值为 `gpu_power_W`。
