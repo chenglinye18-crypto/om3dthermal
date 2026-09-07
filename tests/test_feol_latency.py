@@ -214,7 +214,7 @@ def test_energy_miv_topology_capacitance_and_serialization_regression(
     assert topology.as_dict() == topology_before
     assert canonical_route.feol_serialization_applied is False
 
-    power = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert power.E_feol_route_pj_bit == pytest.approx(baseline_energy)
     assert power.E_vertical_pj_bit == pytest.approx(0.002445862111816407)
     assert power.diagnostics["miv_resistance_ohm_per_um"] == 10.0

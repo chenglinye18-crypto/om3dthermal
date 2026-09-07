@@ -8,8 +8,11 @@ from pathlib import Path
 from typing import Iterable
 
 from om3dthermal.adapters import resolve_architecture_spec
+from om3dthermal.architecture_comparison import (
+    _resolve_case_power_operating_point_kwargs,
+)
 from om3dthermal.evaluation import evaluate_architecture_capacity_feasibility
-from om3dthermal.platform import resolve_gpu_decode_power
+from om3dthermal.power import load_case_config
 from om3dthermal.serving import (
     AnalyticalRooflineGPUModel,
     HostOverlapSpec,
@@ -55,15 +58,6 @@ def run_serving_experiment(
     platform = load_platform_spec(experiment.platform_config, project_root=root)
     if platform.gpu_decode_power is None:
         raise ValueError("serving capacity resolution requires gpu_decode_power")
-    decode_spec = platform.gpu_decode_power
-    reference_gpu_point = resolve_gpu_decode_power(
-        static_power_W=decode_spec.static_power_W,
-        e_decode_J_per_bit=decode_spec.e_decode_J_per_bit,
-        bandwidth_demand_bytes_per_s=(
-            decode_spec.peak_memory_bandwidth_bytes_per_s),
-        peak_bandwidth_bytes_per_s=(
-            decode_spec.peak_memory_bandwidth_bytes_per_s),
-    )
     if platform.host_offload is None:
         raise ValueError("serving experiment requires platform.host_offload")
     workload_spec = load_workload_spec(
@@ -90,9 +84,10 @@ def run_serving_experiment(
     capacity_targets: list[tuple[str, object]] = []
     for config in experiment.architecture_configs:
         spec = load_architecture_spec(config, project_root=root)
+        case = load_case_config(spec.canonical_case)
         resolved = resolve_architecture_spec(
             spec, project_root=root,
-            gpu_operating_point=reference_gpu_point)
+            **_resolve_case_power_operating_point_kwargs(case, root))
         capacity = evaluate_architecture_capacity_feasibility(
             demand,
             resolved.packing,

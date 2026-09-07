@@ -50,7 +50,7 @@ def workload():
 def physical_layout():
     case = load_case_config(M3D_CASE)
     geometry = resolve_case_geometry(case)
-    power = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)

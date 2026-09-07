@@ -15,7 +15,8 @@
   7.645 pJ/bit；P_peak nominal 派生 = **367.568 W**。不应用 HBM-energy
   subtraction，memory energy 保持独立建模。
 - 三架构（baseline / proposed / H200 参考行）同值同硅片论证；平台峰值带宽
-  4.9 → 4.8 TB/s（H200 厂商值），场景 cap 4.9 TB/s → u=1.02 钳位于 1。
+  4.9 → 4.8 TB/s（H200 厂商值），场景 demand 4.9 TB/s；M3D 路径的
+  shared actual transfer 在 GPU 峰值处钳位为 4.8 TB/s。
 - 平台文件：`configs/platform/gpu_package_h200_reference.yaml`
   （旧 300w 文件已删除）；case 固定功率、平台派生功率输入、硬编码校验器
   与 legacy unresolved 豁免均已删除，运行时只消费 canonical resolver 输出。
@@ -100,6 +101,9 @@ Llama-3.1-8B BF16 @128K，balanced 放置：
   NMP 是第三个创新点的手段，不是文章主线。
 - 带宽：4.9 TB/s 是 legacy matched scenario；M3D raw capability 为
   `min(internal, contactless) = 5.3 TB/s`，GPU 4.8 TB/s 只属于 system-level
-  downstream bottleneck，不进入 M3D memory resolver。
+  downstream bottleneck，不进入 M3D memory resolver。system/performance
+  边界显式解析 `BW_xfer=min(4.9, 5.3, 4.8)=4.8 TB/s`；M3D dynamic
+  read power 与 bandwidth-bound GPU decode power 均消费这一份 actual
+  transfer rate。case 中 39.2 Tb/s 只表示 requested scenario demand。
 - 容量叙事：同一根 DREAM 标定过的 slab，容量随 slab 数线性扩展
   （98→106），最干净的扩展声明。

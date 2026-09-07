@@ -37,7 +37,7 @@ def _architecture():
     case = load_case_config(
         ROOT / "configs/cases/orthogonal_m3d_igzo.yaml")
     geometry = resolve_case_geometry(case)
-    power = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     if geometry.m3d is None:
         raise ValueError("tier-service evaluation requires M3D geometry")
     topology = calculate_m3d_subarray(

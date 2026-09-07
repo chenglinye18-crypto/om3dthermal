@@ -211,7 +211,7 @@ def test_canonical_case_resolves_nominal_resistance_and_latency():
     assert "not derived from an explicitly modeled MIV cross section" in (
         vertical.miv_resistance_provenance.note)
     geometry = resolve_case_geometry(case)
-    result = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    result = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     metadata = result.diagnostics
     assert result.E_vertical_pj_bit == pytest.approx(0.002445862111816407)
     assert metadata["miv_latency_model"] == (

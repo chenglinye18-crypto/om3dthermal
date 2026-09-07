@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from om3dthermal.case_runner import run_steady_pipeline
-from om3dthermal.architecture_comparison import _resolve_case_gpu_operating_point
+from om3dthermal.architecture_comparison import _resolve_case_power_operating_points
 from om3dthermal.experiment import load_experiment_spec, load_workload_spec
 from om3dthermal.placement import evaluate_nmp_locality_case
 from om3dthermal.placement.nmp_load_balance import (
@@ -38,7 +38,7 @@ def _frozen_case_inputs(requests: int):
     case_path = ROOT / "configs/cases/orthogonal_m3d_igzo.yaml"
     case = load_case_config(case_path)
     geometry = resolve_case_geometry(case)
-    memory = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    memory = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     topology = calculate_m3d_subarray(case.architecture.m3d_subarray, geometry.m3d)
     feol = calculate_feol_route(case.architecture, topology)
     physical = calculate_physical_access_latency(
@@ -91,9 +91,12 @@ def _frozen_case_inputs(requests: int):
         external_boundary_time_ms=external_ms, ownership=placement.ownership)
     power_map = build_nmp_die_power_map(case, memory, topology, feol, activity, placement)
     gain = requests / (activity.decode_step_interval_ms * 1e-3) / baseline.timing.tokens_per_s
+    gpu_point, transfer_point = _resolve_case_power_operating_points(
+        case, ROOT)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        gpu_operating_point=gpu_point,
+        transfer_operating_point=transfer_point)
     return case, system, power_map, gain, placement
 
 

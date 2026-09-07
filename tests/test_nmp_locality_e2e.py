@@ -13,7 +13,7 @@ from om3dthermal.workload import build_m3d_workload_page_demand
 
 @pytest.fixture(scope='module')
 def inputs():
-    layout,bw=_architecture(); c=load_case_config(ROOT/'configs/cases/orthogonal_m3d_igzo.yaml'); g=resolve_case_geometry(c); power=calculate_memory_power(c,project_root=ROOT,geometry=g); top=calculate_m3d_subarray(c.architecture.m3d_subarray,g.m3d); feol=calculate_feol_route(c.architecture,top)
+    layout,bw=_architecture(); c=load_case_config(ROOT/'configs/cases/orthogonal_m3d_igzo.yaml'); g=resolve_case_geometry(c); power=calculate_memory_power(c, read_bandwidth_gbps=c.workload.read_bandwidth_gbps,project_root=ROOT,geometry=g); top=calculate_m3d_subarray(c.architecture.m3d_subarray,g.m3d); feol=calculate_feol_route(c.architecture,top)
     phy=calculate_physical_access_latency(c.architecture.physical_access_latency,feol_route=feol,miv_length_per_layer_um=power.diagnostics['miv_length_per_layer_um'],miv_delay_per_layer_ns=power.diagnostics['miv_delay_per_layer_ns'],miv_status=power.diagnostics['miv_latency_status'],miv_parameter_status=power.diagnostics['miv_resistance_parameter_status'],miv_provenance=power.diagnostics['miv_resistance_provenance'])
     w=load_workload_spec(ROOT/'configs/workload/llama31_8b_decode_b1_s131072.yaml',project_root=ROOT).decode; d=build_m3d_workload_page_demand(w,layout); gpu=load_experiment_spec(ROOT/'configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml',project_root=ROOT).scenario.effective_compute_flops_per_second
     return layout,bw,phy,w,d,gpu

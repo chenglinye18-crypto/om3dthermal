@@ -164,12 +164,10 @@ def test_diagnostic_does_not_mutate_canonical_or_frozen_inputs(canonical):
     case_before = case.model_dump()
     topology_before = topology.as_dict()
     feol_before = feol.as_dict()
-    power_before = calculate_memory_power(
-        case, project_root=ROOT, geometry=geometry)
+    power_before = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
 
     calculate_hierarchical_mat_to_coil(feol, aggregation_load_multiplier=4.0)
-    power_after = calculate_memory_power(
-        case, project_root=ROOT, geometry=geometry)
+    power_after = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
 
     assert case.model_dump() == case_before
     assert topology.as_dict() == topology_before

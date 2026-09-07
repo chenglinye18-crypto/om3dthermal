@@ -30,6 +30,7 @@ architecture:
 
 workload:
   read_bandwidth_gbps: 39200
+  read_bandwidth_semantics: REQUESTED_SCENARIO_BANDWIDTH_DEMAND
   write_bandwidth_gbps: 0
   row_policy: {activated_row_data_utilization: 0.10}
 

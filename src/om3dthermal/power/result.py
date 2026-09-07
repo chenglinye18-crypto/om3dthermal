@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .memory_bandwidth import ArchitectureBandwidthClosure
+    from .physical_capacity import PhysicalCapacityLayout
 
 
 @dataclass(frozen=True)
@@ -64,6 +68,8 @@ class MemoryPowerResult:
     P_memory_background_W: float | None
     P_logic_background_W: float | None
     P_total_W: float | None
+    physical_capacity_layout: PhysicalCapacityLayout | None = None
+    architecture_bandwidth_closure: ArchitectureBandwidthClosure | None = None
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self, *, display_na: bool = False) -> dict[str, Any]:

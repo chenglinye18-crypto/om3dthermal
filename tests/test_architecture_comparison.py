@@ -6,7 +6,7 @@ import pytest
 
 from om3dthermal.cli import build_scene
 from om3dthermal.architecture_comparison import (
-    _resolve_case_gpu_operating_point,
+    _resolve_case_power_operating_point_kwargs,
     _resolved_capacity,
     compile_case_thermal,
 )
@@ -32,7 +32,7 @@ def _resolved(name):
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        **_resolve_case_power_operating_point_kwargs(case, ROOT))
     return case, geometry, system
 
 
@@ -56,10 +56,12 @@ def test_access_energy_regressions_and_system_bandwidth_are_frozen():
                 0.8552605756733209)
     for name, energy in zip(NAMES, expected):
         _, _, system = _resolved(name)
-        assert system.read_bandwidth_gbps == 39200.0
+        expected_bandwidth = (
+            38400.0 if name == "orthogonal_m3d_igzo" else 39200.0)
+        assert system.read_bandwidth_gbps == expected_bandwidth
         assert system.memory_access_energy_pJ_per_bit == energy
         assert system.memory_access_power_W == pytest.approx(
-            energy * 39200.0 * 1e-3)
+            energy * expected_bandwidth * 1e-3)
 
 
 def test_resolved_to_thermal_source_closure_and_same_case_compile():

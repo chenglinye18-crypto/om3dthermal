@@ -37,7 +37,7 @@ WORKLOAD = ROOT / "configs" / "workload" / "llama31_8b_decode_b1_s131072.yaml"
 def canonical():
     case = load_case_config(CASE)
     geometry = resolve_case_geometry(case)
-    power = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)

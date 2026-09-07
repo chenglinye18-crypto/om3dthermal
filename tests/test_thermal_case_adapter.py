@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from om3dthermal.architecture_comparison import (
-    _resolve_case_gpu_operating_point,
+    _resolve_case_power_operating_point_kwargs,
     compile_case_thermal,
 )
 from om3dthermal.power import (
@@ -24,7 +24,7 @@ def test_public_thermal_adapter_is_exact_legacy_compiler_facade(name: str) -> No
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        **_resolve_case_power_operating_point_kwargs(case, ROOT))
 
     legacy = compile_case_thermal(case, system)
     public = compile_canonical_thermal_case(case, system)

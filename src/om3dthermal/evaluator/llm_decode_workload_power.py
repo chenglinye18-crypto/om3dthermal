@@ -1,9 +1,9 @@
 """Workload-dependent LLM decode memory/package power accounting (E5).
 
-Dynamic memory power has exactly one source: conditional dynamic memory
-energy per generated token multiplied by aggregate generated tokens per
-second.  Existing configured-bandwidth access power is retained only as a
-regression reference and is never added to the new total.
+Dynamic memory power combines conditional per-token energy with the explicit
+operating rate. For M3D bandwidth-bound decode, the shared M3D-to-GPU transfer
+rate scales the scenario-demand throughput so memory and GPU power consume the
+same actual traffic. Existing configured-demand power is never added.
 
 Refresh, memory-background, and logic-background power are consumed once from
 ``ResolvedSystemPower.memory_result``. GPU power always comes from the same E8
@@ -360,6 +360,17 @@ def evaluate_llm_decode_workload_power(
         completeness = COMPLETENESS_RESOLVED
 
     dynamic = energy_j * throughput
+    if system.memory_dynamic_power_bandwidth_source == (
+            "SHARED_MEMORY_GPU_TRANSFER_OPERATING_POINT"):
+        actual_bytes_per_s = _finite_nonnegative(
+            "system.memory_gpu_actual_bandwidth_bytes_per_s",
+            system.memory_gpu_actual_bandwidth_bytes_per_s)
+        demand_bits_per_s = _finite_nonnegative(
+            "performance.matched_payload_bandwidth_bits_per_second",
+            performance.matched_payload_bandwidth_bits_per_second)
+        if demand_bits_per_s <= 0.0:
+            raise ValueError("shared transfer requires positive demand")
+        dynamic *= (actual_bytes_per_s * 8.0) / demand_bits_per_s
     if not math.isfinite(dynamic):
         raise ValueError("derived dynamic access power must be finite")
     memory_total = dynamic + refresh + background + effective_logic

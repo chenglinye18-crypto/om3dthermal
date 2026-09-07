@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from om3dthermal.architecture_comparison import (
-    _resolve_case_gpu_operating_point,
+    _resolve_case_power_operating_point_kwargs,
 )
 from om3dthermal.architecture_capacity import (
     ResolvedArchitectureCapacity,
@@ -141,6 +141,12 @@ def _system(*, case_name: str, energy_pj_per_bit: float | None) -> ResolvedSyste
         memory_power_model="test",
         memory_power_status="test",
         read_bandwidth_gbps=100.0,
+        memory_gpu_bandwidth_demand_bytes_per_s=None,
+        memory_raw_bandwidth_capability_bytes_per_s=None,
+        gpu_peak_bandwidth_bytes_per_s=None,
+        memory_gpu_actual_bandwidth_bytes_per_s=None,
+        memory_gpu_transfer_bottleneck=None,
+        memory_dynamic_power_bandwidth_source="TEST_FIXTURE",
         memory_access_energy_pJ_per_bit=energy_pj_per_bit,
         memory_access_power_W=None,
         refresh_power_W=None,
@@ -155,7 +161,7 @@ def _resolve_architecture_capacity(name: str) -> ResolvedArchitectureCapacity:
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        **_resolve_case_power_operating_point_kwargs(case, ROOT))
     return resolve_architecture_capacity(case, geometry, system)
 
 
@@ -164,7 +170,7 @@ def _resolve_system(name: str) -> ResolvedSystemPower:
     geometry = resolve_case_geometry(case)
     return resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        **_resolve_case_power_operating_point_kwargs(case, ROOT))
 
 
 # ---------------------------------------------------------------------------

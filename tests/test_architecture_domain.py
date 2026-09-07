@@ -8,7 +8,7 @@ from om3dthermal.adapters import (
 )
 from om3dthermal.architecture import resolve_packing_from_legacy_power_result
 from om3dthermal.architecture_comparison import (
-    _resolve_case_gpu_operating_point,
+    _resolve_case_power_operating_point_kwargs,
 )
 from om3dthermal.architecture_capacity import resolve_architecture_capacity
 from om3dthermal.experiment.config import load_architecture_spec
@@ -33,7 +33,7 @@ def test_resolved_packing_is_bit_exact_with_existing_capacity(name: str) -> None
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        **_resolve_case_power_operating_point_kwargs(case, ROOT))
     assert system.memory_result is not None
 
     packing = resolve_packing_from_legacy_power_result(
@@ -60,7 +60,7 @@ def test_resolved_architecture_facts_are_exact_adapter_views(name: str) -> None:
     case = load_case_config(spec.canonical_case)
     resolved = resolve_architecture_spec(
         spec, project_root=ROOT,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        **_resolve_case_power_operating_point_kwargs(case, ROOT))
 
     facts = extract_architecture_facts(resolved)
 
@@ -86,7 +86,7 @@ def test_m3d_architecture_facts_preserve_unresolved_logic_background() -> None:
     facts = extract_architecture_facts(
         resolve_architecture_spec(
             spec, project_root=ROOT,
-            gpu_operating_point=_resolve_case_gpu_operating_point(
+            **_resolve_case_power_operating_point_kwargs(
                 load_case_config(spec.canonical_case), ROOT))
     )
 

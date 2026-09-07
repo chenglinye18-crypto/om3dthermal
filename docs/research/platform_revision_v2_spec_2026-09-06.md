@@ -125,8 +125,28 @@ layer。
 capability。GPU 4.8 TB/s 仅在 system-level 作为 downstream bottleneck，
 不进入 raw M3D bandwidth resolver。
 
-- 带宽：场景固定 4.9 TB/s；M3D raw capability 5.3 TB/s 作设计冗余；
-  GPU 侧限制只在 system-level 讨论
+### Shared M3D-to-GPU transfer operating point
+
+`workload.read_bandwidth_gbps=39200` 的唯一语义是 requested scenario
+bandwidth demand，而不是 actual bandwidth 或硬件 capability。正式
+bandwidth-bound M3D 路径在 system/performance 边界解析：
+
+```text
+BW_xfer = min(BW_demand, BW_M3D_raw, BW_GPU_peak)
+        = min(4.9, 5.3, 4.8) TB/s
+        = 4.8 TB/s
+```
+
+`BW_M3D_raw` 来自上述 M3D resolver，`BW_GPU_peak` 来自 canonical H200
+platform YAML。解析得到的同一个 `BW_xfer` 同时传给 M3D dynamic read
+power 和 bandwidth-bound GPU decode power；M3D power 不再将 4.9 TB/s
+demand 当作 actual rate。该 transfer 只表示跨越 M3D→GPU 边界的流量，
+不代表未来可能留在 memory side 的 NMP-local activity。tie 的主
+bottleneck 采用固定优先级 `DEMAND > MEMORY > GPU`，同时保留全部
+等于最小值的 limiter flags。
+
+- 带宽：场景 demand 4.9 TB/s；M3D raw capability 5.3 TB/s；GPU peak
+  4.8 TB/s；shared actual transfer 为 4.8 TB/s
 - host 链路：PCIe 主结果 + C2C 敏感性（450 GB/s 仍 ~11× 低于 HBM，结论稳健）
 - 容量叙事：slab 设计冻结，容量随 slab 数线性扩展（98→106），
   "同一根 DREAM 标定过的 slab"是最干净的扩展声明

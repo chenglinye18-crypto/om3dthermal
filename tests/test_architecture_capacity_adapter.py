@@ -48,9 +48,8 @@ def _resolve_capacity(name: str) -> ResolvedArchitectureCapacity:
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=(
-            architecture_comparison._resolve_case_gpu_operating_point(
-                case, ROOT)))
+        **architecture_comparison._resolve_case_power_operating_point_kwargs(
+            case, ROOT))
     return resolve_architecture_capacity(case, geometry, system)
 
 
@@ -107,9 +106,8 @@ def test_architecture_comparison_compatibility_uses_public_resolver(
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=(
-            architecture_comparison._resolve_case_gpu_operating_point(
-                case, ROOT)))
+        **architecture_comparison._resolve_case_power_operating_point_kwargs(
+            case, ROOT))
     called = False
     public_resolver = resolve_architecture_capacity
 

@@ -26,6 +26,7 @@ from om3dthermal.platform import (
     AffineGPUDecodePowerSpec,
     GPUComputePowerOperatingPoint,
     GPUDecodePowerOperatingPoint,
+    LocalMemoryGPUTransferOperatingPoint,
     resolve_gpu_compute_power,
     resolve_gpu_decode_power,
 )
@@ -135,6 +136,7 @@ def evaluate_gpu_decode_energy(
     spec: AffineGPUDecodePowerSpec,
     compute_spec: AffineGPUComputePowerSpec | None = None,
     *,
+    transfer_operating_point: LocalMemoryGPUTransferOperatingPoint | None = None,
     compute_energy_dynamic_J_per_FLOP: float | None = None,
 ) -> GPUDecodeEnergyMetrics:
     """Evaluate regime-selected GPU decode energy for one architecture/rho.
@@ -223,13 +225,35 @@ def evaluate_gpu_decode_energy(
         gpu_side_bytes = (
             performance.read_bytes_per_token
             + performance.write_bytes_per_token)
+        gpu_bandwidth_demand = gpu_side_bytes / token_time_s
+        if transfer_operating_point is not None:
+            if not math.isclose(
+                gpu_bandwidth_demand,
+                transfer_operating_point.bandwidth_demand_bytes_per_s,
+                rel_tol=1e-12,
+                abs_tol=1e-6,
+            ):
+                raise ValueError(
+                    "performance demand and transfer demand do not close")
+            gpu_bandwidth_demand = min(
+                transfer_operating_point.bandwidth_demand_bytes_per_s,
+                transfer_operating_point.memory_capability_bytes_per_s,
+            )
         operating_point = resolve_gpu_decode_power(
             static_power_W=spec.static_power_W,
             e_decode_J_per_bit=spec.e_decode_J_per_bit,
-            bandwidth_demand_bytes_per_s=gpu_side_bytes / token_time_s,
+            bandwidth_demand_bytes_per_s=gpu_bandwidth_demand,
             peak_bandwidth_bytes_per_s=(
                 spec.peak_memory_bandwidth_bytes_per_s),
         )
+        if (transfer_operating_point is not None
+                and not math.isclose(
+                    operating_point.bandwidth_actual_bytes_per_s,
+                    transfer_operating_point.bandwidth_actual_bytes_per_s,
+                    rel_tol=1e-12,
+                    abs_tol=1e-6)):
+            raise RuntimeError(
+                "GPU and transfer actual bandwidth do not close")
         bandwidth_values = {
             "memory_bandwidth_utilization": (
                 operating_point.bandwidth_utilization),

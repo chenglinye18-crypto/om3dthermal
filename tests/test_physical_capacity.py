@@ -27,8 +27,7 @@ CASE = ROOT / "configs" / "cases" / "orthogonal_m3d_igzo.yaml"
 def canonical_layout():
     case = load_case_config(CASE)
     geometry = resolve_case_geometry(case)
-    power = calculate_memory_power(
-        case, project_root=ROOT, geometry=geometry)
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
@@ -170,8 +169,10 @@ def test_capacity_layout_has_no_workload_probability_dependence(
         "layer_access_probability": (1.0, 0.0, 0.0, 0.0,
                                      0.0, 0.0, 0.0, 0.0),
     })
+    changed_case = case.model_copy(update={"workload": workload})
     changed = calculate_memory_power(
-        case.model_copy(update={"workload": workload}),
+        changed_case,
+        read_bandwidth_gbps=changed_case.workload.read_bandwidth_gbps,
         project_root=ROOT,
         geometry=geometry,
     )

@@ -37,7 +37,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .architecture_comparison import (
-    _resolve_case_gpu_operating_point,
+    _resolve_case_power_operating_points,
     _resolved_capacity,
     _temperature_maxima,
     compile_case_thermal,
@@ -365,10 +365,12 @@ def _system_metrics(
         case: CanonicalCaseConfig, project_root: Path,
         ) -> dict[str, Any]:
     geom = resolve_case_geometry(case)
+    gpu_point, transfer_point = _resolve_case_power_operating_points(
+        case, project_root)
     sys_pow = resolve_system_power(
         case, project_root=project_root, geometry=geom,
-        gpu_operating_point=_resolve_case_gpu_operating_point(
-            case, project_root))
+        gpu_operating_point=gpu_point,
+        transfer_operating_point=transfer_point)
     capacity = _resolved_capacity(case, geom, sys_pow)
     diagnostics = sys_pow.diagnostics or {}
     memory = sys_pow.memory_result
@@ -450,10 +452,12 @@ def _thermal_metrics(
         system_metrics: dict[str, Any], *,
         backend: str = "cpu") -> dict[str, Any]:
     geom = resolve_case_geometry(case)
+    gpu_point, transfer_point = _resolve_case_power_operating_points(
+        case, project_root)
     sys_pow = resolve_system_power(
         case, project_root=project_root, geometry=geom,
-        gpu_operating_point=_resolve_case_gpu_operating_point(
-            case, project_root))
+        gpu_operating_point=gpu_point,
+        transfer_operating_point=transfer_point)
     sim = compile_case_thermal(case, sys_pow)
     pipeline = run_steady_pipeline(
         sim, alpha=0.7, rtol=1e-3, max_delta_t_K=1e-2,

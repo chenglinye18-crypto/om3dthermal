@@ -501,6 +501,8 @@ class RowPolicy(StrictModel):
 
 class WorkloadInput(StrictModel):
     read_bandwidth_gbps: float = Field(ge=0.0)
+    read_bandwidth_semantics: Literal[
+        "REQUESTED_SCENARIO_BANDWIDTH_DEMAND"]
     write_bandwidth_gbps: float = Field(ge=0.0)
     read_data: BinaryProbability | None = None
     write_transition: WriteProbability | None = None

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from om3dthermal.architecture_comparison import (
-    _resolve_case_gpu_operating_point,
+    _resolve_case_power_operating_point_kwargs,
 )
 from om3dthermal.architecture_capacity import resolve_architecture_capacity
 from om3dthermal.evaluation import evaluate_architecture_capacity_feasibility
@@ -54,9 +54,10 @@ def _fake_thermal(mapping):
 def test_m3d_interface_and_logic_sensitivities_are_separate_and_close():
     case = load_case_config(ROOT / "configs/cases/orthogonal_m3d_igzo.yaml")
     geometry = resolve_case_geometry(case)
+    operating_points = _resolve_case_power_operating_point_kwargs(case, ROOT)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        **operating_points)
     workload = evaluate_llm_decode(LLMDecodeInput(
         n_param=8_000_000_000, n_layers=32, n_heads_q=32, n_heads_kv=8,
         d_model=4096, d_ff=14336, vocab_size=128_256,
@@ -77,11 +78,12 @@ def test_m3d_interface_and_logic_sensitivities_are_separate_and_close():
         thermal_runner=_fake_thermal,
         gpu_decode_power=load_platform_spec(
             ROOT / "configs/platform/gpu_package_h200_reference.yaml",
-            project_root=ROOT).gpu_decode_power)
+            project_root=ROOT).gpu_decode_power,
+        transfer_operating_point=operating_points["transfer_operating_point"])
 
     assert result.status == "PARAMETRIC_SENSITIVITY"
-    assert [row.interface_power_at_matched_bandwidth_W
-            for row in result.interface_rows] == pytest.approx((9.8, 19.6, 39.2))
+    assert [row.interface_power_at_actual_bandwidth_W
+            for row in result.interface_rows] == pytest.approx((9.6, 19.2, 38.4))
     assert [row.read_total_energy_pj_per_bit
             for row in result.interface_rows] == pytest.approx(
                 (0.6052605756733209, 0.8552605756733209,

@@ -38,7 +38,7 @@ CASE = ROOT / "configs/cases/orthogonal_m3d_igzo.yaml"
 def _build_m3d_pipeline():
     case = load_case_config(CASE)
     geometry = resolve_case_geometry(case)
-    power = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
@@ -213,8 +213,7 @@ def test_gates_and_risk_ranking(dream, m3d) -> None:
 
 def test_bandwidth_model_unchanged(m3d_pipeline) -> None:
     case, topology, _, latency = m3d_pipeline
-    power = calculate_memory_power(
-        case, project_root=ROOT,
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT,
         geometry=resolve_case_geometry(case))
     layout = calculate_physical_capacity_layout(
         topology,

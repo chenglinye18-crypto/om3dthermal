@@ -191,11 +191,19 @@ def test_runner_shares_gpu_operating_point_in_energy_power_and_thermal(
             pytest.approx(row.gpu_power_W))
         assert row.package_power_W == pytest.approx(
             row.gpu_power_W + row.memory_total_power_W)
-        # E8's energy scope excludes memory static power; account for it once.
+        # This task does not redefine token throughput/J. M3D power alone
+        # consumes the shared actual transfer rate, so scale its existing
+        # per-token memory energy by actual/demand for this power closure.
         static_memory = (power["refresh_power_W"] + power["memory_background_power_W"]
                          + power["logic_background_effective_W"])
+        memory_rate_scale = (
+            bandwidth_actual / bandwidth_demand
+            if row.architecture == "orthogonal_m3d_igzo"
+            else 1.0)
         assert row.package_power_W == pytest.approx(
-            gpu.system_energy_j_per_token * row.aggregate_tokens_per_second
+            (gpu.gpu_energy_j_per_token
+             + gpu.memory_dynamic_energy_j_per_token * memory_rate_scale)
+            * row.aggregate_tokens_per_second
             + static_memory)
         assert thermal["mapped_package_power_W"] == pytest.approx(row.package_power_W)
 
@@ -337,6 +345,13 @@ def test_runner_records_derived_matched_bandwidth_provenance(formal_run) -> None
         pytest.approx(3.92e13))
     assert environment["matched_bandwidth_capability_bits_per_second"] == (
         pytest.approx(4.24e13))
+    transfer = environment["memory_gpu_transfer_operating_points"][
+        "orthogonal_m3d_igzo"]
+    assert transfer["bandwidth_demand_bytes_per_s"] == pytest.approx(4.9e12)
+    assert transfer["memory_capability_bytes_per_s"] == pytest.approx(5.3e12)
+    assert transfer["gpu_peak_bandwidth_bytes_per_s"] == pytest.approx(4.8e12)
+    assert transfer["bandwidth_actual_bytes_per_s"] == pytest.approx(4.8e12)
+    assert transfer["bottleneck"] == "GPU"
 
 
 def test_capped_derivation_pins_bandwidth_below_derived_capability() -> None:

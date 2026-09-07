@@ -26,8 +26,7 @@ CASE = ROOT / "configs" / "cases" / "orthogonal_m3d_igzo.yaml"
 def canonical_chain():
     case = load_case_config(CASE)
     geometry = resolve_case_geometry(case)
-    power = calculate_memory_power(
-        case, project_root=ROOT, geometry=geometry)
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
@@ -113,8 +112,7 @@ def test_map_is_independent_of_layer_probability(canonical_chain):
                                      0.0, 0.0, 0.0, 0.0),
     })
     changed_case = case.model_copy(update={"workload": workload})
-    changed = calculate_memory_power(
-        changed_case, project_root=ROOT, geometry=geometry)
+    changed = calculate_memory_power(changed_case, read_bandwidth_gbps=changed_case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert changed.diagnostics["latency_map_ns"] == (
         baseline.diagnostics["latency_map_ns"])
 

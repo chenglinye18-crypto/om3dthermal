@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from om3dthermal.architecture_comparison import (
-    _resolve_case_gpu_operating_point,
+    _resolve_case_power_operating_point_kwargs,
 )
 from om3dthermal.power import (
     calculate_memory_power,
@@ -425,8 +425,8 @@ def test_nominal_spacing_diagnostics_density_and_miv_independence():
     zero_architecture = config.architecture.model_copy(
         update={"m3d_subarray": zero_spec})
     zero_config = config.model_copy(update={"architecture": zero_architecture})
-    baseline_result = calculate_memory_power(config, project_root=ROOT)
-    zero_result = calculate_memory_power(zero_config, project_root=ROOT)
+    baseline_result = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
+    zero_result = calculate_memory_power(zero_config, read_bandwidth_gbps=zero_config.workload.read_bandwidth_gbps, project_root=ROOT)
     assert zero_result.diagnostics["cluster_count_x"] == (
         baseline_result.diagnostics["cluster_count_x"])
     assert zero_result.diagnostics["cluster_count_y"] == (
@@ -489,7 +489,7 @@ def test_geometry_fit_checks_each_axis(configured_x, configured_y, expected):
 
 
 def test_dreamram_hbm3_full_row_regression(conventional):
-    result = calculate_memory_power(conventional, project_root=ROOT)
+    result = calculate_memory_power(conventional, read_bandwidth_gbps=conventional.workload.read_bandwidth_gbps, project_root=ROOT)
     assert result.E_access_total_pj_bit == 0.9782367130708566
     assert result.P_access_W == pytest.approx(
         39200 * result.E_access_total_pj_bit * 1e-3)
@@ -507,13 +507,15 @@ def test_dreamram_hbm3_full_row_regression(conventional):
 
 
 def test_dreamram_hbm3_closed_row_regression(conventional):
+    changed = _with_row_utilization(conventional, 1 / 64)
     result = calculate_memory_power(
-        _with_row_utilization(conventional, 1 / 64), project_root=ROOT)
+        changed, read_bandwidth_gbps=changed.workload.read_bandwidth_gbps,
+        project_root=ROOT)
     assert result.E_access_total_pj_bit == pytest.approx(3.0133613062)
 
 
 def test_dreamram_decomposition_closes(conventional):
-    result = calculate_memory_power(conventional, project_root=ROOT)
+    result = calculate_memory_power(conventional, read_bandwidth_gbps=conventional.workload.read_bandwidth_gbps, project_root=ROOT)
     reconstructed = (
         result.E_memory_internal_pj_bit + result.E_vertical_pj_bit
         + result.E_base_route_pj_bit + result.E_interface_pj_bit)
@@ -521,7 +523,7 @@ def test_dreamram_decomposition_closes(conventional):
 
 
 def test_internal_component_partition_closes(conventional):
-    result = calculate_memory_power(conventional, project_root=ROOT)
+    result = calculate_memory_power(conventional, read_bandwidth_gbps=conventional.workload.read_bandwidth_gbps, project_root=ROOT)
     components = result.diagnostics["native_components_pj_bit"]
     assert set(components) == ONE_T_ONE_C_SPECIFIC | REUSABLE_STRUCTURE
     specific = sum(components[name] for name in ONE_T_ONE_C_SPECIFIC)
@@ -539,8 +541,10 @@ def test_internal_component_partition_closes(conventional):
 )
 def test_activated_row_utilization_resolves_effective_rd_count(
         conventional, utilization, expected_rd):
+    changed = _with_row_utilization(conventional, utilization)
     result = calculate_memory_power(
-        _with_row_utilization(conventional, utilization), project_root=ROOT)
+        changed, read_bandwidth_gbps=changed.workload.read_bandwidth_gbps,
+        project_root=ROOT)
     assert result.diagnostics["activated_row_data_utilization"] == utilization
     assert result.diagnostics["effective_rd_per_act"] == expected_rd
     expected_energy = (
@@ -560,8 +564,10 @@ def test_activated_row_utilization_range_fails(utilization):
     "utilization, expected_rd", [(0.30, 19.2), (0.10, 6.4)])
 def test_fractional_effective_rd_per_act_succeeds(
         conventional, utilization, expected_rd):
+    changed = _with_row_utilization(conventional, utilization)
     result = calculate_memory_power(
-        _with_row_utilization(conventional, utilization), project_root=ROOT)
+        changed, read_bandwidth_gbps=changed.workload.read_bandwidth_gbps,
+        project_root=ROOT)
     assert result.diagnostics["effective_rd_per_act"] == pytest.approx(
         expected_rd)
     expected_energy = (
@@ -572,16 +578,18 @@ def test_fractional_effective_rd_per_act_succeeds(
 
 
 def test_utilization_below_one_transfer_fails(conventional):
+    changed = _with_row_utilization(conventional, 0.01)
     with pytest.raises(ValueError, match="at least 1/atoms_per_page=0.015625"):
         calculate_memory_power(
-            _with_row_utilization(conventional, 0.01), project_root=ROOT)
+            changed, read_bandwidth_gbps=changed.workload.read_bandwidth_gbps,
+            project_root=ROOT)
 
 
 def test_m3d_uses_control_address_reuse_not_hbm_row_policy():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     assert config.workload.row_policy is None
     assert config.workload.control_address_reuse == 64
-    result = calculate_memory_power(config, project_root=ROOT)
+    result = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     assert result.diagnostics["control_address_reuse"] == 64
     assert "activated_row_data_utilization" not in result.diagnostics
     assert "effective_rd_per_act" not in result.diagnostics
@@ -594,9 +602,11 @@ def test_m3d_uses_control_address_reuse_not_hbm_row_policy():
 
 
 def test_orthogonal_si_keeps_same_dreamram_internal_energy(conventional):
-    hbm = calculate_memory_power(conventional, project_root=ROOT)
+    hbm = calculate_memory_power(conventional, read_bandwidth_gbps=conventional.workload.read_bandwidth_gbps, project_root=ROOT)
+    orthogonal_config = load_power_config(POWER_CONFIGS / "orthogonal_si.yaml")
     orthogonal = calculate_memory_power(
-        load_power_config(POWER_CONFIGS / "orthogonal_si.yaml"),
+        orthogonal_config,
+        read_bandwidth_gbps=orthogonal_config.workload.read_bandwidth_gbps,
         project_root=ROOT)
     assert orthogonal.E_memory_internal_pj_bit == pytest.approx(
         hbm.E_memory_internal_pj_bit, abs=0.0)
@@ -608,11 +618,13 @@ def test_orthogonal_si_keeps_same_dreamram_internal_energy(conventional):
 
 
 def test_igzo_then_si_has_no_shared_tech_contamination(conventional):
-    before = calculate_memory_power(conventional, project_root=ROOT)
+    before = calculate_memory_power(conventional, read_bandwidth_gbps=conventional.workload.read_bandwidth_gbps, project_root=ROOT)
+    m3d_config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     calculate_memory_power(
-        load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml"),
+        m3d_config,
+        read_bandwidth_gbps=m3d_config.workload.read_bandwidth_gbps,
         project_root=ROOT)
-    after = calculate_memory_power(conventional, project_root=ROOT)
+    after = calculate_memory_power(conventional, read_bandwidth_gbps=conventional.workload.read_bandwidth_gbps, project_root=ROOT)
     assert after.E_access_total_pj_bit == pytest.approx(
         before.E_access_total_pj_bit, abs=0.0)
     assert after.diagnostics["pitch_bl_um"] == before.diagnostics["pitch_bl_um"]
@@ -620,9 +632,12 @@ def test_igzo_then_si_has_no_shared_tech_contamination(conventional):
 
 
 def test_logic_removed_only_drops_dreamram_base_route(conventional):
-    baseline = calculate_memory_power(conventional, project_root=ROOT)
+    baseline = calculate_memory_power(conventional, read_bandwidth_gbps=conventional.workload.read_bandwidth_gbps, project_root=ROOT)
+    removed_config = load_power_config(
+        POWER_CONFIGS / "hbm3_si_logic_remove.yaml")
     removed = calculate_memory_power(
-        load_power_config(POWER_CONFIGS / "hbm3_si_logic_remove.yaml"),
+        removed_config,
+        read_bandwidth_gbps=removed_config.workload.read_bandwidth_gbps,
         project_root=ROOT)
     assert removed.E_memory_internal_pj_bit == pytest.approx(
         baseline.E_memory_internal_pj_bit, abs=0.0)
@@ -636,12 +651,14 @@ def test_logic_removed_only_drops_dreamram_base_route(conventional):
 
 
 def test_synthetic_replacement_has_no_double_count(conventional):
-    native = calculate_memory_power(conventional, project_root=ROOT)
+    native = calculate_memory_power(conventional, read_bandwidth_gbps=conventional.workload.read_bandwidth_gbps, project_root=ROOT)
     old_component = native.diagnostics["native_components_pj_bit"]["bl-act"]
     replacement = 0.125
+    changed = _with_component_replacement(
+        conventional, replacements={"bl-act": replacement})
     modified = calculate_memory_power(
-        _with_component_replacement(
-            conventional, replacements={"bl-act": replacement}),
+        changed,
+        read_bandwidth_gbps=changed.workload.read_bandwidth_gbps,
         project_root=ROOT)
     expected = native.E_memory_internal_pj_bit - old_component + replacement
     assert modified.E_memory_internal_pj_bit == pytest.approx(
@@ -658,8 +675,8 @@ def test_modified_internal_is_architecture_independent(conventional):
         POWER_CONFIGS / "orthogonal_si.yaml").architecture
     orthogonal = modified.model_copy(
         update={"architecture": orthogonal_architecture})
-    hbm_result = calculate_memory_power(modified, project_root=ROOT)
-    orthogonal_result = calculate_memory_power(orthogonal, project_root=ROOT)
+    hbm_result = calculate_memory_power(modified, read_bandwidth_gbps=modified.workload.read_bandwidth_gbps, project_root=ROOT)
+    orthogonal_result = calculate_memory_power(orthogonal, read_bandwidth_gbps=orthogonal.workload.read_bandwidth_gbps, project_root=ROOT)
     assert orthogonal_result.E_memory_internal_pj_bit == pytest.approx(
         hbm_result.E_memory_internal_pj_bit, abs=0.0)
     assert hbm_result.E_vertical_pj_bit != orthogonal_result.E_vertical_pj_bit
@@ -675,7 +692,7 @@ def test_required_replacement_missing_fails_loudly(conventional):
     with pytest.raises(
             MissingCellReplacementError,
             match="required replacement components are unresolved: bl-pre"):
-        calculate_memory_power(config, project_root=ROOT)
+        calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
 
 
 def test_operation_table_is_device_energy_not_complete_memory_energy():
@@ -690,7 +707,7 @@ def test_operation_table_is_device_energy_not_complete_memory_energy():
 
 def test_m3d_internal_uses_zhu_tang_and_no_dreamram_hierarchy():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    result = calculate_memory_power(config, project_root=ROOT)
+    result = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     operation = 0.5 * 0.00060 + 0.5 * 0.36800
     replacement = result.diagnostics["replacement_components_pj_bit"]
     assert result.E_memory_internal_pj_bit == pytest.approx(
@@ -905,7 +922,7 @@ def test_length_scaled_miv_energy_resolves_and_access_closes():
     assert metadata["data_miv_voltage_source"] == (
         "DREAMRAM_TSV_EQUIVALENT")
 
-    result = calculate_memory_power(config, project_root=ROOT)
+    result = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     mat_local = result.diagnostics["replacement_components_pj_bit"][
         "zhu_scaled_local_operation"]
     routing = result.diagnostics["replacement_components_pj_bit"][
@@ -1027,10 +1044,13 @@ def test_feol_wire_energy_scaling(wire_update, expected_factor):
 
 def test_feol_boundary_is_additive_and_frozen_terms_are_unchanged():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    with_route = calculate_memory_power(config, project_root=ROOT)
+    with_route = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     architecture = config.architecture.model_copy(update={"feol_route": None})
+    without_route_config = config.model_copy(
+        update={"architecture": architecture})
     without_route = calculate_memory_power(
-        config.model_copy(update={"architecture": architecture}),
+        without_route_config,
+        read_bandwidth_gbps=without_route_config.workload.read_bandwidth_gbps,
         project_root=ROOT)
     assert with_route.E_access_total_pj_bit == pytest.approx(
         without_route.E_access_total_pj_bit + with_route.E_feol_route_pj_bit)
@@ -1048,8 +1068,11 @@ def test_feol_boundary_is_additive_and_frozen_terms_are_unchanged():
     assert with_route.diagnostics["interface_energy_pj_per_bit"] == 0.5
     assert with_route.diagnostics["feol_serialization_applied"] is False
 
+    conventional_config = load_power_config(POWER_CONFIGS / "hbm3_si.yaml")
     conventional = calculate_memory_power(
-        load_power_config(POWER_CONFIGS / "hbm3_si.yaml"), project_root=ROOT)
+        conventional_config,
+        read_bandwidth_gbps=conventional_config.workload.read_bandwidth_gbps,
+        project_root=ROOT)
     assert conventional.E_feol_route_pj_bit == 0.0
     assert conventional.E_vertical_pj_bit == pytest.approx(0.22048568115234377)
     assert conventional.E_access_total_pj_bit == 0.9782367130708566
@@ -1074,8 +1097,11 @@ def test_zhu_nrow_scaling_preserves_reference_and_formula():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     results = {
         rows: calculate_memory_power(
-            _with_m3d_subarray_size(config, n_rows=rows), project_root=ROOT)
+            changed,
+            read_bandwidth_gbps=changed.workload.read_bandwidth_gbps,
+            project_root=ROOT)
         for rows in (256, 512, 1024)
+        for changed in (_with_m3d_subarray_size(config, n_rows=rows),)
     }
     reference = results[512]
     assert reference.diagnostics["zhu_reference_n_rows"] == 512
@@ -1109,9 +1135,12 @@ def test_zhu_nrow_scaling_preserves_reference_and_formula():
 
 def test_zhu_v1_scaling_ignores_ncol_and_local_energy_is_zero():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    baseline = calculate_memory_power(config, project_root=ROOT)
+    baseline = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
+    wider_config = _with_m3d_subarray_size(config, n_cols=1024)
     wider = calculate_memory_power(
-        _with_m3d_subarray_size(config, n_cols=1024), project_root=ROOT)
+        wider_config,
+        read_bandwidth_gbps=wider_config.workload.read_bandwidth_gbps,
+        project_root=ROOT)
     assert wider.diagnostics["zhu_scaled_weighted_read_pj_per_bit"] == (
         pytest.approx(
             baseline.diagnostics["zhu_scaled_weighted_read_pj_per_bit"],
@@ -1134,7 +1163,7 @@ def test_zhu_v1_scaling_ignores_ncol_and_local_energy_is_zero():
 
 def test_local_energy_removal_preserves_frozen_transports_and_geometry():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    result = calculate_memory_power(config, project_root=ROOT)
+    result = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     topology = _m3d_subarray(config)
     assert result.diagnostics["cluster_width_um"] == pytest.approx(
         topology.cluster_width_um, abs=0.0)
@@ -1150,7 +1179,7 @@ def test_local_energy_removal_preserves_frozen_transports_and_geometry():
 
 def test_igzo_refresh_operation_table_and_capacity_accounting():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    result = calculate_memory_power(config, project_root=ROOT)
+    result = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     diagnostics = result.diagnostics
     assert diagnostics["refresh_reference_0_pj_per_bit"] == 0.00090
     assert diagnostics["refresh_reference_1_pj_per_bit"] == 0.37000
@@ -1207,7 +1236,7 @@ def test_igzo_refresh_scales_with_capacity_interval_and_safety_factor():
 
 def test_si_refresh_uses_internal_act_pre_components_and_organization():
     config = load_power_config(POWER_CONFIGS / "hbm3_si.yaml")
-    result = calculate_memory_power(config, project_root=ROOT)
+    result = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     diagnostics = result.diagnostics
     included = diagnostics["dreamram_refresh_included_components"]
     excluded = diagnostics["dreamram_refresh_excluded_components"]
@@ -1240,22 +1269,26 @@ def test_si_refresh_uses_internal_act_pre_components_and_organization():
 @pytest.mark.parametrize("name", ["hbm3_si.yaml", "orthogonal_m3d_igzo.yaml"])
 def test_refresh_is_independent_of_read_bandwidth(name):
     config = load_power_config(POWER_CONFIGS / name)
-    baseline = calculate_memory_power(config, project_root=ROOT)
+    baseline = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     workload = config.workload.model_copy(update={
         "read_bandwidth_gbps": config.workload.read_bandwidth_gbps / 2.0})
     slower = calculate_memory_power(
-        config.model_copy(update={"workload": workload}), project_root=ROOT)
+        config.model_copy(update={"workload": workload}),
+        read_bandwidth_gbps=workload.read_bandwidth_gbps,
+        project_root=ROOT)
     assert slower.P_read_W == pytest.approx(0.5 * baseline.P_read_W)
     assert slower.P_refresh_W == pytest.approx(baseline.P_refresh_W, abs=0.0)
 
 
 def test_si_refresh_window_scaling_and_read_regression():
     config = load_power_config(POWER_CONFIGS / "hbm3_si.yaml")
-    baseline = calculate_memory_power(config, project_root=ROOT)
+    baseline = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     refresh = config.power.refresh.model_copy(update={"refresh_window_s": 0.064})
+    modified_config = config.model_copy(update={
+        "power": config.power.model_copy(update={"refresh": refresh})})
     modified = calculate_memory_power(
-        config.model_copy(update={
-            "power": config.power.model_copy(update={"refresh": refresh})}),
+        modified_config,
+        read_bandwidth_gbps=modified_config.workload.read_bandwidth_gbps,
         project_root=ROOT)
     assert modified.P_refresh_W == pytest.approx(0.5 * baseline.P_refresh_W)
     assert modified.E_access_total_pj_bit == 0.9782367130708566
@@ -1270,7 +1303,7 @@ def test_refresh_disable_is_zero_and_read_paths_are_frozen():
         raw = config.model_dump(mode="json")
         raw["power"]["refresh"] = {"enabled": False}
         disabled = MemoryPowerConfig.model_validate(raw)
-        result = calculate_memory_power(disabled, project_root=ROOT)
+        result = calculate_memory_power(disabled, read_bandwidth_gbps=disabled.workload.read_bandwidth_gbps, project_root=ROOT)
         assert result.P_refresh_W == 0.0
         assert result.E_access_total_pj_bit == pytest.approx(
             expected_access, abs=0.0)
@@ -1279,7 +1312,7 @@ def test_refresh_disable_is_zero_and_read_paths_are_frozen():
 
 def test_refresh_does_not_change_m3d_read_transport_terms():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    result = calculate_memory_power(config, project_root=ROOT)
+    result = calculate_memory_power(config, read_bandwidth_gbps=config.workload.read_bandwidth_gbps, project_root=ROOT)
     assert result.E_access_total_pj_bit == pytest.approx(
         0.8552605756733209, abs=0.0)
     assert result.E_vertical_pj_bit == pytest.approx(
@@ -1295,7 +1328,7 @@ def test_active_cases_parse_and_resolve_system_power():
     hbm_geometry = resolve_case_geometry(hbm_case)
     hbm_system = resolve_system_power(
         hbm_case, project_root=ROOT, geometry=hbm_geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(hbm_case, ROOT))
+        **_resolve_case_power_operating_point_kwargs(hbm_case, ROOT))
     # H200-anchored range-midpoint bandwidth-saturated compatibility point.
     assert hbm_system.gpu_power_W == 367.568
     assert hbm_system.memory_result is not None
@@ -1325,8 +1358,7 @@ def test_active_cases_parse_and_resolve_system_power():
 
     m3d_case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
     m3d_geometry = resolve_case_geometry(m3d_case)
-    m3d = calculate_memory_power(
-        m3d_case, project_root=ROOT, geometry=m3d_geometry)
+    m3d = calculate_memory_power(m3d_case, read_bandwidth_gbps=m3d_case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=m3d_geometry)
     assert m3d.E_access_total_pj_bit == 0.8552605756733209
     assert m3d.E_vertical_pj_bit == 0.002445862111816407
     assert m3d.E_feol_route_pj_bit == 0.16705631334524151
@@ -1366,7 +1398,7 @@ def test_active_case_system_mapping_uses_resolved_power():
         geometry = resolve_case_geometry(case)
         system = resolve_system_power(
             case, project_root=ROOT, geometry=geometry,
-            gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+            **_resolve_case_power_operating_point_kwargs(case, ROOT))
         mapping = map_system_power_to_thermal(case, system)
         assert mapping.unresolved is False
         assert mapping.total_mapped_power_W == pytest.approx(
@@ -1381,7 +1413,7 @@ def test_m3d_si_unresolved_is_na_not_zero():
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+        **_resolve_case_power_operating_point_kwargs(case, ROOT))
     mapping = map_system_power_to_thermal(case, system)
     assert system.memory_power_status == "NOT_VALIDATED"
     assert system.memory_access_energy_pJ_per_bit is None
@@ -1395,7 +1427,7 @@ def test_m3d_si_unresolved_is_na_not_zero():
 def test_orthogonal_si_uses_matched_row_workload_and_refresh():
     case = load_case_config(CASE_CONFIGS / "orthogonal_si.yaml")
     geometry = resolve_case_geometry(case)
-    result = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    result = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert result.diagnostics["activated_row_data_utilization"] == 0.10
     assert result.diagnostics["effective_rd_per_act"] == 6.4
     assert result.E_vertical_pj_bit == 0.0
@@ -1409,7 +1441,7 @@ def test_orthogonal_si_uses_matched_row_workload_and_refresh():
 def test_orthogonal_si_capacity_is_integer_geometry_packing():
     case = load_case_config(CASE_CONFIGS / "orthogonal_si.yaml")
     geometry = resolve_case_geometry(case)
-    result = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    result = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     d = result.diagnostics
     assert d["primitive_type"] == (
         "DREAMRAM_BANK_TILE_WITH_DECODERS_SWD_BLSA")
@@ -1438,8 +1470,7 @@ def test_orthogonal_si_capacity_is_integer_geometry_packing():
 def test_orthogonal_si_slab_dimensions_drive_capacity_and_rotation():
     case = load_case_config(CASE_CONFIGS / "orthogonal_si.yaml")
     baseline_geometry = resolve_case_geometry(case)
-    baseline = calculate_memory_power(
-        case, project_root=ROOT, geometry=baseline_geometry)
+    baseline = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=baseline_geometry)
 
     smaller_orthogonal = case.geometry.orthogonal.model_copy(update={
         "slab_plane_y_mm": 11.0})
@@ -1447,8 +1478,7 @@ def test_orthogonal_si_slab_dimensions_drive_capacity_and_rotation():
         "geometry": case.geometry.model_copy(update={
             "orthogonal": smaller_orthogonal})})
     smaller_geometry = resolve_case_geometry(smaller_case)
-    smaller = calculate_memory_power(
-        smaller_case, project_root=ROOT, geometry=smaller_geometry)
+    smaller = calculate_memory_power(smaller_case, read_bandwidth_gbps=smaller_case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=smaller_geometry)
     assert smaller.diagnostics["bits_per_slab"] < (
         baseline.diagnostics["bits_per_slab"])
 
@@ -1457,8 +1487,7 @@ def test_orthogonal_si_slab_dimensions_drive_capacity_and_rotation():
     rotated_case = case.model_copy(update={
         "geometry": case.geometry.model_copy(update={
             "orthogonal": rotated_orthogonal})})
-    rotated = calculate_memory_power(
-        rotated_case, project_root=ROOT,
+    rotated = calculate_memory_power(rotated_case, read_bandwidth_gbps=rotated_case.workload.read_bandwidth_gbps, project_root=ROOT,
         geometry=resolve_case_geometry(rotated_case))
     assert rotated.diagnostics["rotated_90_deg"] is True
     assert rotated.diagnostics["bits_per_slab"] == (
@@ -1467,15 +1496,13 @@ def test_orthogonal_si_slab_dimensions_drive_capacity_and_rotation():
 
 def test_orthogonal_si_refresh_scales_with_packed_capacity():
     case = load_case_config(CASE_CONFIGS / "orthogonal_si.yaml")
-    baseline = calculate_memory_power(
-        case, project_root=ROOT, geometry=resolve_case_geometry(case))
+    baseline = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=resolve_case_geometry(case))
     half_orthogonal = case.geometry.orthogonal.model_copy(update={
         "slab_count": 49})
     half_case = case.model_copy(update={
         "geometry": case.geometry.model_copy(update={
             "orthogonal": half_orthogonal})})
-    half = calculate_memory_power(
-        half_case, project_root=ROOT, geometry=resolve_case_geometry(half_case))
+    half = calculate_memory_power(half_case, read_bandwidth_gbps=half_case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=resolve_case_geometry(half_case))
     assert half.diagnostics["total_system_bits"] == (
         baseline.diagnostics["total_system_bits"] // 2)
     assert half.P_refresh_W == pytest.approx(0.5 * baseline.P_refresh_W)
@@ -1501,9 +1528,11 @@ def test_conventional_full_row_same_boundary_remains_stable():
         CASE_CONFIGS / "conventional_hbm_2x1.yaml")
     full = _with_row_utilization(case, 1.0)
     geometry = resolve_case_geometry(full)
-    result = calculate_memory_power(full, project_root=ROOT, geometry=geometry)
+    result = calculate_memory_power(full, read_bandwidth_gbps=full.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
+    legacy_config = load_power_config(POWER_CONFIGS / "hbm3_si.yaml")
     legacy = calculate_memory_power(
-        load_power_config(POWER_CONFIGS / "hbm3_si.yaml"),
+        legacy_config,
+        read_bandwidth_gbps=legacy_config.workload.read_bandwidth_gbps,
         project_root=ROOT)
     assert result.diagnostics["effective_rd_per_act"] == 64.0
     assert result.E_base_route_pj_bit == legacy.E_base_route_pj_bit
@@ -1525,10 +1554,8 @@ def test_conventional_12hi_scales_only_dreamram_vertical_path():
         CASE_CONFIGS / "conventional_hbm_2x1.yaml")
     geometry_12hi = resolve_case_geometry(case)
     geometry_8hi = replace(geometry_12hi, memory_dies_per_region=8)
-    result_8hi = calculate_memory_power(
-        case, project_root=ROOT, geometry=geometry_8hi)
-    result_12hi = calculate_memory_power(
-        case, project_root=ROOT, geometry=geometry_12hi)
+    result_8hi = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry_8hi)
+    result_12hi = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry_12hi)
 
     assert geometry_12hi.memory_dies_per_region == 12
     assert result_12hi.diagnostics["total_stored_bits"] == 1159641169920  # rev v2
@@ -1585,7 +1612,7 @@ def test_canonical_m3d_has_single_geometry_and_operation_sources():
 def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
     case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
     geometry = resolve_case_geometry(case)
-    baseline = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
+    baseline = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert baseline.diagnostics["clusters_per_layer"] == 280
     assert baseline.diagnostics["subarrays_per_layer"] == 17920
     assert baseline.diagnostics["bits_per_layer"] == 4697620480
@@ -1600,8 +1627,7 @@ def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
     raw["geometry"]["m3d_stack"]["si_substrate_um"] = 290.242
     doubled_case = type(case).model_validate(raw)
     doubled_geometry = resolve_case_geometry(doubled_case)
-    doubled = calculate_memory_power(
-        doubled_case, project_root=ROOT, geometry=doubled_geometry)
+    doubled = calculate_memory_power(doubled_case, read_bandwidth_gbps=doubled_case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=doubled_geometry)
     assert doubled.diagnostics["total_stored_bits"] == (
         2 * baseline.diagnostics["total_stored_bits"])
     assert doubled.diagnostics["miv_average_length_um"] != (
@@ -1613,17 +1639,16 @@ def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
     raw["geometry"]["m3d_stack"]["si_substrate_um"] = 292.45
     wider_pitch_case = type(case).model_validate(raw)
     wider_geometry = resolve_case_geometry(wider_pitch_case)
-    wider = calculate_memory_power(
-        wider_pitch_case, project_root=ROOT, geometry=wider_geometry)
+    wider = calculate_memory_power(wider_pitch_case, read_bandwidth_gbps=wider_pitch_case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=wider_geometry)
     assert wider.diagnostics["miv_average_length_um"] != (
         baseline.diagnostics["miv_average_length_um"])
     assert wider.E_vertical_pj_bit != baseline.E_vertical_pj_bit
 
 
-def test_run_memory_power_accepts_one_canonical_case_path():
+def test_run_memory_power_rejects_m3d_without_shared_transfer():
     case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
     geometry = resolve_case_geometry(case)
     assert case.thermal["geometry_source"] == "canonical_case_geometry"
     assert geometry.source == "canonical_case:orthogonal_m3d_igzo"
-    result = run_memory_power(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
-    assert result.E_access_total_pj_bit == 0.8552605756733209
+    with pytest.raises(ValueError, match="requires an explicit shared"):
+        run_memory_power(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")

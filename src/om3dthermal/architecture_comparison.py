@@ -20,9 +20,11 @@ from .config import (
     compile_user_config,
 )
 from .power import (
+    calculate_memory_power,
     load_case_config,
     map_system_power_to_thermal,
     resolve_case_geometry,
+    resolve_effective_bandwidth,
     resolve_system_power,
 )
 from .power.config import CanonicalCaseConfig, find_project_root
@@ -30,8 +32,10 @@ from .power.geometry import ResolvedGeometry
 from .power.system import ResolvedSystemPower
 from .platform import (
     GPUDecodePowerOperatingPoint,
+    LocalMemoryGPUTransferOperatingPoint,
     load_platform_spec_file,
     resolve_gpu_decode_power,
+    resolve_local_memory_gpu_transfer,
 )
 
 
@@ -72,25 +76,78 @@ def _resolved_capacity(
     return resolve_architecture_capacity(case, geometry, system).as_dict()
 
 
-def _resolve_case_gpu_operating_point(
+def _resolve_case_power_operating_points(
     case: CanonicalCaseConfig,
     project_root: Path,
-) -> GPUDecodePowerOperatingPoint:
-    """Resolve standalone case traffic through the canonical platform input."""
+) -> tuple[
+    GPUDecodePowerOperatingPoint,
+    LocalMemoryGPUTransferOperatingPoint | None,
+]:
+    """Resolve standalone case demand through canonical memory/GPU limits."""
     platform = load_platform_spec_file(
         project_root / "configs/platform/gpu_package_h200_reference.yaml")
     if platform.gpu_decode_power is None:
         raise ValueError("canonical platform is missing gpu_decode_power")
     spec = platform.gpu_decode_power
-    return resolve_gpu_decode_power(
+    demand = (
+        (case.workload.read_bandwidth_gbps
+         + case.workload.write_bandwidth_gbps) * 1e9 / 8.0)
+    transfer = None
+    gpu_input_demand = demand
+    if (case.geometry.type == "orthogonal_m3d"
+            and case.power.memory.model == "analytical"):
+        geometry = resolve_case_geometry(case)
+        intrinsic = calculate_memory_power(
+            case,
+            project_root=project_root,
+            geometry=geometry,
+            read_bandwidth_gbps=0.0,
+        )
+        closure = intrinsic.architecture_bandwidth_closure
+        if closure is None:
+            raise ValueError("M3D case is missing raw bandwidth closure")
+        raw = resolve_effective_bandwidth(
+            closure,
+            closure.average_service_cycle_ns / closure.service_cycle_scale,
+        )
+        transfer = resolve_local_memory_gpu_transfer(
+            bandwidth_demand_bytes_per_s=demand,
+            memory_capability_bytes_per_s=raw.effective_bandwidth_bytes_per_s,
+            gpu_peak_bandwidth_bytes_per_s=(
+                spec.peak_memory_bandwidth_bytes_per_s),
+        )
+        gpu_input_demand = min(
+            transfer.bandwidth_demand_bytes_per_s,
+            transfer.memory_capability_bytes_per_s,
+        )
+    gpu = resolve_gpu_decode_power(
         static_power_W=spec.static_power_W,
         e_decode_J_per_bit=spec.e_decode_J_per_bit,
-        bandwidth_demand_bytes_per_s=(
-            (case.workload.read_bandwidth_gbps
-             + case.workload.write_bandwidth_gbps) * 1e9 / 8.0),
+        bandwidth_demand_bytes_per_s=gpu_input_demand,
         peak_bandwidth_bytes_per_s=(
             spec.peak_memory_bandwidth_bytes_per_s),
     )
+    return gpu, transfer
+
+
+def _resolve_case_gpu_operating_point(
+    case: CanonicalCaseConfig,
+    project_root: Path,
+) -> GPUDecodePowerOperatingPoint:
+    """Return only the GPU member for GPU-only consumers."""
+    return _resolve_case_power_operating_points(case, project_root)[0]
+
+
+def _resolve_case_power_operating_point_kwargs(
+    case: CanonicalCaseConfig,
+    project_root: Path,
+) -> dict[str, object]:
+    """Explicit keyword bundle for system/architecture resolver calls."""
+    gpu, transfer = _resolve_case_power_operating_points(case, project_root)
+    return {
+        "gpu_operating_point": gpu,
+        "transfer_operating_point": transfer,
+    }
 
 
 def _common_compact(case: CanonicalCaseConfig) -> dict[str, Any]:
@@ -321,9 +378,12 @@ def run_architecture_comparison(
         case = load_case_config(path)
         geometry = resolve_case_geometry(case)
         root = find_project_root(path)
+        gpu_point, transfer_point = _resolve_case_power_operating_points(
+            case, root)
         system = resolve_system_power(
             case, project_root=root, geometry=geometry,
-            gpu_operating_point=_resolve_case_gpu_operating_point(case, root))
+            gpu_operating_point=gpu_point,
+            transfer_operating_point=transfer_point)
         capacity = _resolved_capacity(case, geometry, system)
         mapping = map_system_power_to_thermal(case, system)
         assert system.resolved_total_memory_power_W is not None

@@ -30,7 +30,7 @@ from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
 def _m3d_inputs(root: Path):
     case = load_case_config(root / "configs/cases/orthogonal_m3d_igzo.yaml")
     geometry = resolve_case_geometry(case)
-    power = calculate_memory_power(case, project_root=root, geometry=geometry)
+    power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=root, geometry=geometry)
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)

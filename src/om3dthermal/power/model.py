@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 import yaml
 
@@ -25,6 +26,7 @@ from .geometry import (
 )
 from .feol_route import calculate_feol_route
 from .m3d_subarray import calculate_m3d_subarray
+from .memory_bandwidth import derive_architecture_bandwidth
 from .physical_latency import calculate_physical_access_latency
 from .physical_capacity import calculate_physical_capacity_layout
 from .refresh import calculate_refresh_power
@@ -181,7 +183,13 @@ def _scaled_m3d_read_energy(
 
 def calculate_memory_power(
         config: MemoryPowerConfig, *, project_root: Path,
+        read_bandwidth_gbps: float,
         geometry: ResolvedGeometry | None = None) -> MemoryPowerResult:
+    if (isinstance(read_bandwidth_gbps, bool)
+            or not isinstance(read_bandwidth_gbps, (int, float))
+            or not math.isfinite(float(read_bandwidth_gbps))
+            or read_bandwidth_gbps < 0.0):
+        raise ValueError("read_bandwidth_gbps must be finite and non-negative")
     if geometry is None:
         source = config.architecture.geometry_source
         if source is None:
@@ -289,7 +297,7 @@ def calculate_memory_power(
             "replacement boundary is unavailable")
 
     # Gbit/s * pJ/bit = 1e-3 W.
-    read_W = config.workload.read_bandwidth_gbps * read_total * 1e-3
+    read_W = float(read_bandwidth_gbps) * read_total * 1e-3
     write_W = 0.0
     access_W = read_W + write_W
     refresh_result = calculate_refresh_power(
@@ -302,6 +310,7 @@ def calculate_memory_power(
         memory_region_count=geometry.memory_region_count,
     )
     physical_capacity_result = None
+    architecture_bandwidth_closure = None
     if physical_latency_result is not None:
         if m3d_subarray is None:
             raise ValueError("physical capacity layout requires M3D topology")
@@ -315,6 +324,12 @@ def calculate_memory_power(
             slab_count=geometry.memory_region_count,
             expected_total_bits=raw_total_bits,
         )
+        if config.architecture.memory_service is not None:
+            architecture_bandwidth_closure = derive_architecture_bandwidth(
+                config.architecture.memory_service,
+                physical_capacity_result,
+                m3d_subarray,
+            )
     refresh_W = refresh_result.power_W
     background_W = _background_power(device, config)
     logic_W = config.architecture.logic_background_w
@@ -376,6 +391,8 @@ def calculate_memory_power(
         P_memory_background_W=background_W,
         P_logic_background_W=logic_W,
         P_total_W=total_W,
+        physical_capacity_layout=physical_capacity_result,
+        architecture_bandwidth_closure=architecture_bandwidth_closure,
         diagnostics={
             **backend.metadata,
             **({} if m3d_subarray is None else m3d_subarray.as_dict()),
@@ -413,6 +430,8 @@ def calculate_memory_power(
             "interface_source_boundary": (
                 config.architecture.interface.source_boundary),
             "P_memory_dynamic_W": access_W + refresh_W + background_W,
+            "read_power_bandwidth_gbps": float(read_bandwidth_gbps),
+            "read_power_bandwidth_source": "EXPLICIT_OPERATING_POINT",
         },
     )
 
@@ -423,10 +442,24 @@ def run_memory_power(config_path: str | Path) -> MemoryPowerResult:
         raw = yaml.safe_load(stream)
     if isinstance(raw, dict) and "geometry" in raw:
         case = load_case_config(path)
+        if (case.geometry.type == "orthogonal_m3d"
+                and case.power.memory.model == "analytical"):
+            raise ValueError(
+                "standalone analytical M3D power requires an explicit shared "
+                "memory-to-GPU transfer; use resolve_system_power")
         return calculate_memory_power(
             case,
             project_root=find_project_root(path),
+            read_bandwidth_gbps=case.workload.read_bandwidth_gbps,
             geometry=resolve_case_geometry(case),
         )
+    config = load_power_config(path)
+    if config.architecture.memory_service is not None:
+        raise ValueError(
+            "standalone analytical M3D power requires an explicit transfer "
+            "bandwidth passed to calculate_memory_power")
     return calculate_memory_power(
-        load_power_config(path), project_root=find_project_root(path))
+        config,
+        project_root=find_project_root(path),
+        read_bandwidth_gbps=config.workload.read_bandwidth_gbps,
+    )

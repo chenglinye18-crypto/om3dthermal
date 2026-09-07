@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from om3dthermal.architecture_comparison import (
-    _resolve_case_gpu_operating_point,
+    _resolve_case_power_operating_point_kwargs,
 )
 from om3dthermal.architecture_capacity import resolve_architecture_capacity
 from om3dthermal.evaluator import (
@@ -67,6 +67,12 @@ def _system(*, name="test", logic=0.0, access=10.0, refresh=2.0,
         case_name=name, architecture_type="test", gpu_power_W=gpu,
         memory_power_model="analytical", memory_power_status="VALIDATED",
         read_bandwidth_gbps=1, memory_access_energy_pJ_per_bit=1,
+        memory_gpu_bandwidth_demand_bytes_per_s=None,
+        memory_raw_bandwidth_capability_bytes_per_s=None,
+        gpu_peak_bandwidth_bytes_per_s=None,
+        memory_gpu_actual_bandwidth_bytes_per_s=None,
+        memory_gpu_transfer_bottleneck=None,
+        memory_dynamic_power_bandwidth_source="TEST_FIXTURE",
         memory_access_power_W=access, refresh_power_W=refresh,
         resolved_total_memory_power_W=old_total,
         memory_result=memory, diagnostics={},
@@ -388,7 +394,7 @@ def frozen():
         geometry = resolve_case_geometry(case)
         system = resolve_system_power(
             case, project_root=ROOT, geometry=geometry,
-            gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
+            **_resolve_case_power_operating_point_kwargs(case, ROOT))
         capacity = resolve_architecture_capacity(case, geometry, system)
         feasibility = evaluate_architecture_capacity_feasibility(
             workload, capacity, reserved_capacity_bytes=0)
@@ -450,7 +456,7 @@ def test_rho_one_anchor_and_memory_total_close_for_three_architectures(frozen) -
     m3d = next(row for row in rows if row.architecture == "orthogonal_m3d_igzo")
     # Rev v2 re-frozen: refresh scales with capacity 428.75 -> 463.75 GiB
     # (was 33.5603645761 W).
-    assert m3d.memory_workload_total_W == pytest.approx(33.5631523320)
+    assert m3d.memory_workload_total_W == pytest.approx(32.8789438715)
     assert m3d.logic_background_raw_W is None
     assert m3d.logic_background_effective_W == 0
 
