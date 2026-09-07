@@ -4,7 +4,7 @@
 
 按用户要求修正正式端到端路径中 GPU 能耗采用仿射功耗、热源却固定 300 W 的不一致。
 
-runner 现在先计算 GPU decode 功率/能耗，再将同一 `GPUDecodeEnergyMetrics` 传入 workload power。封装总功率、GPU 热源和 E7 行都消费 `gpu_power_W`。`fixed_gpu_power_W` 仅保留原 case 参考值，不再驱动配置了 E8 的热路径，也不会额外加进总功率。附带 M3D logic-background 敏感性同步接入平台 GPU 模型。
+runner 现在先计算 GPU decode 功率/能耗，再将同一 `GPUDecodeEnergyMetrics` 传入 workload power。封装总功率、GPU 热源和 E7 行都消费 `gpu_power_W`。case 与 platform 中的固定功率入口已经删除；附带 M3D logic-background 敏感性同步接入平台 GPU 模型。
 
 运行时检查 architecture/rho/容量可行性一致、token 时间一致、memory dynamic energy 一致，并验证：
 
@@ -15,7 +15,7 @@ package W = GPU W + memory workload W
 
 E8 的 scoped system J/token 仍是 GPU + memory dynamic，不包含 memory refresh/background/logic。因此完整的封装功率检查还需要把这些静态项加一次。该修改没有升级 GPU 仿射模型的实测可信度，也没有实现待验证的 MAC/GPU offload 分工。
 
-这里使用 workload 平均稳态功率，不涉及瞬态热模型。物理算子、GPU-PCG、网格、容差、选择器/空间映射及 benchmark 配置值均未修改。没有配置 E8 的兼容调用保留显式固定功率。
+这里使用 workload 平均稳态功率，不涉及瞬态热模型。物理算子、GPU-PCG、网格、容差、选择器/空间映射均未修改。没有配置 E8 时正式 runner 直接拒绝运行，不存在固定功率 fallback。
 
 ## 测试
 
@@ -25,7 +25,7 @@ E8 的 scoped system J/token 仍是 GPU + memory dynamic，不包含 memory refr
 - `tests/test_sweep.py`：25 passed。
 - `tests/test_thermal_relaxation.py -k gpu_pcg`：3 passed。
 
-新增覆盖低利用率、满利用率、B=1/2 的 aggregate token 时间语义、无 E8 的固定参考兼容、敏感性路径、工作点混用拒绝、GPU 能耗与功率不守恒拒绝、即使封装总功率相同也拒绝错误 GPU 热源。
+新增覆盖低利用率、满利用率、B=1/2 的 aggregate token 时间语义、缺失 E8 拒绝、敏感性路径、工作点混用拒绝、GPU 能耗与功率不守恒拒绝、即使封装总功率相同也拒绝错误 GPU 热源。
 
 ## 两个历史 GPU-PCG 接线验证点（已被 rev v2 参数取代）
 

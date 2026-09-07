@@ -33,7 +33,6 @@ workload:
   row_policy: {activated_row_data_utilization: 0.10}
 
 power:
-  gpu: {model: fixed, power_W: 300.0}
   memory: {model: analytical, status: VALIDATED}
   refresh:
     enabled: true

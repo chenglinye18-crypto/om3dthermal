@@ -8,6 +8,7 @@ from pathlib import Path
 from om3dthermal.power.config import find_project_root, load_case_config
 from om3dthermal.power.geometry import resolve_case_geometry
 from om3dthermal.power.system import resolve_system_power
+from om3dthermal.architecture_comparison import _resolve_case_gpu_operating_point
 
 CASE = "configs/cases/orthogonal_m3d_igzo.yaml"
 root = find_project_root(CASE)
@@ -16,7 +17,9 @@ base = load_case_config(CASE)
 
 def capacity(case):
     geometry = resolve_case_geometry(case)
-    system = resolve_system_power(case, project_root=root, geometry=geometry)
+    system = resolve_system_power(
+        case, project_root=root, geometry=geometry,
+        gpu_operating_point=_resolve_case_gpu_operating_point(case, root))
     return int(system.memory_result.diagnostics["total_stored_bits"])
 
 

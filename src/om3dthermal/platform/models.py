@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from typing import Literal
+from pathlib import Path
+
+import yaml
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -93,10 +96,6 @@ class PlatformSpec(BaseModel):
 
     schema_version: Literal[1] = 1
     platform_id: str = Field(min_length=1)
-    fixed_gpu_power_W: float = Field(ge=0.0)
-    gpu_power_status: Literal[
-        "FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL"
-    ]
     package_profile_status: str = Field(min_length=1)
     host_offload: HostOffloadSpec | None = None
     gpu_decode_power: "AffineGPUDecodePowerSpec | None" = None
@@ -112,3 +111,12 @@ class PlatformSpec(BaseModel):
             raise ValueError(
                 "GPU decode and compute power models must share static power")
         return self
+
+
+def load_platform_spec_file(path: str | Path) -> PlatformSpec:
+    """Load one strict platform document from its canonical YAML source."""
+    with Path(path).open("r", encoding="utf-8") as stream:
+        raw = yaml.safe_load(stream)
+    if not isinstance(raw, dict):
+        raise TypeError("platform config root must be a mapping")
+    return PlatformSpec.model_validate(raw)

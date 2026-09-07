@@ -6,9 +6,9 @@ second.  Existing configured-bandwidth access power is retained only as a
 regression reference and is never added to the new total.
 
 Refresh, memory-background, and logic-background power are consumed once from
-``ResolvedSystemPower.memory_result``. GPU power comes from the same E8 result
-used for energy accounting when supplied; callers without E8 retain the fixed
-reference. This stage reports power, not system J/token or Tmax.
+``ResolvedSystemPower.memory_result``. GPU power always comes from the same E8
+result used for energy accounting. This stage reports power, not system J/token
+or Tmax.
 """
 
 from __future__ import annotations
@@ -38,9 +38,7 @@ STATUS_UNRESOLVED_STATIC = "UNRESOLVED_STATIC_POWER"
 DYNAMIC_POWER_STATUS = (
     "WORKLOAD_J_PER_TOKEN_TIMES_AGGREGATE_TOKENS_PER_SECOND")
 STATIC_POWER_STATUS = "EXISTING_POWER_MODEL_COMPONENTS_ADDED_ONCE"
-GPU_POWER_STATUS = "FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL"
 GPU_WORKLOAD_POWER_STATUS = "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY"
-SYSTEM_ENERGY_STATUS = "NOT_AVAILABLE_COMPUTE_ENERGY_EXCLUDED"
 SCENARIO_STATUS = "CONDITIONAL_MATCHED_REFERENCE_SENSITIVITY"
 
 LOGIC_STATUS_RESOLVED_ZERO = "RESOLVED_EXPLICIT_ZERO"
@@ -87,8 +85,6 @@ class LLMDecodeWorkloadPowerMetrics(BaseModel):
     logic_background_effective_W: float | None
     memory_workload_total_W: float | None
     gpu_power_W: float | None
-    # Reference only; package totals and thermal mapping use gpu_power_W.
-    fixed_gpu_power_W: float | None
     package_workload_total_W: float | None
 
     unresolved_logic_background_policy: Literal[
@@ -117,10 +113,8 @@ class LLMDecodeWorkloadPowerMetrics(BaseModel):
     static_power_status: Literal[
         "EXISTING_POWER_MODEL_COMPONENTS_ADDED_ONCE"]
     gpu_power_status: Literal[
-        "FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL",
         "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY"]
     system_energy_status: Literal[
-        "NOT_AVAILABLE_COMPUTE_ENERGY_EXCLUDED",
         "GPU_ENERGY_REPORTED_IN_GPU_DECODE_ENERGY_STAGE"]
     scenario_status: Literal[
         "CONDITIONAL_MATCHED_REFERENCE_SENSITIVITY"]
@@ -134,7 +128,6 @@ class LLMDecodeWorkloadPowerMetrics(BaseModel):
             self.logic_background_effective_W,
             self.memory_workload_total_W,
             self.gpu_power_W,
-            self.fixed_gpu_power_W,
             self.package_workload_total_W,
         )
         if self.evaluation_status != STATUS_EVALUATED:
@@ -151,7 +144,6 @@ class LLMDecodeWorkloadPowerMetrics(BaseModel):
         assert self.logic_background_effective_W is not None
         assert self.memory_workload_total_W is not None
         assert self.gpu_power_W is not None
-        assert self.fixed_gpu_power_W is not None
         assert self.package_workload_total_W is not None
         expected_memory = (
             self.memory_dynamic_access_power_W + self.refresh_power_W
@@ -176,8 +168,9 @@ def _common(
         "unresolved_logic_background_policy": policy,
         "dynamic_power_status": DYNAMIC_POWER_STATUS,
         "static_power_status": STATIC_POWER_STATUS,
-        "gpu_power_status": GPU_POWER_STATUS,
-        "system_energy_status": SYSTEM_ENERGY_STATUS,
+        "gpu_power_status": GPU_WORKLOAD_POWER_STATUS,
+        "system_energy_status": (
+            "GPU_ENERGY_REPORTED_IN_GPU_DECODE_ENERGY_STAGE"),
         "scenario_status": SCENARIO_STATUS,
     }
 
@@ -191,7 +184,7 @@ def evaluate_llm_decode_workload_power(
         "REQUIRE_RESOLVED", "EXISTING_PLACEHOLDER_ZERO",
         "PARAMETRIC_SENSITIVITY"],
     logic_background_sensitivity_W: float | None = None,
-    gpu_decode_energy: GPUDecodeEnergyMetrics | None = None,
+    gpu_decode_energy: GPUDecodeEnergyMetrics,
 ) -> LLMDecodeWorkloadPowerMetrics:
     """Combine per-token memory energy, throughput, and static components.
 
@@ -217,14 +210,10 @@ def evaluate_llm_decode_workload_power(
         raise ValueError("energy/performance write traffic mismatch")
 
     common = _common(energy, policy)
-    if gpu_decode_energy is not None:
-        if (gpu_decode_energy.architecture != energy.architecture
-                or gpu_decode_energy.rho != energy.rho
-                or gpu_decode_energy.capacity_feasible != energy.capacity_feasible):
-            raise ValueError("GPU energy/workload identity mismatch")
-        common["gpu_power_status"] = GPU_WORKLOAD_POWER_STATUS
-        common["system_energy_status"] = (
-            "GPU_ENERGY_REPORTED_IN_GPU_DECODE_ENERGY_STAGE")
+    if (gpu_decode_energy.architecture != energy.architecture
+            or gpu_decode_energy.rho != energy.rho
+            or gpu_decode_energy.capacity_feasible != energy.capacity_feasible):
+        raise ValueError("GPU energy/workload identity mismatch")
     blocked = (
         not energy.capacity_feasible
         or energy.memory_dynamic_energy_j_per_token is None
@@ -246,7 +235,6 @@ def evaluate_llm_decode_workload_power(
             logic_background_effective_W=None,
             memory_workload_total_W=None,
             gpu_power_W=None,
-            fixed_gpu_power_W=None,
             package_workload_total_W=None,
             logic_background_status=LOGIC_STATUS_UNRESOLVED,
             memory_total_completeness_status=COMPLETENESS_UNRESOLVED,
@@ -266,7 +254,6 @@ def evaluate_llm_decode_workload_power(
             logic_background_effective_W=None,
             memory_workload_total_W=None,
             gpu_power_W=None,
-            fixed_gpu_power_W=None,
             package_workload_total_W=None,
             logic_background_status=LOGIC_STATUS_UNRESOLVED,
             memory_total_completeness_status=COMPLETENESS_UNRESOLVED,
@@ -296,7 +283,6 @@ def evaluate_llm_decode_workload_power(
             logic_background_effective_W=None,
             memory_workload_total_W=None,
             gpu_power_W=None,
-            fixed_gpu_power_W=None,
             package_workload_total_W=None,
             logic_background_status=LOGIC_STATUS_UNRESOLVED,
             memory_total_completeness_status=COMPLETENESS_UNRESOLVED,
@@ -316,29 +302,29 @@ def evaluate_llm_decode_workload_power(
     refresh = _finite_nonnegative("memory.P_refresh_W", memory.P_refresh_W)
     background = _finite_nonnegative(
         "memory.P_memory_background_W", memory.P_memory_background_W)
-    fixed_gpu = _finite_nonnegative("system.gpu_power_W", system.gpu_power_W)
-    gpu = fixed_gpu
-    if gpu_decode_energy is not None:
-        if gpu_decode_energy.evaluation_status != (
-                "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY"):
-            raise ValueError("evaluated workload requires evaluated GPU energy")
-        gpu = _finite_nonnegative(
-            "gpu_decode_energy.gpu_decode_power_W",
-            gpu_decode_energy.gpu_decode_power_W)
-        gpu_j = _finite_nonnegative(
-            "gpu_decode_energy.gpu_energy_j_per_token",
-            gpu_decode_energy.gpu_energy_j_per_token)
-        token_time = _finite_nonnegative(
-            "gpu_decode_energy.token_time_s", gpu_decode_energy.token_time_s)
-        if token_time <= 0.0 or throughput <= 0.0:
-            raise ValueError("GPU energy requires positive token time and throughput")
-        if (token_time != performance.token_equivalent_time_s
-                or gpu_decode_energy.memory_dynamic_energy_j_per_token != energy_j):
-            raise ValueError("GPU energy/workload operating point mismatch")
-        if not math.isclose(token_time * throughput, 1.0, rel_tol=1e-12):
-            raise ValueError("GPU token time and aggregate throughput do not close")
-        if not math.isclose(gpu_j * throughput, gpu, rel_tol=1e-12, abs_tol=1e-9):
-            raise ValueError("GPU energy and workload power do not close")
+    if gpu_decode_energy.evaluation_status != (
+            "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY"):
+        raise ValueError("evaluated workload requires evaluated GPU energy")
+    gpu = _finite_nonnegative(
+        "gpu_decode_energy.gpu_decode_power_W",
+        gpu_decode_energy.gpu_decode_power_W)
+    system_gpu = _finite_nonnegative("system.gpu_power_W", system.gpu_power_W)
+    if not math.isclose(system_gpu, gpu, rel_tol=1e-12, abs_tol=1e-9):
+        raise ValueError("system and GPU energy must share one operating point")
+    gpu_j = _finite_nonnegative(
+        "gpu_decode_energy.gpu_energy_j_per_token",
+        gpu_decode_energy.gpu_energy_j_per_token)
+    token_time = _finite_nonnegative(
+        "gpu_decode_energy.token_time_s", gpu_decode_energy.token_time_s)
+    if token_time <= 0.0 or throughput <= 0.0:
+        raise ValueError("GPU energy requires positive token time and throughput")
+    if (token_time != performance.token_equivalent_time_s
+            or gpu_decode_energy.memory_dynamic_energy_j_per_token != energy_j):
+        raise ValueError("GPU energy/workload operating point mismatch")
+    if not math.isclose(token_time * throughput, 1.0, rel_tol=1e-12):
+        raise ValueError("GPU token time and aggregate throughput do not close")
+    if not math.isclose(gpu_j * throughput, gpu, rel_tol=1e-12, abs_tol=1e-9):
+        raise ValueError("GPU energy and workload power do not close")
 
     if policy == POLICY_PARAMETRIC_SENSITIVITY:
         effective_logic = _finite_nonnegative(
@@ -392,7 +378,6 @@ def evaluate_llm_decode_workload_power(
         logic_background_effective_W=effective_logic,
         memory_workload_total_W=memory_total,
         gpu_power_W=gpu,
-        fixed_gpu_power_W=fixed_gpu,
         package_workload_total_W=package_total,
         logic_background_status=logic_status,
         memory_total_completeness_status=completeness,

@@ -28,14 +28,9 @@ def _spec() -> AffineGPUDecodePowerSpec:
     return AffineGPUDecodePowerSpec(
         model="AFFINE_UTILIZATION_MODEL",
         static_power_W=STATIC_POWER_W,
-        e_decode_J_per_bit_min=6.28e-12,
         e_decode_J_per_bit=E_DECODE_J_PER_BIT,
-        e_decode_J_per_bit_max=9.01e-12,
-        peak_decode_power_W=PEAK_DECODE_POWER_W,
         peak_memory_bandwidth_bytes_per_s=PEAK_BANDWIDTH_BYTES_PER_S,
         static_power_status="PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE",
-        peak_power_status=(
-            "DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH"),
         bandwidth_status="MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED",
         coefficient_range_status="REFERENCE_DERIVED_RANGE",
         coefficient_nominal_status="MODELING_CHOICE_RANGE_MIDPOINT",
@@ -173,20 +168,16 @@ def test_power_is_monotonic_then_constant_across_bandwidth_boundary() -> None:
     assert powers[3:] == pytest.approx([PEAK_DECODE_POWER_W] * 3)
 
 
-def test_peak_decode_power_is_a_derived_schema_check() -> None:
-    with pytest.raises(ValueError, match="must equal the derived value"):
-        AffineGPUDecodePowerSpec.model_validate(
-            _spec().model_dump() | {"peak_decode_power_W": 270.0})
+def test_peak_decode_power_is_read_only_derived_value() -> None:
+    assert _spec().derived_peak_decode_power_W == pytest.approx(367.568)
 
 
-def test_decode_coefficient_is_the_frozen_reference_range_midpoint() -> None:
+def test_decode_coefficient_is_the_runtime_nominal() -> None:
     spec = _spec()
-    assert spec.e_decode_J_per_bit_min == 6.28e-12
     assert spec.e_decode_J_per_bit == 7.645e-12
-    assert spec.e_decode_J_per_bit_max == 9.01e-12
-    with pytest.raises(ValueError, match="range midpoint"):
-        AffineGPUDecodePowerSpec.model_validate(
-            spec.model_dump() | {"e_decode_J_per_bit": 7.0e-12})
+    assert AffineGPUDecodePowerSpec.model_validate(
+        spec.model_dump() | {"e_decode_J_per_bit": 7.0e-12}
+    ).e_decode_J_per_bit == 7.0e-12
 
 
 def test_decode_reference_range_peak_power_hand_checks() -> None:

@@ -11,10 +11,12 @@ from om3dthermal.evaluator import (
     LLMDecodeWorkloadThermalMetrics,
     assemble_conditional_llm_decode_e2e_row,
     evaluate_architecture_decode_memory_energy,
+    evaluate_gpu_decode_energy,
     evaluate_llm_decode_performance,
     evaluate_llm_decode_workload_power,
     validate_conditional_llm_decode_e2e_table,
 )
+from om3dthermal.experiment import load_platform_spec
 from om3dthermal.power import (
     load_case_config,
     resolve_case_geometry,
@@ -28,6 +30,9 @@ from om3dthermal.workload import (
 
 
 ROOT = Path(__file__).parents[1]
+GPU_SPEC = load_platform_spec(
+    ROOT / "configs/platform/gpu_package_h200_reference.yaml",
+    project_root=ROOT).gpu_decode_power
 ARCHITECTURES = (
     "conventional_hbm_2x1", "orthogonal_si", "orthogonal_m3d_igzo")
 RHOS = (0, 1, 100, 1000)
@@ -114,11 +119,14 @@ def frozen():
         for rho in RHOS:
             energy = evaluate_architecture_decode_memory_energy(
                 workload, fit, system, rho=rho)
+            gpu_energy = evaluate_gpu_decode_energy(
+                performance, energy, GPU_SPEC)
             policy = ("EXISTING_PLACEHOLDER_ZERO"
                       if name == "orthogonal_m3d_igzo" else "REQUIRE_RESOLVED")
             power = evaluate_llm_decode_workload_power(
                 energy, performance, system,
-                unresolved_logic_background_policy=policy)
+                unresolved_logic_background_policy=policy,
+                gpu_decode_energy=gpu_energy)
             thermal = _thermal(name, rho, power)
             row = assemble_conditional_llm_decode_e2e_row(
                 inp, workload, fit, performance, energy, power, thermal,
@@ -230,7 +238,9 @@ def test_capacity_infeasible_propagates_without_thermal(frozen, name):
               if name == "orthogonal_m3d_igzo" else "REQUIRE_RESOLVED")
     power = evaluate_llm_decode_workload_power(
         energy, performance, system,
-        unresolved_logic_background_policy=policy)
+        unresolved_logic_background_policy=policy,
+        gpu_decode_energy=evaluate_gpu_decode_energy(
+            performance, energy, GPU_SPEC))
     row = assemble_conditional_llm_decode_e2e_row(
         inp, workload, fit, performance, energy, power, None,
         workload_identifier="blocked-test")

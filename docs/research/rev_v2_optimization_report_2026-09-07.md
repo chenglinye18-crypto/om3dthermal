@@ -17,8 +17,8 @@
 - 三架构（baseline / proposed / H200 参考行）同值同硅片论证；平台峰值带宽
   4.9 → 4.8 TB/s（H200 厂商值），场景 cap 4.9 TB/s → u=1.02 钳位于 1。
 - 平台文件：`configs/platform/gpu_package_h200_reference.yaml`
-  （旧 300w 文件已删除）；300 W 硬编码校验器改写为
-  `CANONICAL_GPU_POWER_W = 367.568` 常量 + 豁免 legacy unresolved 案例。
+  （旧 300w 文件已删除）；case 固定功率、平台派生功率输入、硬编码校验器
+  与 legacy unresolved 豁免均已删除，运行时只消费 canonical resolver 输出。
 
 ### 2. 封装几何：对齐 H200 GH100-class
 

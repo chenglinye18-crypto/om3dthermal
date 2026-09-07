@@ -11,6 +11,7 @@ import pytest
 from om3dthermal.architecture_capacity import resolve_architecture_capacity
 from om3dthermal.evaluator import (
     ArchitectureDecodeMemoryEnergyMetrics,
+    GPUDecodeEnergyMetrics,
     LLMDecodePerformanceMetrics,
     evaluate_architecture_decode_memory_energy,
     evaluate_gpu_decode_energy,
@@ -92,7 +93,7 @@ def _energy(*, name="test", rho=1.0, feasible=True, read=1.0, write=1.0,
 
 def _performance(*, name="test", feasible=True, read=1.0, write=1.0,
                  aggregate=3.0, batch=1):
-    none = None if not feasible else 1.0
+    none = None if not feasible else 1.0 / aggregate
     return LLMDecodePerformanceMetrics(
         architecture=name, batch_size=batch, capacity_feasible=feasible,
         read_bytes_per_token=read, write_bytes_per_token=write,
@@ -120,9 +121,62 @@ def _performance(*, name="test", feasible=True, read=1.0, write=1.0,
 
 def _evaluate(energy=None, performance=None, system=None,
               policy="REQUIRE_RESOLVED"):
+    resolved_energy = energy or _energy()
+    resolved_performance = performance or _performance()
+    resolved_system = system or _system()
     return evaluate_llm_decode_workload_power(
-        energy or _energy(), performance or _performance(), system or _system(),
-        unresolved_logic_background_policy=policy)
+        resolved_energy, resolved_performance, resolved_system,
+        unresolved_logic_background_policy=policy,
+        gpu_decode_energy=_gpu_metrics(
+            resolved_energy,
+            (resolved_performance
+             if resolved_performance.capacity_feasible
+             == resolved_energy.capacity_feasible
+             else _performance(
+                 name=resolved_energy.architecture,
+                 feasible=resolved_energy.capacity_feasible,
+                 read=resolved_energy.read_bytes_per_token,
+                 write=resolved_energy.write_bytes_per_token)),
+            resolved_system))
+
+
+def _gpu_metrics(energy, performance, system):
+    if not energy.capacity_feasible:
+        nominal = load_platform_spec(
+            ROOT / "configs/platform/gpu_package_h200_reference.yaml",
+            project_root=ROOT).gpu_decode_power
+        return evaluate_gpu_decode_energy(performance, energy, nominal)
+    token_time = performance.token_equivalent_time_s
+    demand = (performance.read_bytes_per_token
+              + performance.write_bytes_per_token) / token_time
+    gpu = system.gpu_power_W
+    return GPUDecodeEnergyMetrics(
+        architecture=energy.architecture, rho=energy.rho,
+        capacity_feasible=True, memory_bandwidth_utilization=0.5,
+        utilization_clamped=False,
+        bandwidth_demand_bytes_per_s=demand,
+        bandwidth_actual_bytes_per_s=demand,
+        bandwidth_saturated=False, gpu_dynamic_power_W=gpu - 1.0,
+        compute_demand_flops_per_s=None, compute_actual_flops_per_s=None,
+        compute_utilization=None, compute_saturated=None,
+        gpu_dynamic_compute_power_W=None,
+        compute_energy_dynamic_J_per_FLOP=None, gpu_power_regime="MEMORY",
+        gpu_decode_power_W=gpu, token_time_s=token_time,
+        gpu_energy_j_per_token=gpu * token_time,
+        memory_dynamic_energy_j_per_token=(
+            energy.memory_dynamic_energy_j_per_token),
+        system_energy_j_per_token=(
+            gpu * token_time + energy.memory_dynamic_energy_j_per_token),
+        evaluation_status="EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY",
+        gpu_power_model_status="ANALYTICAL_AFFINE_UTILIZATION_MODEL",
+        parameter_provenance_status=(
+            "MEASURED_REFERENCE_RANGE_WITH_EXPLICIT_COMPUTE_SELECTION"),
+        bandwidth_status="MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED",
+        system_energy_scope_status=(
+            "GPU_PLUS_MEMORY_DYNAMIC_ONLY__EXCLUDES_HOST_CPU_DRAM_COOLING_NETWORK"),
+        utilization_semantics_status=(
+            "REGIME_ACTUAL_RATE_OVER_CEILING__STRICT_EXCEEDANCE_SATURATION"),
+    )
 
 
 def test_two_j_per_token_times_three_aggregate_tokens_is_six_watts() -> None:
@@ -150,10 +204,7 @@ def gpu_operating_point():
     # Dimensionally consistent small-number fixture: 2 B/s demand is half of
     # the 4 B/s peak.
     spec = type(nominal).model_validate(nominal.model_dump() | {
-        "e_decode_J_per_bit_min": 1.0,
         "e_decode_J_per_bit": 1.0,
-        "e_decode_J_per_bit_max": 1.0,
-        "peak_decode_power_W": 106.0,
         "peak_memory_bandwidth_bytes_per_s": 4.0,
     })
     energy, performance = _energy(), _performance(aggregate=1.0)
@@ -161,15 +212,14 @@ def gpu_operating_point():
     return energy, performance, gpu
 
 
-def test_affine_power_replaces_fixed_gpu_reference_once(gpu_operating_point):
+def test_affine_power_is_consumed_once(gpu_operating_point):
     energy, performance, gpu = gpu_operating_point
     power = evaluate_llm_decode_workload_power(
-        energy, performance, _system(gpu=300),
+        energy, performance, _system(gpu=90),
         unresolved_logic_background_policy="REQUIRE_RESOLVED", gpu_decode_energy=gpu)
     # The fixture's actual byte rate is half the peak, so power is
     # 74 W + 1 J/bit x 8 bit/byte x 2 B/s = 90 W.
     assert power.gpu_power_W == pytest.approx(90.0)
-    assert power.fixed_gpu_power_W == 300.0
     assert power.package_workload_total_W == pytest.approx(
         90.0 + power.memory_workload_total_W)
     assert power.gpu_power_status == "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY"
@@ -190,7 +240,7 @@ def test_inconsistent_gpu_energy_cannot_feed_thermal_power(
     energy, performance, gpu = gpu_operating_point
     with pytest.raises(ValueError, match=message):
         evaluate_llm_decode_workload_power(
-            energy, performance, _system(gpu=300),
+            energy, performance, _system(gpu=90),
             unresolved_logic_background_policy="REQUIRE_RESOLVED",
             gpu_decode_energy=gpu.model_copy(update=update))
 
@@ -200,7 +250,7 @@ def test_inconsistent_token_time_and_throughput_are_rejected(gpu_operating_point
     with pytest.raises(ValueError, match="token time and aggregate throughput"):
         evaluate_llm_decode_workload_power(
             energy, performance.model_copy(update={"aggregate_tokens_per_second": 2}),
-            _system(gpu=300), unresolved_logic_background_policy="REQUIRE_RESOLVED",
+            _system(gpu=90), unresolved_logic_background_policy="REQUIRE_RESOLVED",
             gpu_decode_energy=gpu)
 
 
@@ -211,10 +261,9 @@ def test_blocked_gpu_energy_keeps_all_power_outputs_absent():
         project_root=ROOT).gpu_decode_power
     gpu = evaluate_gpu_decode_energy(performance, energy, spec)
     power = evaluate_llm_decode_workload_power(
-        energy, performance, _system(gpu=300),
+        energy, performance, _system(gpu=90),
         unresolved_logic_background_policy="REQUIRE_RESOLVED", gpu_decode_energy=gpu)
     assert power.gpu_power_W is None
-    assert power.fixed_gpu_power_W is None
     assert power.package_workload_total_W is None
 
 
@@ -357,7 +406,12 @@ def _frozen_rows(frozen):
                 workload, capacity, system, rho=rho)
             rows.append(evaluate_llm_decode_workload_power(
                 energy, performance, system,
-                unresolved_logic_background_policy=policy))
+                unresolved_logic_background_policy=policy,
+                gpu_decode_energy=evaluate_gpu_decode_energy(
+                    performance, energy,
+                    load_platform_spec(
+                        ROOT / "configs/platform/gpu_package_h200_reference.yaml",
+                        project_root=ROOT).gpu_decode_power)))
     return rows
 
 
@@ -374,9 +428,9 @@ def test_frozen_table_has_exactly_twelve_rows_and_statuses(frozen) -> None:
         assert row.static_power_status == (
             "EXISTING_POWER_MODEL_COMPONENTS_ADDED_ONCE")
         assert row.gpu_power_status == (
-            "FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL")
+            "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY")
         assert row.system_energy_status == (
-            "NOT_AVAILABLE_COMPUTE_ENERGY_EXCLUDED")
+            "GPU_ENERGY_REPORTED_IN_GPU_DECODE_ENERGY_STAGE")
 
 
 def test_rho_one_anchor_and_memory_total_close_for_three_architectures(frozen) -> None:

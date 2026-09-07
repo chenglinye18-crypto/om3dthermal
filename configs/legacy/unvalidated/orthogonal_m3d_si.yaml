@@ -92,7 +92,6 @@ workload:
   control_address_reuse: 64
 
 power:
-  gpu: {model: fixed, power_W: 300.0}
   memory: {model: unresolved, status: NOT_VALIDATED}
   refresh: {enabled: false}
   background: {enabled: false}
@@ -122,4 +121,3 @@ provenance:
   memory_power: NOT_VALIDATED
   analytical_primitive: UNAVAILABLE
   bandwidth_status: INTERFACE_PLACEHOLDER_NOT_CAPABILITY_VALIDATED
-

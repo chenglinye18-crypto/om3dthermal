@@ -12,8 +12,7 @@ bottleneck's actual service rate, not directly from tokens::
 ``e_decode`` is the project-level GPU decode dynamic energy-per-bit
 coefficient used by the bandwidth-bounded GPU power model. Memory energy is
 modeled independently elsewhere, without subtraction from this coefficient.
-The compatibility field ``peak_decode_power_W`` is a derived closure check,
-never an independent power-model parameter.
+Peak decode power is a read-only derived value, never an input.
 
 Both regimes share the 74 W static anchor. Their dynamic terms are alternatives,
 not additive components.
@@ -161,18 +160,11 @@ class AffineGPUDecodePowerSpec(BaseModel):
 
     model: Literal["AFFINE_UTILIZATION_MODEL"]
     static_power_W: float = Field(gt=0.0)
-    e_decode_J_per_bit_min: float = Field(gt=0.0)
     e_decode_J_per_bit: float = Field(gt=0.0)
-    e_decode_J_per_bit_max: float = Field(gt=0.0)
     peak_memory_bandwidth_bytes_per_s: float = Field(gt=0.0)
-    # Compatibility/reporting field: validator enforces its derived value.
-    peak_decode_power_W: float = Field(gt=0.0)
     static_power_status: Literal[
         "PARAMETRIC_NOMINAL_WITHIN_MEASURED_REFERENCE_RANGE",
         "MEASURED_REFERENCE_H200_SXM_IDLE_FLOOR",
-    ]
-    peak_power_status: Literal[
-        "DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH"
     ]
     bandwidth_status: Literal[
         "MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED",
@@ -196,26 +188,6 @@ class AffineGPUDecodePowerSpec(BaseModel):
 
     @model_validator(mode="after")
     def _closure(self) -> "AffineGPUDecodePowerSpec":
-        if self.e_decode_J_per_bit_max < self.e_decode_J_per_bit_min:
-            raise ValueError("decode coefficient maximum must not be below minimum")
-        midpoint = 0.5 * (
-            self.e_decode_J_per_bit_min + self.e_decode_J_per_bit_max)
-        if not math.isclose(
-            self.e_decode_J_per_bit, midpoint, rel_tol=1e-12, abs_tol=1e-18
-        ):
-            raise ValueError(
-                "e_decode_J_per_bit must equal the configured range midpoint")
-        if not math.isclose(
-            self.peak_decode_power_W,
-            self.derived_peak_decode_power_W,
-            rel_tol=1e-12,
-            abs_tol=1e-9,
-        ):
-            raise ValueError(
-                "peak_decode_power_W must equal the derived value "
-                "static_power_W + e_decode_J_per_bit * 8 * "
-                "peak_memory_bandwidth_bytes_per_s"
-            )
         if not self.provenance:
             raise ValueError(
                 "GPU decode power spec requires provenance records")

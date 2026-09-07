@@ -9,6 +9,7 @@ from om3dthermal.evaluator import (
     evaluate_llm_decode_performance,
 )
 from om3dthermal.experiment import run_m3d_parameter_sensitivity
+from om3dthermal.experiment import load_platform_spec
 from om3dthermal.power import (
     load_case_config,
     resolve_case_geometry,
@@ -68,7 +69,10 @@ def test_m3d_interface_and_logic_sensitivities_are_separate_and_close():
         performance=performance,
         interface_energy_values_pj_per_bit=(0.25, 0.5, 1.0),
         logic_background_values_W=(0, 5, 10, 20),
-        thermal_runner=_fake_thermal)
+        thermal_runner=_fake_thermal,
+        gpu_decode_power=load_platform_spec(
+            ROOT / "configs/platform/gpu_package_h200_reference.yaml",
+            project_root=ROOT).gpu_decode_power)
 
     assert result.status == "PARAMETRIC_SENSITIVITY"
     assert [row.interface_power_at_matched_bandwidth_W

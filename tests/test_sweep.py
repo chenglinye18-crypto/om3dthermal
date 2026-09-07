@@ -172,7 +172,7 @@ def test_system_metrics_fails_loudly_without_memory_result(
         "om3dthermal.sweep.resolve_case_geometry", lambda c: geom)
     monkeypatch.setattr(
         "om3dthermal.sweep.resolve_system_power",
-        lambda c, project_root, geometry: sys_pow)
+        lambda c, project_root, geometry, **kwargs: sys_pow)
     monkeypatch.setattr(
         "om3dthermal.sweep._resolved_capacity",
         lambda c, g, s: {
@@ -239,7 +239,7 @@ def test_system_metrics_extracts_energy_and_power_from_memory_result(
         "om3dthermal.sweep.resolve_case_geometry", lambda c: object())
     monkeypatch.setattr(
         "om3dthermal.sweep.resolve_system_power",
-        lambda c, project_root, geometry: sys_pow)
+        lambda c, project_root, geometry, **kwargs: sys_pow)
     monkeypatch.setattr(
         "om3dthermal.sweep._resolved_capacity",
         lambda c, g, s: capacity)

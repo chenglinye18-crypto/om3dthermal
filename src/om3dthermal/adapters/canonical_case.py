@@ -17,12 +17,19 @@ from om3dthermal.power import (
     resolve_case_geometry,
     resolve_system_power,
 )
+from om3dthermal.platform import (
+    GPUComputePowerOperatingPoint,
+    GPUDecodePowerOperatingPoint,
+)
 
 
 def resolve_architecture_spec(
     spec: ArchitectureSpec,
     *,
     project_root: Path,
+    gpu_operating_point: (
+        GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint
+        | None) = None,
 ) -> ResolvedArchitecture:
     """Resolve without copying or changing any canonical physical parameter."""
 
@@ -32,7 +39,8 @@ def resolve_architecture_spec(
             "architecture descriptor identity does not match canonical case")
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
-        case, project_root=project_root, geometry=geometry)
+        case, project_root=project_root, geometry=geometry,
+        gpu_operating_point=gpu_operating_point)
     if system.memory_result is None:
         raise ValueError(
             "formal architecture resolution requires analytical packing evidence")
@@ -84,7 +92,6 @@ def extract_architecture_facts(
             refresh_power_W=memory.P_refresh_W,
             memory_background_power_W=memory.P_memory_background_W,
             logic_background_power_W=logic_background,
-            fixed_gpu_power_W=system.gpu_power_W,
             source_status=system.memory_power_status,
             completeness_status=completeness,
         ),

@@ -219,7 +219,6 @@ workload:
   control_address_reuse: 64
 
 power:
-  gpu: {model: fixed, power_W: 367.568}
   memory: {model: analytical, status: CONDITIONAL_ASSUMPTION}
   refresh:
     enabled: true
@@ -279,7 +278,6 @@ thermal:
 
 provenance:
   platform_revision: REV_V2_H200_ANCHORED_2026_09_06
-  gpu_power_provenance: H200_ANCHORED_AFFINE_U1_POINT_74W_PLUS_5P10_PJBIT_X_4P8TBS
   geometry:
     cell_area_um2: PAPER_REPORTED
     bitcell_layer_pitch_nm: DERIVED_FROM_PAPER_FIGURE

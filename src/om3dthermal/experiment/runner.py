@@ -27,6 +27,8 @@ from om3dthermal.evaluator import (
 )
 from om3dthermal.evaluation import evaluate_architecture_capacity_feasibility
 from om3dthermal.provenance import RunProvenance
+from om3dthermal.platform import resolve_gpu_decode_power
+from om3dthermal.power import resolve_system_power
 from om3dthermal.result import write_result_bundle
 from om3dthermal.workload import (
     evaluate_llm_decode,
@@ -160,6 +162,17 @@ def run_experiment(
             f"{experiment.output_policy}: {output_dir}")
     platform = load_platform_spec(
         experiment.platform_config, project_root=root)
+    if platform.gpu_decode_power is None:
+        raise ValueError("formal decode evaluation requires gpu_decode_power")
+    decode_spec = platform.gpu_decode_power
+    reference_gpu_point = resolve_gpu_decode_power(
+        static_power_W=decode_spec.static_power_W,
+        e_decode_J_per_bit=decode_spec.e_decode_J_per_bit,
+        bandwidth_demand_bytes_per_s=(
+            decode_spec.peak_memory_bandwidth_bytes_per_s),
+        peak_bandwidth_bytes_per_s=(
+            decode_spec.peak_memory_bandwidth_bytes_per_s),
+    )
     workload_spec = load_workload_spec(
         experiment.workload_config, project_root=root)
     architecture_specs = tuple(
@@ -174,7 +187,9 @@ def run_experiment(
     workload = evaluate_llm_decode(workload_spec.decode)
     workload_demand = resolve_llm_decode_demand(workload_spec, workload)
     resolved_architectures = tuple(
-        resolve_architecture_spec(spec, project_root=root)
+        resolve_architecture_spec(
+            spec, project_root=root,
+            gpu_operating_point=reference_gpu_point)
         for spec in architecture_specs
     )
     (matched_bandwidth_bits_per_s,
@@ -190,9 +205,7 @@ def run_experiment(
     rows = []
     gpu_energies = []
     for resolved in resolved_architectures:
-        system = resolved.system_power
-        if system.gpu_power_W != platform.fixed_gpu_power_W:
-            raise ValueError("canonical case GPU power does not match platform")
+        reference_system = resolved.system_power
         capacity = evaluate_architecture_capacity_feasibility(
             workload_demand,
             resolved.packing,
@@ -213,12 +226,21 @@ def run_experiment(
         performances.append(performance)
         for rho in experiment.scenario.rho_values:
             energy = evaluate_architecture_decode_memory_energy(
-                workload, capacity, system, rho=rho)
-            gpu_energy = (
-                evaluate_gpu_decode_energy(
-                    performance, energy, platform.gpu_decode_power,
-                    platform.gpu_compute_power)
-                if platform.gpu_decode_power is not None else None)
+                workload, capacity, reference_system, rho=rho)
+            gpu_energy = evaluate_gpu_decode_energy(
+                performance, energy, decode_spec,
+                platform.gpu_compute_power)
+            system = (
+                resolve_system_power(
+                    resolved.case,
+                    project_root=root,
+                    geometry=resolved.geometry,
+                    gpu_operating_point=gpu_energy.gpu_power_operating_point,
+                )
+                if gpu_energy.evaluation_status
+                == "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY"
+                else reference_system
+            )
             power = evaluate_llm_decode_workload_power(
                 energy,
                 performance,
@@ -245,8 +267,7 @@ def run_experiment(
             powers.append(power)
             thermals.append(thermal)
             rows.append(row)
-            if gpu_energy is not None:
-                gpu_energies.append(gpu_energy)
+            gpu_energies.append(gpu_energy)
 
     validated_rows = validate_conditional_llm_decode_e2e_rows(
         rows,

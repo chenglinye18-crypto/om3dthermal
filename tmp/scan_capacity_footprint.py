@@ -9,6 +9,7 @@ from om3dthermal.power.config import (
     CaseMemoryRegionInput, find_project_root, load_case_config)
 from om3dthermal.power.geometry import resolve_case_geometry
 from om3dthermal.power.system import resolve_system_power
+from om3dthermal.architecture_comparison import _resolve_case_gpu_operating_point
 
 CASE = "configs/cases/conventional_hbm_2x1.yaml"
 root = find_project_root(CASE)
@@ -23,7 +24,8 @@ for side in [10.8, 11.0, 11.2, 11.4, 11.6, 11.8, 12.0, 12.2, 12.4]:
     case = base.model_copy(update={"geometry": new_geo})
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
-        case, project_root=root, geometry=geometry)
+        case, project_root=root, geometry=geometry,
+        gpu_operating_point=_resolve_case_gpu_operating_point(case, root))
     diag = system.memory_result.diagnostics
     bits_stack = int(diag["bits_per_stack"])
     total_bits = int(diag["total_stored_bits"])

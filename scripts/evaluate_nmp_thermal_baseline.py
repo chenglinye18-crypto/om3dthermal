@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from om3dthermal.case_runner import run_steady_pipeline
+from om3dthermal.architecture_comparison import _resolve_case_gpu_operating_point
 from om3dthermal.experiment import load_experiment_spec, load_workload_spec
 from om3dthermal.placement import evaluate_nmp_locality_case
 from om3dthermal.placement.nmp_load_balance import (
@@ -90,7 +91,9 @@ def _frozen_case_inputs(requests: int):
         external_boundary_time_ms=external_ms, ownership=placement.ownership)
     power_map = build_nmp_die_power_map(case, memory, topology, feol, activity, placement)
     gain = requests / (activity.decode_step_interval_ms * 1e-3) / baseline.timing.tokens_per_s
-    system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+    system = resolve_system_power(
+        case, project_root=ROOT, geometry=geometry,
+        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
     return case, system, power_map, gain, placement
 
 

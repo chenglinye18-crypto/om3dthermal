@@ -24,6 +24,8 @@ from pydantic import BaseModel
 from om3dthermal.platform import (
     AffineGPUComputePowerSpec,
     AffineGPUDecodePowerSpec,
+    GPUComputePowerOperatingPoint,
+    GPUDecodePowerOperatingPoint,
     resolve_gpu_compute_power,
     resolve_gpu_decode_power,
 )
@@ -86,6 +88,45 @@ class GPUDecodeEnergyMetrics(BaseModel):
         "GPU_PLUS_MEMORY_DYNAMIC_ONLY__EXCLUDES_HOST_CPU_DRAM_COOLING_NETWORK"]
     utilization_semantics_status: Literal[
         "REGIME_ACTUAL_RATE_OVER_CEILING__STRICT_EXCEEDANCE_SATURATION"]
+
+    @property
+    def gpu_power_operating_point(
+        self,
+    ) -> GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint:
+        """Reify the already-resolved E8 point without recalculating power."""
+        if self.evaluation_status != STATUS_EVALUATED:
+            raise ValueError("blocked GPU energy has no operating point")
+        assert self.gpu_decode_power_W is not None
+        if self.gpu_power_regime == "MEMORY":
+            assert self.bandwidth_demand_bytes_per_s is not None
+            assert self.bandwidth_actual_bytes_per_s is not None
+            assert self.memory_bandwidth_utilization is not None
+            assert self.bandwidth_saturated is not None
+            assert self.gpu_dynamic_power_W is not None
+            return GPUDecodePowerOperatingPoint(
+                bandwidth_demand_bytes_per_s=(
+                    self.bandwidth_demand_bytes_per_s),
+                bandwidth_actual_bytes_per_s=(
+                    self.bandwidth_actual_bytes_per_s),
+                bandwidth_utilization=self.memory_bandwidth_utilization,
+                bandwidth_saturated=self.bandwidth_saturated,
+                gpu_dynamic_power_W=self.gpu_dynamic_power_W,
+                gpu_power_W=self.gpu_decode_power_W,
+            )
+        assert self.gpu_power_regime == "COMPUTE"
+        assert self.compute_demand_flops_per_s is not None
+        assert self.compute_actual_flops_per_s is not None
+        assert self.compute_utilization is not None
+        assert self.compute_saturated is not None
+        assert self.gpu_dynamic_compute_power_W is not None
+        return GPUComputePowerOperatingPoint(
+            compute_demand_flops_per_s=self.compute_demand_flops_per_s,
+            compute_actual_flops_per_s=self.compute_actual_flops_per_s,
+            compute_utilization=self.compute_utilization,
+            compute_saturated=self.compute_saturated,
+            gpu_dynamic_compute_power_W=self.gpu_dynamic_compute_power_W,
+            gpu_power_W=self.gpu_decode_power_W,
+        )
 
 
 def evaluate_gpu_decode_energy(

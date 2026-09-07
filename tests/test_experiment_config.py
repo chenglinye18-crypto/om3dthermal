@@ -48,14 +48,18 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
     )
     # H200-anchored range-midpoint bandwidth-saturated operating point:
     # 74 W + 7.645 pJ/bit x 4.8 TB/s x 8 = 367.568 W.
-    assert platform.fixed_gpu_power_W == 367.568
-    assert platform.gpu_decode_power.e_decode_J_per_bit_min == 6.28e-12
+    assert platform.gpu_decode_power.static_power_W == 74.0
     assert platform.gpu_decode_power.e_decode_J_per_bit == 7.645e-12
-    assert platform.gpu_decode_power.e_decode_J_per_bit_max == 9.01e-12
+    assert platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s == 4.8e12
     assert platform.gpu_decode_power.derived_peak_decode_power_W == pytest.approx(
         367.568)
-    assert platform.gpu_decode_power.peak_power_status == (
-        "DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH")
+    raw_platform = yaml.safe_load(experiment.platform_config.read_text())
+    assert set(raw_platform["gpu_decode_power"]) == {
+        "model", "static_power_W", "e_decode_J_per_bit",
+        "peak_memory_bandwidth_bytes_per_s", "static_power_status",
+        "bandwidth_status", "coefficient_range_status",
+        "coefficient_nominal_status", "model_form_status", "provenance",
+    }
     compute = platform.gpu_compute_power
     assert compute.static_power_W == platform.gpu_decode_power.static_power_W
     assert compute.peak_compute_BF16_dense_flops_per_s == 989.5e12
@@ -82,6 +86,18 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
         "m3d_igzo_llama31_8b_decode_conditional_v0")
 
 
+def test_no_obsolete_parameter_path_remains() -> None:
+    forbidden = (
+        "_".join(("fixed", "gpu", "power", "W")),
+        "_".join(("legacy", "gpu", "power")),
+        "_".join(("compatibility", "gpu", "power")),
+    )
+    for directory in ("configs", "src", "tests", "scripts"):
+        for path in (ROOT / directory).rglob("*"):
+            if path.suffix.lower() not in {".py", ".yaml", ".yml"}:
+                continue
+            text = path.read_text(encoding="utf-8")
+            assert all(token not in text for token in forbidden), path
 def test_gpu_platform_ledger_matches_decode_reference_range_and_nominal() -> None:
     path = ROOT / "docs" / "research" / "gpu_platform_table_2026-09-06.csv"
     with path.open(encoding="utf-8", newline="") as stream:

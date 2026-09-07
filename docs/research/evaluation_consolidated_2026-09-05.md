@@ -88,8 +88,8 @@ Tmax 81.925634 °C；差异来自先前容量几何变更所影响的刷新功�
 - 实现：`platform/gpu_power.py` + `evaluator/llm_decode_gpu_energy.py`，
   runner 已接入；超过 GPU 峰值带宽后 dynamic power 不再增长。
 
-- 2026-09-05 修订：E8 前移至热求解之前，GPU W 同时用于能耗、封装总功率
-  和 GPU 热源；`fixed_gpu_power_W` 仅保留配置参考，实际值为 `gpu_power_W`。
+- 2026-09-07 修订：E8 前移至热求解之前，GPU W 同时用于能耗、封装总功率
+  和 GPU 热源；case/platform 的固定功率兼容输入已删除。
   该改动不改变 GPU-PCG 算子或数值实现，也不代表 offload 分工已经验证。
 - 专项文档：`gpu_power_model_spec_2026-09-05.md`（§8.1–8.3 已完成）。
 

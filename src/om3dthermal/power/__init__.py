@@ -74,7 +74,6 @@ from .system import (
     ResolvedSystemPower,
     ResolvedThermalPowerMapping,
     map_system_power_to_thermal,
-    run_case_system_power,
     resolve_system_power,
 )
 
@@ -137,5 +136,4 @@ __all__ = [
     "ResolvedThermalPowerMapping",
     "resolve_system_power",
     "map_system_power_to_thermal",
-    "run_case_system_power",
 ]

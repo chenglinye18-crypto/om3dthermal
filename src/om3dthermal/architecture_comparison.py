@@ -28,6 +28,11 @@ from .power import (
 from .power.config import CanonicalCaseConfig, find_project_root
 from .power.geometry import ResolvedGeometry
 from .power.system import ResolvedSystemPower
+from .platform import (
+    GPUDecodePowerOperatingPoint,
+    load_platform_spec_file,
+    resolve_gpu_decode_power,
+)
 
 
 @dataclass(frozen=True)
@@ -65,6 +70,27 @@ def _resolved_capacity(
         system: ResolvedSystemPower) -> dict[str, float | int | str]:
     """Compatibility mapping backed by the public capacity resolver."""
     return resolve_architecture_capacity(case, geometry, system).as_dict()
+
+
+def _resolve_case_gpu_operating_point(
+    case: CanonicalCaseConfig,
+    project_root: Path,
+) -> GPUDecodePowerOperatingPoint:
+    """Resolve standalone case traffic through the canonical platform input."""
+    platform = load_platform_spec_file(
+        project_root / "configs/platform/gpu_package_h200_reference.yaml")
+    if platform.gpu_decode_power is None:
+        raise ValueError("canonical platform is missing gpu_decode_power")
+    spec = platform.gpu_decode_power
+    return resolve_gpu_decode_power(
+        static_power_W=spec.static_power_W,
+        e_decode_J_per_bit=spec.e_decode_J_per_bit,
+        bandwidth_demand_bytes_per_s=(
+            (case.workload.read_bandwidth_gbps
+             + case.workload.write_bandwidth_gbps) * 1e9 / 8.0),
+        peak_bandwidth_bytes_per_s=(
+            spec.peak_memory_bandwidth_bytes_per_s),
+    )
 
 
 def _common_compact(case: CanonicalCaseConfig) -> dict[str, Any]:
@@ -295,7 +321,9 @@ def run_architecture_comparison(
         case = load_case_config(path)
         geometry = resolve_case_geometry(case)
         root = find_project_root(path)
-        system = resolve_system_power(case, project_root=root, geometry=geometry)
+        system = resolve_system_power(
+            case, project_root=root, geometry=geometry,
+            gpu_operating_point=_resolve_case_gpu_operating_point(case, root))
         capacity = _resolved_capacity(case, geometry, system)
         mapping = map_system_power_to_thermal(case, system)
         assert system.resolved_total_memory_power_W is not None

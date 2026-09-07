@@ -13,7 +13,6 @@ from om3dthermal.power import (
     map_system_power_to_thermal,
     resolve_case_geometry,
     resolve_system_power,
-    run_case_system_power,
     run_memory_power,
 )
 from om3dthermal.power.backends import DreamRAMBackend, OperationTableCellModel
@@ -1341,7 +1340,7 @@ def test_active_case_surface_is_minimal_and_single_file():
         raw_text = path.read_text(encoding="utf-8")
         raw = yaml.safe_load(raw_text)
         case = load_case_config(path)
-        assert case.power.gpu.power_W == 367.568  # H200 range midpoint
+        assert "gpu" not in raw["power"]
         assert case.architecture.geometry_source is None
         assert not any(token in raw_text for token in forbidden)
         assert "gpu" not in raw.get("thermal", {})
@@ -1376,7 +1375,7 @@ def test_m3d_si_unresolved_is_na_not_zero():
     assert system.resolved_total_memory_power_W is None
     assert system.as_dict(display_na=True)["resolved_total_memory_power_W"] == "N/A"
     assert mapping.unresolved is True
-    assert mapping.total_mapped_power_W == 300.0
+    assert mapping.total_mapped_power_W == 367.568
 
 
 def test_orthogonal_si_uses_matched_row_workload_and_refresh():

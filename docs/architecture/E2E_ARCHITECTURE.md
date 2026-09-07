@@ -111,15 +111,13 @@ The formal scenario remains conditional:
   dynamic-only coefficient selected from 0.4557857504–0.6326427489 pJ/FLOP;
   the 989.5 TFLOP/s vendor peak remains separate from scenario `F_effective`.
   Balanced-regime power is unresolved, and bandwidth/compute dynamic terms
-  are never added. Without an E8 model, compatibility callers retain
-  explicitly marked fixed power;
+  are never added. Without an E8 model, formal evaluation is rejected;
 - the read-shaped write spatial distribution is sensitivity-only.
 
 No directory structure or PASS status upgrades those scientific claims.
 
-`power.json` distinguishes `gpu_power_W` (the evaluated source used for both
-the package total and thermal mapping) from `fixed_gpu_power_W` (the original
-case reference, never added again). The GPU contribution closes as
+`power.json` records `gpu_power_W` as the evaluated source used for both
+the package total and thermal mapping. The GPU contribution closes as
 `gpu_energy_j_per_token * aggregate_tokens_per_second = gpu_power_W`.
 E8's `system_energy_j_per_token` still covers GPU plus memory dynamic energy;
 memory refresh/background/logic power remains in E5 and the thermal total.

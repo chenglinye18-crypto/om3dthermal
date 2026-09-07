@@ -6,8 +6,15 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from .config import CanonicalCaseConfig, find_project_root, load_case_config
-from .geometry import ResolvedGeometry, resolve_case_geometry
+from om3dthermal.platform import (
+    GPUComputePowerOperatingPoint,
+    GPUDecodePowerOperatingPoint,
+    load_platform_spec_file,
+    resolve_gpu_decode_power,
+)
+
+from .config import CanonicalCaseConfig
+from .geometry import ResolvedGeometry
 from .model import calculate_memory_power
 from .result import MemoryPowerResult
 
@@ -53,16 +60,35 @@ class ResolvedThermalPowerMapping:
 
 def resolve_system_power(
         case: CanonicalCaseConfig, *, project_root: Path,
-        geometry: ResolvedGeometry) -> ResolvedSystemPower:
-    """Resolve GPU and memory power from one canonical case."""
-    assert case.power.gpu is not None
+        geometry: ResolvedGeometry,
+        gpu_operating_point: (
+            GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint
+            | None) = None,
+) -> ResolvedSystemPower:
+    """Resolve package power from memory facts and one resolved GPU point."""
     assert case.power.memory is not None
+    if gpu_operating_point is None:
+        platform = load_platform_spec_file(
+            project_root / "configs/platform/gpu_package_h200_reference.yaml")
+        if platform.gpu_decode_power is None:
+            raise ValueError("canonical platform is missing gpu_decode_power")
+        spec = platform.gpu_decode_power
+        gpu_operating_point = resolve_gpu_decode_power(
+            static_power_W=spec.static_power_W,
+            e_decode_J_per_bit=spec.e_decode_J_per_bit,
+            bandwidth_demand_bytes_per_s=(
+                (case.workload.read_bandwidth_gbps
+                 + case.workload.write_bandwidth_gbps) * 1e9 / 8.0),
+            peak_bandwidth_bytes_per_s=(
+                spec.peak_memory_bandwidth_bytes_per_s),
+        )
+    gpu_power_W = gpu_operating_point.gpu_power_W
     mode = case.power.memory
     if mode.model == "unresolved":
         return ResolvedSystemPower(
             case_name=case.name,
             architecture_type=case.geometry.type,
-            gpu_power_W=case.power.gpu.power_W,
+            gpu_power_W=gpu_power_W,
             memory_power_model=mode.model,
             memory_power_status=mode.status,
             read_bandwidth_gbps=case.workload.read_bandwidth_gbps,
@@ -77,7 +103,7 @@ def resolve_system_power(
         return ResolvedSystemPower(
             case_name=case.name,
             architecture_type=case.geometry.type,
-            gpu_power_W=case.power.gpu.power_W,
+            gpu_power_W=gpu_power_W,
             memory_power_model=mode.model,
             memory_power_status=mode.status,
             read_bandwidth_gbps=case.workload.read_bandwidth_gbps,
@@ -102,7 +128,7 @@ def resolve_system_power(
     diagnostics = {
         "case_name": case.name,
         "architecture_type": case.geometry.type,
-        "gpu_power_W": case.power.gpu.power_W,
+        "gpu_power_W": gpu_power_W,
         "memory_power_model": mode.model,
         "memory_power_status": mode.status,
         "resolved_total_memory_power_W": total,
@@ -132,7 +158,7 @@ def resolve_system_power(
     return ResolvedSystemPower(
         case_name=case.name,
         architecture_type=case.geometry.type,
-        gpu_power_W=case.power.gpu.power_W,
+        gpu_power_W=gpu_power_W,
         memory_power_model=mode.model,
         memory_power_status=mode.status,
         read_bandwidth_gbps=case.workload.read_bandwidth_gbps,
@@ -219,11 +245,3 @@ def map_system_power_to_thermal(
         case_name=case.name, sources=sources,
         total_mapped_power_W=sum(source.power_W for source in sources),
         unresolved=False)
-
-
-def run_case_system_power(path: str | Path) -> ResolvedSystemPower:
-    case_path = Path(path).resolve()
-    case = load_case_config(case_path)
-    geometry = resolve_case_geometry(case)
-    return resolve_system_power(
-        case, project_root=find_project_root(case_path), geometry=geometry)

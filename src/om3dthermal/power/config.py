@@ -14,14 +14,6 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-# Rev v2 (2026-09-06): canonical cases are anchored to the H200-class
-# platform's H200-anchored bandwidth-saturated decode operating point
-# nominal: 74 W measured idle floor + 7.645 pJ/bit x 4.8e12 B/s x 8
-# = 367.568 W.  See docs/research/platform_revision_v2_spec_2026-09-06.md
-# and configs/platform/gpu_package_h200_reference.yaml.
-CANONICAL_GPU_POWER_W = 367.568
-
-
 class BinaryProbability(StrictModel):
     p0: float = Field(ge=0.0, le=1.0)
     p1: float = Field(ge=0.0, le=1.0)
@@ -596,11 +588,6 @@ class EnableInput(StrictModel):
     enabled: bool
 
 
-class GPUCasePowerInput(StrictModel):
-    model: Literal["fixed"]
-    power_W: float = Field(ge=0.0)
-
-
 class MemoryCasePowerInput(StrictModel):
     model: Literal["analytical", "reference_fixed", "unresolved"]
     status: Literal[
@@ -637,7 +624,6 @@ class MemoryCasePowerInput(StrictModel):
 class PowerInput(StrictModel):
     refresh: RefreshInput
     background: EnableInput
-    gpu: GPUCasePowerInput | None = None
     memory: MemoryCasePowerInput | None = None
 
 
@@ -788,21 +774,8 @@ class CanonicalCaseConfig(MemoryPowerConfig):
         is_m3d = self.architecture.m3d_subarray is not None
         if is_m3d != (self.geometry.type == "orthogonal_m3d"):
             raise ValueError("architecture and canonical geometry type disagree")
-        if self.power.gpu is None or self.power.memory is None:
-            raise ValueError("canonical case requires GPU and memory power modes")
-        # The GPU-power guard applies to runnable research cases only.
-        # Legacy unresolved cases (e.g. configs/legacy/unvalidated/) are
-        # historical references that cannot enter thermal/E2E anyway; for
-        # runnable cases the experiment runner additionally enforces
-        # case GPU power == platform.fixed_gpu_power_W.
-        if (self.power.memory.model != "unresolved"
-                and not math.isclose(
-                    self.power.gpu.power_W, CANONICAL_GPU_POWER_W,
-                    rel_tol=0.0, abs_tol=1e-9)):
-            raise ValueError(
-                "active canonical research cases require GPU="
-                f"{CANONICAL_GPU_POWER_W} W (H200-anchored bandwidth-saturated "
-                "point, rev v2)")
+        if self.power.memory is None:
+            raise ValueError("canonical case requires a memory power mode")
         if (self.power.memory.model == "analytical"
                 and self.memory.backend != "dreamram"):
             raise ValueError("analytical memory power requires DreamRAM backend")

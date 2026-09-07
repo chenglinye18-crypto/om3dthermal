@@ -183,10 +183,11 @@ def map_workload_power_to_thermal(
         new_sources.append(source)
         audit_sources.append(audit)
 
-    add("gpu", gpu, (
-        "E8_WORKLOAD_GPU_POWER_SHARED_WITH_ENERGY_REPLACES_EXISTING_SOURCE"
-        if power.gpu_power_status == GPU_WORKLOAD_POWER_STATUS
-        else "E5_FIXED_GPU_POWER_REPLACES_EXISTING_SOURCE"))
+    if power.gpu_power_status != GPU_WORKLOAD_POWER_STATUS:
+        raise ValueError("thermal requires the canonical E8 GPU power source")
+    add(
+        "gpu", gpu,
+        "E8_WORKLOAD_GPU_POWER_SHARED_WITH_ENERGY_REPLACES_EXISTING_SOURCE")
 
     if case.geometry.type == "dreamram_hbm":
         result = system.memory_result

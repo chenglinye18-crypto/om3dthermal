@@ -26,7 +26,7 @@ priority.
 | `experiment/` | composes architectures, platform, workload, scenario, sweep, and output policy | yes; start here |
 | `architecture/` | architecture identity, role, canonical-case reference, provenance | normally read-only |
 | `workload/` | LLM model/decode semantics such as batch, context, precision, and runtime footprint | yes for workload studies |
-| `platform/` | facts shared across architecture comparisons, currently fixed GPU/package policy | yes when platform changes |
+| `platform/` | canonical GPU/package facts shared across architecture comparisons | yes when platform changes |
 | `cases/` | three validated compatibility cases supplying existing geometry/power/thermal physics | internal source of truth |
 | `legacy/` | historical, fixed-power, fixture, or explicitly unvalidated configs | no |
 

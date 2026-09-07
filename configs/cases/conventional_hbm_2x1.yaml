@@ -34,7 +34,6 @@ workload:
   row_policy: {activated_row_data_utilization: 0.10}
 
 power:
-  gpu: {model: fixed, power_W: 367.568}
   memory: {model: analytical, status: VALIDATED}
   refresh:
     enabled: true
@@ -108,4 +107,3 @@ provenance:
   base_logic_feol_power_status: NOT_SEPARATELY_MODELED
   base_logic_feol_power_provenance: PLACEHOLDER_ZERO_FOR_FUTURE_LOGIC_MODEL
   bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
-  gpu_power_provenance: H200_ANCHORED_AFFINE_U1_POINT_74W_PLUS_5P10_PJBIT_X_4P8TBS

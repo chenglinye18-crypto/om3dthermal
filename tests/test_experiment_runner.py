@@ -185,7 +185,6 @@ def test_runner_shares_gpu_operating_point_in_energy_power_and_thermal(
         assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(
             bandwidth_actual)
         assert gpu.bandwidth_saturated is (bandwidth_demand > 4.8e12)
-        assert power["fixed_gpu_power_W"] == 367.568  # compatibility reference
         assert power["gpu_power_W"] == gpu.gpu_decode_power_W == row.gpu_power_W
         assert thermal["source_power_breakdown_W"]["gpu"] == row.gpu_power_W
         assert gpu.gpu_energy_j_per_token * row.aggregate_tokens_per_second == (
@@ -201,18 +200,58 @@ def test_runner_shares_gpu_operating_point_in_energy_power_and_thermal(
         assert thermal["mapped_package_power_W"] == pytest.approx(row.package_power_W)
 
 
-def test_runner_without_gpu_model_retains_explicit_fixed_reference(monkeypatch):
+def test_runner_rejects_missing_canonical_gpu_model(monkeypatch):
     original = runner_module.load_platform_spec
 
     def platform(*args, **kwargs):
         return original(*args, **kwargs).model_copy(update={"gpu_decode_power": None})
 
     monkeypatch.setattr(runner_module, "load_platform_spec", platform)
-    monkeypatch.setattr(runner_module, "run_llm_decode_workload_thermal", _fake_thermal)
-    result = run_experiment(CONFIG, project_root=ROOT, write_bundle=False)
-    assert result.gpu_decode_energy is None
-    assert all(row.gpu_power_W == 367.568 for row in result.rows)
-    assert all(row.gpu_energy_model_status == "NOT_AVAILABLE" for row in result.rows)
+    with pytest.raises(ValueError, match="requires gpu_decode_power"):
+        run_experiment(CONFIG, project_root=ROOT, write_bundle=False)
+
+
+def test_single_platform_coefficient_propagates_to_power_and_thermal(
+        monkeypatch):
+    original = runner_module.load_platform_spec
+
+    def run_with(coefficient):
+        mappings = []
+
+        def platform(*args, **kwargs):
+            loaded = original(*args, **kwargs)
+            decode = loaded.gpu_decode_power.model_copy(
+                update={"e_decode_J_per_bit": coefficient})
+            return loaded.model_copy(update={"gpu_decode_power": decode})
+
+        def thermal(mapping):
+            mappings.append(mapping)
+            return _fake_thermal(mapping)
+
+        monkeypatch.setattr(runner_module, "load_platform_spec", platform)
+        monkeypatch.setattr(
+            runner_module, "run_llm_decode_workload_thermal", thermal)
+        result = run_experiment(CONFIG, project_root=ROOT, write_bundle=False)
+        return result, mappings
+
+    nominal, nominal_mappings = run_with(7.645e-12)
+    changed, changed_mappings = run_with(8.645e-12)
+    expected_delta_W = 1.0e-12 * 8.0 * 4.8e12
+    for before, after, before_map, after_map in zip(
+            nominal.rows, changed.rows,
+            nominal_mappings[:len(nominal.rows)],
+            changed_mappings[:len(changed.rows)]):
+        assert after.gpu_power_W - before.gpu_power_W == pytest.approx(
+            expected_delta_W)
+        assert after.package_power_W - before.package_power_W == pytest.approx(
+            expected_delta_W)
+        before_gpu = next(
+            source.power_W for source in before_map.sources
+            if source.name == "gpu")
+        after_gpu = next(
+            source.power_W for source in after_map.sources
+            if source.name == "gpu")
+        assert after_gpu - before_gpu == pytest.approx(expected_delta_W)
 
 
 def test_m3d_sensitivity_uses_same_reduced_gpu_power_as_main_rows(monkeypatch):

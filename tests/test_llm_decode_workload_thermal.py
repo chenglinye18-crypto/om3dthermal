@@ -11,10 +11,12 @@ from om3dthermal.architecture_capacity import resolve_architecture_capacity
 from om3dthermal.evaluator import (
     WorkloadPowerBlockedError,
     evaluate_architecture_decode_memory_energy,
+    evaluate_gpu_decode_energy,
     evaluate_llm_decode_performance,
     evaluate_llm_decode_workload_power,
     map_workload_power_to_thermal,
 )
+from om3dthermal.experiment import load_platform_spec
 from om3dthermal.power import (
     load_case_config,
     map_system_power_to_thermal,
@@ -27,8 +29,12 @@ from om3dthermal.workload import (
     evaluate_llm_decode,
 )
 
-
 ROOT = Path(__file__).parents[1]
+GPU_SPEC = load_platform_spec(
+    ROOT / "configs/platform/gpu_package_h200_reference.yaml",
+    project_root=ROOT).gpu_decode_power
+
+
 CASES = ROOT / "configs" / "cases"
 ARCHITECTURES = (
     "conventional_hbm_2x1", "orthogonal_si", "orthogonal_m3d_igzo")
@@ -60,9 +66,12 @@ def frozen():
         for rho in (0, 1, 100, 1000):
             energy = evaluate_architecture_decode_memory_energy(
                 workload, fit, system, rho=rho)
+            gpu_energy = evaluate_gpu_decode_energy(
+                performance, energy, GPU_SPEC)
             powers[rho] = evaluate_llm_decode_workload_power(
                 energy, performance, system,
-                unresolved_logic_background_policy=policy)
+                unresolved_logic_background_policy=policy,
+                gpu_decode_energy=gpu_energy)
         data[name] = (case, system, powers)
     return data
 

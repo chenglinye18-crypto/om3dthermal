@@ -197,7 +197,6 @@ def assemble_conditional_llm_decode_e2e_row(
             power.memory_dynamic_access_power_W,
             power.memory_workload_total_W,
             power.gpu_power_W,
-            power.fixed_gpu_power_W,
             power.package_workload_total_W))
         thermal_status = "BLOCKED_BY_CAPACITY"
         closure_status = "NOT_EVALUATED_CAPACITY_INFEASIBLE"

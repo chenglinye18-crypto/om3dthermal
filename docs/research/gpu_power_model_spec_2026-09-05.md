@@ -108,8 +108,9 @@ token 定义；W、B/s、bit/s 与 FLOP/s 是基本量。token time 仅用于把
 量换算为 rate，以及将已解析的 W 换算成 J/token。两个 regime 共用同一个
 `P_static=74 W`，且 static 只加一次。
 
-YAML 中为兼容性保留 `peak_decode_power_W`，但 schema 强制它等于
-`P_static + e_decode * 8 * B_gpu_peak`。它不是可独立标定或扫描的物理参数。
+YAML 只保存 `P_static`、`e_decode` 和 `B_gpu_peak` 三个独立 decode 参数。
+峰值 decode 功率由只读 property 按
+`P_static + e_decode * 8 * B_gpu_peak` 即时派生，不是配置输入。
 
 ## 5. Canonical data flow and closure
 
@@ -123,10 +124,9 @@ performance bottleneck
   -> thermal source "gpu"
 ```
 
-动态路径不得重新读取 legacy fixed power。`fixed_gpu_power_W` 只为没有 E8
-模型的兼容调用和 case/platform 一致性检查保留；formal runner 配置 E8 时，GPU
-energy、package power、E2E row 和 thermal source 必须使用完全相同的
-`gpu_decode_power_W`。
+不存在 legacy fixed-power 入口或无 E8 fallback。formal runner、GPU energy、
+package power、E2E row 和 thermal source 必须使用同一个 resolver operating
+point 的 `gpu_decode_power_W`。
 
 闭环关系：
 

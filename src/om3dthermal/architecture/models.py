@@ -79,7 +79,6 @@ class ResolvedStaticPower(BaseModel):
     refresh_power_W: float | None = Field(ge=0.0)
     memory_background_power_W: float | None = Field(ge=0.0)
     logic_background_power_W: float | None = Field(ge=0.0)
-    fixed_gpu_power_W: float = Field(ge=0.0)
     source_status: str = Field(min_length=1)
     completeness_status: Literal[
         "RESOLVED",

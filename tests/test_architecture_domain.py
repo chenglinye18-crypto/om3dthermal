@@ -65,7 +65,6 @@ def test_resolved_architecture_facts_are_exact_adapter_views(name: str) -> None:
         resolved.system_power.memory_result.E_memory_internal_pj_bit
     )
     assert facts.provenance == spec.provenance
-    assert facts.static_power.fixed_gpu_power_W == resolved.system_power.gpu_power_W
     assert facts.static_power.refresh_power_W == (
         resolved.system_power.memory_result.P_refresh_W
     )
