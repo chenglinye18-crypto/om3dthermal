@@ -5,7 +5,7 @@ import math, statistics
 from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
 from om3dthermal.workload.llm_decode import LLMDecodeInput
 from om3dthermal.workload.m3d_page_demand import M3DWorkloadPageDemand
-from .nmp_locality_e2e import DenseDecodePlacementUnit, build_dense_decode_placement_units
+from om3dthermal.workload.dense_decode_ledger import DenseDecodePlacementUnit, build_dense_decode_placement_units, boundary_bytes_per_die
 
 @dataclass(frozen=True)
 class NMPPlacementUnitLoad:
@@ -25,20 +25,20 @@ class NMPPerformanceBalancedPlacement:
 
 def derive_unit_loads(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,layout:PhysicalCapacityLayout)->tuple[NMPPlacementUnitLoad,...]:
     units=build_dense_decode_placement_units(workload)
-    weight_basis=sum(u.weight_bytes for u in units); kv_basis=sum(u.kv_bytes for u in units)
+    if not math.isclose(sum(u.weight_bytes for u in units),demand.weight_footprint_bytes):
+        raise ValueError("workload weight ledger and demand disagree")
+    if not math.isclose(sum(u.kv_bytes for u in units),demand.kv_footprint_bytes):
+        raise ValueError("workload KV ledger and demand disagree")
     raw_resident=sum(u.weight_bytes+u.kv_bytes for u in units)
     runtime=float(demand.runtime_footprint_bytes)
     loads=[]
     for u in units:
-        weight_res=demand.weight_footprint_bytes*u.weight_bytes/weight_basis if u.weight_bytes else 0.0
-        kv_res=demand.kv_footprint_bytes*u.kv_bytes/kv_basis if u.kv_bytes else 0.0
+        weight_res=u.weight_bytes
+        kv_res=u.kv_bytes
         raw=u.weight_bytes+u.kv_bytes
         resident=weight_res+kv_res+(runtime*raw/raw_resident if raw_resident else 0.0)
-        weight_read=(demand.total_weight_read_bytes_per_decode_step*u.weight_bytes/weight_basis if u.weight_bytes else 0.0)
-        kv_read=0.0; kv_write=0.0
-        if u.kv_bytes:
-            kv_read=demand.total_kv_read_bytes_per_decode_step*u.kv_bytes/kv_basis
-            kv_write=demand.kv_write_bytes_per_decode_step*u.kv_bytes/kv_basis
+        weight_read=u.weight_bytes
+        kv_read=u.kv_bytes; kv_write=u.kv_write_bytes
         traffic=weight_read+kv_read+kv_write
         unit_flops=(workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops
         loads.append(NMPPlacementUnitLoad(u,resident,weight_read,kv_read,kv_write,traffic,unit_flops,max(1,math.ceil(resident/layout.capacity_per_slab_bytes))))
@@ -96,20 +96,10 @@ def build_locality_only_placement(workload:LLMDecodeInput,demand:M3DWorkloadPage
         tuple(len(x) for x in ownership),max(resident)/cap,statistics.fmean(resident)/cap,sum(x>cap for x in resident),
         "CAPACITY_BALANCED_FIRST_TOUCH_LOCALITY_ONLY","MINIMUM_DIE_SPAN_ONLY__RUNTIME_LOAD_OBLIVIOUS")
 
-def remaining_external_bytes_for_ownership(loads:tuple[NMPPlacementUnitLoad,...],ownership:tuple[tuple[int,...],...])->float:
-    """Apply the existing activation/partial/next-stage accounting to spans."""
-    activation=sum(x.unit.activation_input_bytes*len(o) for x,o in zip(loads,ownership))
-    partial=sum(x.unit.partial_output_bytes*len(o) for x,o in zip(loads,ownership))
-    output=next(x.unit.partial_output_bytes for x in loads if x.unit.operator_type=="O")
-    return activation+partial+output+activation
+def remaining_external_bytes_for_ownership(loads, ownership)->float:
+    die_count=1+max(d for owners in ownership for d in owners)
+    return sum(external_bytes_per_die_for_ownership(loads,ownership,die_count))
 
-def external_bytes_per_die_for_ownership(loads:tuple[NMPPlacementUnitLoad,...],ownership:tuple[tuple[int,...],...],die_count:int)->tuple[float,...]:
-    """Deterministically attribute the unchanged residual boundary traffic."""
-    result=[0.0]*die_count
-    for load,owners in zip(loads,ownership):
-        contribution=2*load.unit.activation_input_bytes+load.unit.partial_output_bytes
-        for die in owners: result[die]+=contribution
-    output=next(x.unit.partial_output_bytes for x in loads if x.unit.operator_type=="O")
-    first_o=next(i for i,x in enumerate(loads) if x.unit.operator_type=="O")
-    result[ownership[first_o][0]]+=output
-    return tuple(result)
+
+def external_bytes_per_die_for_ownership(loads, ownership, die_count)->tuple[float,...]:
+    return boundary_bytes_per_die(tuple(x.unit for x in loads),ownership,die_count)

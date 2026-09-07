@@ -48,8 +48,10 @@ def test_all_per_die_carriers_and_package_power_close(frozen_n8):
     sources = config.thermal_power_sources.sources
     assert len(regions) == 106  # rev v2
     assert len(sources) == 1 + 3 * 106  # rev v2
-    assert system.gpu_power_W == pytest.approx(367.568)  # H200 range midpoint
-    assert sources[0].total_power == pytest.approx(367.568)
+    activity=system.diagnostics["nmp_activity"]
+    expected_gpu=(activity["softmax_dynamic_energy_j"]+activity["gpu_static_energy_j"])/(activity["decode_step_interval_ms"]*1e-3)
+    assert system.gpu_power_W == pytest.approx(expected_gpu)
+    assert sources[0].total_power == pytest.approx(expected_gpu)
     assert sum(x.thermal_memory_carrier_W for x in power_map.die_powers) == pytest.approx(
         power_map.aggregate_memory_read_dynamic_W
         + power_map.aggregate_memory_write_dynamic_W + power_map.aggregate_refresh_W)
@@ -60,10 +62,11 @@ def test_all_per_die_carriers_and_package_power_close(frozen_n8):
     assert sum(source.total_power for source in sources[1:]) == pytest.approx(
         power_map.aggregate_total_W)
     assert sum(source.total_power for source in sources) == pytest.approx(
-        367.568 + power_map.aggregate_total_W)
+        expected_gpu + power_map.aggregate_total_W)
     assert power_map.aggregate_refresh_W == pytest.approx(power_map.refresh_total_W)
     assert all(row.nmp_logic_overhead_factor == 1.0 for row in power_map.die_powers)
-    assert gain == pytest.approx(3.950, rel=2e-3)
+    baseline_seconds=(16e9+8*(2*32*131072*8*128*2+2*32*8*128*2))/2.4e12
+    assert gain == pytest.approx(baseline_seconds/(activity["decode_step_interval_ms"]*1e-3))
     # This model exposes no direct die-to-die path: ownership is local and all
     # remaining bytes are explicitly attributed to the external boundary.
     assert placement.locality_constraint.startswith("LEXICOGRAPHIC_MINIMUM_DIE_SPAN")

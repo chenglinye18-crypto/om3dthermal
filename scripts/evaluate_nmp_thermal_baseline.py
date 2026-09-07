@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 
@@ -57,46 +57,43 @@ def _frozen_case_inputs(requests: int):
         ROOT / "configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",
         project_root=ROOT)
     gpu_flops = experiment.scenario.effective_compute_flops_per_second
-    # Rev v2 scenario semantics: external boundary bandwidth capped at the
-    # scenario matched bandwidth (39.2 Tb/s).
-    _derivation = experiment.scenario.matched_bandwidth_derivation
-    _cap_bits = (_derivation.cap_bits_per_second
-                 if _derivation is not None else None)
-    cap_bps = (_cap_bits / 8.0) if _cap_bits is not None else None
+    cap_bps = bandwidth.coil_bandwidth_bytes_per_s
     baseline = evaluate_nmp_locality_case(
         workload, demand, layout, physical, bandwidth, case="NON_NMP_GPU",
-        nmp_aggregate_tflops=None, gpu_compute_flops_per_s=gpu_flops,
+        gpu_compute_flops_per_s=gpu_flops,
         external_bandwidth_cap_bytes_per_s=cap_bps)
     hardware = canonical_nmp_hardware(layout.slab_count)
     canonical = evaluate_nmp_locality_case(
         workload, demand, layout, physical, bandwidth,
         case="NMP_LOCALITY_AWARE_PLACEMENT",
-        nmp_aggregate_tflops=hardware.aggregate_peak_flops / 1e12,
         gpu_compute_flops_per_s=gpu_flops,
         external_bandwidth_cap_bytes_per_s=cap_bps)
     bandwidth_per_die = (
         bandwidth.local_service_groups_per_slab * bandwidth.read_payload_bytes_per_service
         / (bandwidth.service_cycle_scale * canonical.placement.local_access_latency_ns * 1e-9))
-    locality = build_locality_only_placement(
-        workload, demand, layout, bandwidth_per_die_bytes_per_s=bandwidth_per_die,
-        compute_per_die_flops_per_s=hardware.peak_flops_per_die)
-    external_bytes = remaining_external_bytes_for_ownership(locality.unit_loads, locality.ownership)
-    external_ms = external_bytes / bandwidth.coil_bandwidth_bytes_per_s * 1e3
     placement = build_performance_balanced_placement(
         workload, demand, layout, bandwidth_per_die_bytes_per_s=bandwidth_per_die,
         compute_per_die_flops_per_s=hardware.peak_flops_per_die)
     activity = evaluate_nmp_die_activity(
         workload, demand, layout, bandwidth,
         local_access_latency_ns=canonical.placement.local_access_latency_ns,
-        external_boundary_time_ms=external_ms, ownership=placement.ownership)
+        bandwidth_demand_bytes_per_s=cap_bps, ownership=placement.ownership)
     power_map = build_nmp_die_power_map(case, memory, topology, feol, activity, placement)
     gain = requests / (activity.decode_step_interval_ms * 1e-3) / baseline.timing.tokens_per_s
-    gpu_point, transfer_point = _resolve_case_power_operating_points(
+    gpu_point, transfer_point, service_point = _resolve_case_power_operating_points(
         case, ROOT)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
         gpu_operating_point=gpu_point,
-        transfer_operating_point=transfer_point)
+        transfer_operating_point=transfer_point,
+        bandwidth_service_operating_point=service_point)
+    # NMP GPU processing is Softmax only; memory carriers come from power_map.
+    # Keep the solver and spatial mapping untouched.
+    interval_s=activity.decode_step_interval_ms*1e-3
+    system=replace(system,
+        gpu_power_W=(activity.gpu_static_energy_j+activity.softmax_dynamic_energy_j)/interval_s,
+        diagnostics={**system.diagnostics,"nmp_gpu_energy_boundary":"SOFTMAX_LOCAL_PLUS_STATIC_ONCE",
+                     "nmp_activity":activity.as_dict()})
     return case, system, power_map, gain, placement
 
 

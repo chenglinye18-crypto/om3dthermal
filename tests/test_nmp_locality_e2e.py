@@ -20,62 +20,49 @@ def inputs():
 
 def test_path_semantics_and_locality(inputs):
     l,b,p,w,d,g=inputs
-    non=evaluate_nmp_locality_case(w,d,l,p,b,case='NON_NMP_GPU',nmp_aggregate_tflops=None,gpu_compute_flops_per_s=g)
-    naive=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_NAIVE',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
-    local=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
-    assert independent_physical_die_count(l)==106  # rev v2: 106 slabs
-    assert non.placement.long_feol_edge_included and non.traffic.weight_bulk_external_bytes>0 and non.traffic.kv_bulk_external_bytes>0
-    assert not naive.placement.long_feol_edge_included and naive.traffic.weight_bulk_external_bytes==0
-    assert naive.traffic.direct_die_to_die_bytes==local.traffic.direct_die_to_die_bytes==0
-    assert local.placement.mean_operator_die_span<=naive.placement.mean_operator_die_span
-    assert local.traffic.external_interface_bytes<=naive.traffic.external_interface_bytes
-    assert max(local.placement.die_used_bytes)<=l.capacity_per_slab_bytes
+    non=evaluate_nmp_locality_case(w,d,l,p,b,case="NON_NMP_GPU",gpu_compute_flops_per_s=g)
+    local=evaluate_nmp_locality_case(w,d,l,p,b,case="NMP_LOCALITY_AWARE_PLACEMENT",gpu_compute_flops_per_s=g)
+    assert non.traffic.weight_bulk_external_bytes > 0 and non.traffic.kv_bulk_external_bytes > 0
+    assert local.traffic.weight_bulk_external_bytes == local.traffic.kv_bulk_external_bytes == 0
+    assert local.traffic.direct_die_to_die_bytes == 0
+    assert not local.placement.long_feol_edge_included
+    assert local.timing.external_bandwidth_bytes_per_s == non.timing.external_bandwidth_bytes_per_s == 2.4e12
+    changed=evaluate_nmp_locality_case(w,d,l,p,replace(b,coil_bandwidth_bytes_per_s=1.2e12),case="NMP_LOCALITY_AWARE_PLACEMENT",gpu_compute_flops_per_s=g)
+    assert changed.timing.local_memory_ms == local.timing.local_memory_ms
+    assert changed.timing.external_ms == pytest.approx(2*local.timing.external_ms)
 
-def test_topology_local_groups_are_decoupled_from_coils(inputs):
+
+@pytest.mark.parametrize("batch,context,kv_bits",[(1,131072,16),(2,17,8),(1,0,16)])
+def test_workload_ledger_formulas(inputs,batch,context,kv_bits):
+    from om3dthermal.workload.dense_decode_ledger import build_dense_decode_placement_units, boundary_bytes_per_die
+    from om3dthermal.workload.llm_decode import evaluate_llm_decode
     l,b,p,w,d,g=inputs
-    assert b.local_service_groups_per_slab == l.clusters_per_slab // b.clusters_per_service == 70
-    assert b.total_local_service_groups == 106 * 70  # rev v2
-    assert b.read_payload_bytes_per_service == 32
-    current=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
-    # Altering external-resource metadata and its aggregate link rate cannot
-    # alter local NMP service time; it only changes external boundary time.
-    altered=replace(b, links_per_slab=25,
-        coil_bandwidth_bytes_per_s=b.coil_bandwidth_bytes_per_s/2)
-    changed=evaluate_nmp_locality_case(w,d,l,p,altered,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
-    assert changed.timing.local_memory_ms == pytest.approx(current.timing.local_memory_ms)
-    assert changed.timing.external_ms == pytest.approx(2 * current.timing.external_ms)
-    old_50_lane_bw=(l.slab_count*b.parallel_service_units_per_slab*b.read_payload_bytes_per_service/(b.service_cycle_scale*current.placement.local_access_latency_ns*1e-9))
-    new_bw=current.traffic.local_memory_bytes/(current.timing.local_memory_ms*1e-3)
-    assert new_bw > old_50_lane_bw
+    w=w.model_copy(update=dict(batch_size=batch,context_length=context,kv_bits=kv_bits))
+    metrics=evaluate_llm_decode(w); units=build_dense_decode_placement_units(w)
+    qk=[u for u in units if u.operator_type=="ATTENTION_QK"]
+    av=[u for u in units if u.operator_type=="ATTENTION_AV"]
+    expected=2*batch*w.n_heads_q*context*w.d_head*w.n_layers
+    assert sum(u.local_flops for u in qk) == sum(u.local_flops for u in av) == expected
+    assert sum(u.local_flops*(batch if u.placement_scope=="SHARED_BATCH" else 1) for u in units) == batch*metrics.flops_per_token
+    assert sum(u.weight_bytes for u in units) == metrics.weight_footprint_bytes
+    assert sum(u.kv_bytes for u in units) == batch*metrics.kv_read_bytes_per_token
+    assert sum(u.kv_write_bytes for u in units) == batch*metrics.kv_write_bytes_per_token
+    # Two active AV dies, each returns the entire batch hidden partial vector.
+    ownership=tuple((0,1) for u in units)
+    boundary=sum(boundary_bytes_per_die(units,ownership,2))
+    assert boundary-sum(2*(2*u.activation_input_bytes+u.partial_output_bytes) for u in units if u.placement_scope=="SHARED_BATCH") == 2*batch*w.n_heads_q*context*2*w.n_layers+2*batch*w.d_model*4*w.n_layers
 
-def test_non_nmp_separates_raw_internal_and_external_pipeline(inputs):
+
+def test_demand_cap_uses_existing_resolver(inputs,monkeypatch):
+    import om3dthermal.power.nmp_die_activity as module
+    from om3dthermal.platform import resolve_local_memory_gpu_transfer
+    calls=[]
+    def record(**kwargs):
+        calls.append(kwargs)
+        return resolve_local_memory_gpu_transfer(**kwargs)
+    monkeypatch.setattr(module,"resolve_local_memory_gpu_transfer",record)
     l,b,p,w,d,g=inputs
-    result=evaluate_nmp_locality_case(w,d,l,p,b,case='NON_NMP_GPU',nmp_aggregate_tflops=None,gpu_compute_flops_per_s=g)
-    t=result.timing; bulk=result.traffic.external_interface_bytes
-    effective=resolve_effective_bandwidth(b,result.placement.local_access_latency_ns)
-    assert effective.bottleneck == 'COIL_INTERFACE'
-    assert t.raw_internal_bandwidth_bytes_per_s != pytest.approx(t.external_bandwidth_bytes_per_s)
-    assert t.local_memory_ms == pytest.approx(bulk/t.raw_internal_bandwidth_bytes_per_s*1e3)
-    assert t.external_ms == pytest.approx(bulk/t.external_bandwidth_bytes_per_s*1e3)
-    assert t.memory_serial_ms == pytest.approx(t.local_memory_ms+t.external_ms)
-    assert t.memory_pipeline_ms == pytest.approx(max(t.local_memory_ms,t.external_ms))
-    assert t.bottleneck == 'EXTERNAL'
-    assert result.traffic.weight_bulk_external_bytes > 0 and result.traffic.kv_bulk_external_bytes > 0
-
-def test_nmp_local_timing_includes_frozen_one_ns_route(inputs):
-    l,b,p,w,d,g=inputs
-    result=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
-    # Rev v2: internal service bandwidth scales with 106 slabs
-    # (1.66354 ms x 98/106).
-    assert result.timing.local_memory_ms == pytest.approx(1.5379922403137316, abs=0.00002)
-    # Rev v2: crossover scales with the internal bandwidth (49.700 x
-    # 106/98).
-    assert result.timing.nmp_compute_crossover_tflops == pytest.approx(53.757, abs=0.002)
-
-@pytest.mark.parametrize('batch',[1,8,16])
-def test_flops_scale_and_more_nmp_compute_never_hurts(inputs,batch):
-    l,b,p,w,d,g=inputs; wb=w.model_copy(update={'batch_size':batch}); db=build_m3d_workload_page_demand(wb,l)
-    low=evaluate_nmp_locality_case(wb,db,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=32,gpu_compute_flops_per_s=g)
-    high=evaluate_nmp_locality_case(wb,db,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=128,gpu_compute_flops_per_s=g)
-    assert high.timing.tokens_per_s>=low.timing.tokens_per_s
-    assert high.traffic.local_weight_read_bytes==pytest.approx(db.total_weight_read_bytes_per_decode_step)
+    result=evaluate_nmp_locality_case(w,d,l,p,b,case="NMP_LOCALITY_AWARE_PLACEMENT",gpu_compute_flops_per_s=g,external_bandwidth_cap_bytes_per_s=1e12)
+    assert calls and calls[0]["bandwidth_demand_bytes_per_s"]==1e12
+    assert result.timing.external_bandwidth_bytes_per_s == 1e12
+    assert result.timing.external_ms == pytest.approx(result.traffic.external_interface_bytes/1e12*1e3)

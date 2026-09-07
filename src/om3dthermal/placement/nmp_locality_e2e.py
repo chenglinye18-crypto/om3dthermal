@@ -20,11 +20,7 @@ Case = Literal["NON_NMP_GPU", "NMP_NAIVE", "NMP_LOCALITY_AWARE_PLACEMENT"]
 NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS = 1.0
 NMP_LOCAL_ROUTE_PROVENANCE = "MODELING_CHOICE_FIXED_LOCAL_NMP_ROUTE_DELAY__NOT_PHYSICALLY_EXTRACTED__NOT_OPTIMIZED__NOT_POSITION_DEPENDENT"
 
-@dataclass(frozen=True)
-class DenseDecodePlacementUnit:
-    unit_id: str; layer_id: int; operator_type: str; weight_bytes: int; kv_bytes: int
-    local_flops: int; activation_input_bytes: int; partial_output_bytes: int
-    request_id: int|None; placement_scope: Literal["SHARED_BATCH","REQUEST_LOCAL"]
+from om3dthermal.workload.dense_decode_ledger import (DenseDecodePlacementUnit, build_dense_decode_placement_units, boundary_bytes_per_die)
 
 @dataclass(frozen=True)
 class NMPPlacementMetrics:
@@ -57,26 +53,6 @@ class NMPFinalResult:
 def independent_physical_die_count(layout: PhysicalCapacityLayout) -> int:
     """Architecture-defined invariant: one symmetric slab is one M3D die."""
     return layout.slab_count
-
-def build_dense_decode_placement_units(workload: LLMDecodeInput) -> tuple[DenseDecodePlacementUnit, ...]:
-    """Dimension-exact LLaMA Q/K/V/attention/O/MLP decomposition."""
-    b = workload.weight_bits // 8; h = workload.d_model; kv = workload.n_heads_kv * workload.d_head
-    specs = (("Q", h*h, 2*h*h, h, h), ("K", h*kv, 2*h*kv, h, kv),
-             ("V", h*kv, 2*h*kv, h, kv),
-             ("O", h*h, 2*h*h, h, h), ("FFN_GATE", h*workload.d_ff, 2*h*workload.d_ff, h, workload.d_ff),
-             ("FFN_UP", h*workload.d_ff, 2*h*workload.d_ff, h, workload.d_ff), ("FFN_DOWN", workload.d_ff*h, 2*workload.d_ff*h, workload.d_ff, h))
-    units=[]
-    for layer in range(workload.n_layers):
-        for name, params, flops, inp, out in specs:
-            units.append(DenseDecodePlacementUnit(f"layer.{layer}.{name}", layer, name, params*b,
-                0,flops,workload.batch_size*inp*b,workload.batch_size*out*b,None,"SHARED_BATCH"))
-        for request in range(workload.batch_size):
-            units.append(DenseDecodePlacementUnit(
-                f"layer.{layer}.ATTENTION_KV.request.{request}",layer,"ATTENTION_KV",0,
-                2*workload.context_length*kv*b,
-                4*workload.n_heads_q*workload.context_length*workload.d_head,
-                h*b,h*b,request,"REQUEST_LOCAL"))
-    return tuple(units)
 
 def _spans(units: tuple[DenseDecodePlacementUnit, ...], layout: PhysicalCapacityLayout,
            locality: bool) -> tuple[tuple[int, ...], tuple[int, ...]]:
@@ -133,26 +109,32 @@ def _traffic(case: Case, demand: M3DWorkloadPageDemand, units: tuple[DenseDecode
     weight=demand.total_weight_read_bytes_per_decode_step; kvread=demand.total_kv_read_bytes_per_decode_step; kvwrite=demand.kv_write_bytes_per_decode_step
     if case == "NON_NMP_GPU":
         return NMPTraffic(0,0,0,weight,kvread+kvwrite,0,0,0,0,0,0,weight+kvread+kvwrite)
-    # Operator spans are the only source of NMP boundary communication.
     spans,_=_spans(units,layout,case=="NMP_LOCALITY_AWARE_PLACEMENT")
-    activation=sum(u.activation_input_bytes*len(s) for u,s in zip(units,spans))
-    partial=sum(u.partial_output_bytes*len(s) for u,s in zip(units,spans))
-    output=units[-1].partial_output_bytes
-    next_stage=activation  # GPU combines then forwards the next operator input.
-    return NMPTraffic(weight,kvread,kvwrite,0,0,activation,partial,output,next_stage,0,
-        weight+kvread+kvwrite,activation+partial+output+next_stage)
+    score=sum(u.score_bytes for u in units)
+    prob=sum(u.probability_bytes for u in units)
+    activation=sum(u.activation_input_bytes*len(o) for u,o in zip(units,spans))
+    boundary=sum(boundary_bytes_per_die(units,spans,layout.slab_count))
+    partial=boundary-score-prob-2*activation
+    return NMPTraffic(weight,kvread,kvwrite,0,0,activation+prob,partial,score,activation,0,
+        weight+kvread+kvwrite,boundary)
 
 def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPageDemand,
         layout: PhysicalCapacityLayout, physical: PhysicalAccessLatency, bandwidth: ArchitectureBandwidthClosure, *,
-        case: Case, nmp_aggregate_tflops: float | None, gpu_compute_flops_per_s: float,
+        case: Case, gpu_compute_flops_per_s: float,
         external_bandwidth_cap_bytes_per_s: float | None = None) -> NMPFinalResult:
     units=build_dense_decode_placement_units(workload); placement=_placement(case,units,layout,physical); traffic=_traffic(case,demand,units,placement,layout)
-    # Rev v2 scenario semantics: the external boundary bandwidth is the slab
-    # IO capability, optionally capped at the scenario matched bandwidth
-    # (the uncapped capability is design margin, not the operating point).
-    external_bw=bandwidth.coil_bandwidth_bytes_per_s
-    if external_bandwidth_cap_bytes_per_s is not None:
-        external_bw=min(external_bw,external_bandwidth_cap_bytes_per_s)
+    from pathlib import Path
+    from om3dthermal.platform import load_platform_spec_file, resolve_gpu_bandwidth_service, resolve_local_memory_gpu_transfer
+    platform=load_platform_spec_file(Path(__file__).resolve().parents[3]/"configs/platform/gpu_package_h200_reference.yaml")
+    spec=platform.gpu_bandwidth_service
+    gpu_bw=resolve_gpu_bandwidth_service(
+        transfer_ceiling_bytes_per_s=platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s,
+        gpu_bandwidth_utilization=spec.nominal_utilization,
+        utilization_status=spec.utilization_status,utilization_provenance=spec.provenance).sustained_bandwidth_bytes_per_s
+    demand_bw=bandwidth.coil_bandwidth_bytes_per_s if external_bandwidth_cap_bytes_per_s is None else external_bandwidth_cap_bytes_per_s
+    external_bw=resolve_local_memory_gpu_transfer(bandwidth_demand_bytes_per_s=demand_bw,
+        memory_capability_bytes_per_s=bandwidth.coil_bandwidth_bytes_per_s,
+        gpu_peak_bandwidth_bytes_per_s=gpu_bw).bandwidth_actual_bytes_per_s
     if case == "NON_NMP_GPU":
         local_bw=resolve_internal_service_bandwidth(bandwidth,placement.local_access_latency_ns)
         local_ms=(traffic.weight_bulk_external_bytes+traffic.kv_bulk_external_bytes)/local_bw*1e3
@@ -165,16 +147,20 @@ def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPage
             local_bw,external_bw,memory_serial,total_serial,memory_pipeline,total_pipeline,
             workload.batch_size/(total_serial*1e-3),workload.batch_size/(total_pipeline*1e-3))
         return NMPFinalResult(placement,traffic,timing)
-    if nmp_aggregate_tflops is None or nmp_aggregate_tflops<=0: raise ValueError("NMP case requires positive aggregate TFLOPS")
-    # Full slab-count local service capacity with path-correct MAT+MIV latency.
-    # NMP local service is array-topology derived.  It must not reuse the
-    # 50 external coil/FEOL IO lanes per die.
-    local_bw=(layout.slab_count*bandwidth.local_service_groups_per_slab*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*placement.local_access_latency_ns*1e-9))
-    local_ms=traffic.local_memory_bytes/local_bw*1e3; external_ms=traffic.external_interface_bytes/external_bw*1e3
-    flops=sum((workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops for u in units); nmp_ms=flops/(nmp_aggregate_tflops*1e12)*1e3
-    total=max(local_ms,nmp_ms)+external_ms
-    cross=flops/(local_ms*1e-3)/1e12
-    timing=NMPCaseTiming(case,nmp_aggregate_tflops,local_ms,external_ms,nmp_ms,0,total,workload.batch_size/(total*1e-3),cross,nmp_aggregate_tflops/layout.slab_count,
-        "NMP_COMPUTE" if nmp_ms>local_ms else "EXTERNAL_OR_LOCAL_MEMORY",local_bw,external_bw,
-        total,total,total,total,workload.batch_size/(total*1e-3),workload.batch_size/(total*1e-3))
+    from om3dthermal.power.nmp_die_activity import canonical_nmp_hardware, evaluate_nmp_die_activity
+    hw=canonical_nmp_hardware(layout.slab_count)
+    nmp_aggregate_tflops=hw.aggregate_peak_flops/1e12
+    spans,_=_spans(units,layout,case=="NMP_LOCALITY_AWARE_PLACEMENT")
+    activity=evaluate_nmp_die_activity(workload,demand,layout,bandwidth,
+        local_access_latency_ns=placement.local_access_latency_ns,
+        bandwidth_demand_bytes_per_s=demand_bw,ownership=spans)
+    local_ms=sum(s["memory_ms"] for s in activity.stages if "memory_ms" in s)
+    nmp_ms=sum(s["compute_ms"] for s in activity.stages if "compute_ms" in s)
+    total=activity.decode_step_interval_ms
+    tps=workload.batch_size/(total*1e-3)
+    timing=NMPCaseTiming(case,nmp_aggregate_tflops,local_ms,activity.boundary_time_ms,
+        nmp_ms,activity.softmax_time_ms,total,tps,None,hw.peak_flops_per_die/1e12,
+        "SERIAL_DEPENDENT_STAGES",activity.aggregate_local_bandwidth_bytes_per_s,
+        external_bw,local_ms+activity.boundary_time_ms,total,
+        local_ms+activity.boundary_time_ms,total,tps,tps)
     return NMPFinalResult(placement,traffic,timing)

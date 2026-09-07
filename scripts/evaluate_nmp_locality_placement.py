@@ -1,4 +1,4 @@
-"""Canonical A-final NMP/locality placement sweep."""
+"""Canonical B=1 dense NMP attention E2E audit (no sweep)."""
 from __future__ import annotations
 import argparse, json
 from pathlib import Path
@@ -24,85 +24,67 @@ def run(output_dir: Path):
     base=load_workload_spec(ROOT/"configs/workload/llama31_8b_decode_b1_s131072.yaml",project_root=ROOT).decode
     experiment=load_experiment_spec(ROOT/"configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",project_root=ROOT)
     gpu=experiment.scenario.effective_compute_flops_per_second
-    # Rev v2 scenario semantics: external boundary bandwidth is the slab IO
-    # capability capped at the scenario matched bandwidth (39.2 Tb/s).
-    _derivation=experiment.scenario.matched_bandwidth_derivation
-    _cap_bits=(_derivation.cap_bits_per_second if _derivation is not None else None)
-    cap_bps=(_cap_bits/8.0) if _cap_bits is not None else None
-    rows=[]
-    for n in (1,8,16):
-        w=base.model_copy(update={'batch_size':n}); d=build_m3d_workload_page_demand(w,layout)
-        baseline=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NON_NMP_GPU',nmp_aggregate_tflops=None,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
-        points=[]
-        for p in (32.,64.,128.):
-            naive=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_NAIVE',nmp_aggregate_tflops=p,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
-            local=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=p,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
-            points.append({'nmp_aggregate_tflops':p,'naive':naive.as_dict(),'locality_aware':local.as_dict(),
-                'nmp_gain':naive.timing.tokens_per_s/baseline.timing.tokens_per_s,
-                'placement_incremental_gain':local.timing.tokens_per_s/naive.timing.tokens_per_s,
-                'combined_A_gain':local.timing.tokens_per_s/baseline.timing.tokens_per_s,
-                'serial_stage_bound': {
-                    'nmp_gain': naive.timing.tokens_per_s_serial / baseline.timing.tokens_per_s_serial,
-                    'placement_incremental_gain': local.timing.tokens_per_s_serial / naive.timing.tokens_per_s_serial,
-                    'combined_A_gain': local.timing.tokens_per_s_serial / baseline.timing.tokens_per_s_serial,
-                }})
-        hardware=canonical_nmp_hardware(layout.slab_count)
-        canonical_naive=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_NAIVE',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
-        canonical=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
-        hardware_bw_die=(bandwidth.local_service_groups_per_slab*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*canonical.placement.local_access_latency_ns*1e-9))
-        locality_placement=build_locality_only_placement(w,d,layout,
-            bandwidth_per_die_bytes_per_s=hardware_bw_die,compute_per_die_flops_per_s=hardware.peak_flops_per_die)
-        external_bytes=remaining_external_bytes_for_ownership(locality_placement.unit_loads,locality_placement.ownership)
-        external_bw_bps=(min(bandwidth.coil_bandwidth_bytes_per_s,cap_bps) if cap_bps is not None else bandwidth.coil_bandwidth_bytes_per_s)
-        external_ms=external_bytes/external_bw_bps*1e3
-        activity=evaluate_nmp_die_activity(w,d,layout,bandwidth,local_access_latency_ns=canonical.placement.local_access_latency_ns,external_boundary_time_ms=external_ms,ownership=locality_placement.ownership)
-        diagnostic_tps=n/(activity.decode_step_interval_ms*1e-3)
-        balanced_placement=build_performance_balanced_placement(w,d,layout,
-            bandwidth_per_die_bytes_per_s=hardware_bw_die,
-            compute_per_die_flops_per_s=hardware.peak_flops_per_die)
-        balanced_activity=evaluate_nmp_die_activity(w,d,layout,bandwidth,
-            local_access_latency_ns=canonical.placement.local_access_latency_ns,
-            external_boundary_time_ms=external_ms,
-            ownership=balanced_placement.ownership)
-        balanced_tps=n/(balanced_activity.decode_step_interval_ms*1e-3)
-        power_map=build_nmp_die_power_map(case,power,topology,feol,balanced_activity,balanced_placement)
-        ideal_local_ms=(d.total_read_bytes_per_decode_step+d.kv_write_bytes_per_decode_step)/(hardware_bw_die*layout.slab_count)*1e3
-        ideal_compute_ms=canonical.timing.nmp_compute_ms
-        ideal_step_ms=max(ideal_local_ms,ideal_compute_ms)+external_ms
-        ideal_tps=n/(ideal_step_ms*1e-3)
-        rows.append({'requests':n,'working_set_bytes':d.allocated_page_bytes,'logical_working_set_bytes':d.logical_working_set_bytes,'non_nmp_gpu':baseline.as_dict(),'points':points,
-            'canonical_nmp_hardware':hardware.__dict__,'canonical_die_activity':activity.as_dict(),
-            'IDEAL_AGGREGATE_UPPER_BOUND': {
-                'timing_semantics': 'IDEAL_AGGREGATE_BALANCED_UPPER_BOUND',
-                'non_nmp_step_ms': baseline.timing.total_step_ms,
-                'nmp_local_memory_ms': ideal_local_ms,
-                'nmp_compute_ms': canonical.timing.nmp_compute_ms,
-                'nmp_remaining_external_ms': external_ms,
-                'remaining_external_bytes': external_bytes,
-                'nmp_step_ms': ideal_step_ms,
-                'nmp_gain': canonical_naive.timing.tokens_per_s/baseline.timing.tokens_per_s,
-                'placement_incremental_gain': canonical.timing.tokens_per_s/canonical_naive.timing.tokens_per_s,
-                'combined_A_gain': ideal_tps/baseline.timing.tokens_per_s,
-            },
-            'LOCALITY_ONLY_BASELINE': {
-                'timing_semantics': 'REALIZED_DIE_LEVEL_LOCALITY_ONLY',
-                'combined_A_gain': diagnostic_tps/baseline.timing.tokens_per_s,
-                'placement': locality_placement.as_dict(),
-                'remaining_external_bytes': external_bytes,
-                'activity': activity.as_dict(),
-            },
-            'A_FINAL_CANONICAL_GAIN': {
-                'timing_semantics': 'REALIZED_DIE_LEVEL_CANONICAL__PERFORMANCE_BALANCED',
-                'combined_A_gain': balanced_tps/baseline.timing.tokens_per_s,
-                'nmp_step_ms': balanced_activity.decode_step_interval_ms,
-                'placement': balanced_placement.as_dict(),
-                'activity': balanced_activity.as_dict(),
-                'remaining_external_bytes': external_bytes,
-            },'B_PREP_DIE_POWER_MAP':power_map.as_dict()})
-    payload={'model':'A_FINAL_NMP_LOCALITY_AWARE_PLACEMENT','physical_die_count':layout.slab_count,'die_semantics':'ARCHITECTURE_DEFINED_ONE_SLAB_PER_PHYSICAL_DIE','DIRECT_DIE_TO_DIE_COMMUNICATION':'FORBIDDEN','canonical_overlap':'CONSERVATIVE_NO_OVERLAP','rows':rows}
-    output_dir.mkdir(parents=True,exist_ok=True); (output_dir/'nmp_locality_placement.json').write_text(json.dumps(payload,indent=2),encoding='utf-8'); return payload
+    from om3dthermal.platform import load_platform_spec_file
+    platform=load_platform_spec_file(ROOT/"configs/platform/gpu_package_h200_reference.yaml")
+    gpu_power=platform.gpu_decode_power
+    w=base; d=build_m3d_workload_page_demand(w,layout)
+    baseline=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,
+        case="NON_NMP_GPU",gpu_compute_flops_per_s=gpu)
+    hardware=canonical_nmp_hardware(layout.slab_count)
+    canonical=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,
+        case="NMP_LOCALITY_AWARE_PLACEMENT",gpu_compute_flops_per_s=gpu)
+    bw_die=bandwidth.local_service_groups_per_slab*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*canonical.placement.local_access_latency_ns*1e-9)
+    placement=build_performance_balanced_placement(w,d,layout,
+        bandwidth_per_die_bytes_per_s=bw_die,compute_per_die_flops_per_s=hardware.peak_flops_per_die)
+    activity=evaluate_nmp_die_activity(w,d,layout,bandwidth,
+        local_access_latency_ns=canonical.placement.local_access_latency_ns,
+        bandwidth_demand_bytes_per_s=bandwidth.coil_bandwidth_bytes_per_s,ownership=placement.ownership)
+    power_map=build_nmp_die_power_map(case,power,topology,feol,activity,placement)
+    interval=activity.decode_step_interval_ms*1e-3
+    nmp_energy=power_map.aggregate_total_W*interval+activity.softmax_dynamic_energy_j+activity.gpu_static_energy_j
+    baseline_s=baseline.timing.total_step_ms*1e-3
+    # Same accounting boundary: memory dynamic + refresh + GPU dynamic + static.
+    primitive=power_map.primitives
+    baseline_write=primitive.igzo_weighted_write_pj_per_bit+power.E_vertical_pj_bit+power.E_feol_route_pj_bit+power.E_base_route_pj_bit+power.E_interface_pj_bit
+    baseline_memory_j=8*(d.total_read_bytes_per_decode_step*power.E_access_total_pj_bit+d.kv_write_bytes_per_decode_step*baseline_write)*1e-12
+    baseline_energy=baseline_memory_j+(power.P_refresh_W or 0)*baseline_s+8*baseline.traffic.external_interface_bytes*gpu_power.e_decode_J_per_bit+gpu_power.static_power_W*baseline_s
+    loads=placement.unit_loads
+    summary={
+        "qk_flops_per_token":sum(x.nmp_flops for x in loads if x.unit.operator_type=="ATTENTION_QK")/w.batch_size,
+        "av_flops_per_token":sum(x.nmp_flops for x in loads if x.unit.operator_type=="ATTENTION_AV")/w.batch_size,
+        "weight_nmp_flops_per_token":sum(x.nmp_flops for x in loads if x.unit.weight_bytes)/w.batch_size,
+        "total_nmp_flops_per_token":sum(x.nmp_flops for x in loads)/w.batch_size,
+        "local_weight_bytes_per_token":sum(x.weight_read_bytes for x in loads)/w.batch_size,
+        "local_kv_bytes_per_token":sum(x.kv_read_bytes+x.kv_write_bytes for x in loads)/w.batch_size,
+        "score_MB_per_token":activity.score_bytes/w.batch_size/1e6,
+        "probability_MB_per_token":activity.probability_bytes/w.batch_size/1e6,
+        "partial_MB_per_token":activity.partial_bytes/w.batch_size/1e6,
+        "attention_boundary_MB_per_token":activity.attention_boundary_bytes/w.batch_size/1e6,
+        "boundary_MB_per_token":activity.residual_boundary_bytes/w.batch_size/1e6,
+        "effective_boundary_BW_bytes_per_s":activity.transfer["bandwidth_actual_bytes_per_s"],
+        "boundary_ms_per_token":activity.boundary_time_ms/w.batch_size,
+        "softmax_ms_per_token":activity.softmax_time_ms/w.batch_size,
+        "nmp_compute_ms_per_token":sum(x["compute_ms"] for x in activity.stages if "compute_ms" in x)/w.batch_size,
+        "nmp_local_memory_ms_per_token":sum(x["memory_ms"] for x in activity.stages if "memory_ms" in x)/w.batch_size,
+        "decode_ms_per_token":activity.decode_step_interval_ms/w.batch_size,
+        "tokens_per_s":w.batch_size/interval,"J_per_token":nmp_energy/w.batch_size,"tokens_per_J":w.batch_size/nmp_energy,
+        "baseline_decode_ms_per_token":baseline.timing.total_step_ms/w.batch_size,
+        "baseline_tokens_per_s":baseline.timing.tokens_per_s,
+        "baseline_J_per_token":baseline_energy/w.batch_size,"baseline_tokens_per_J":w.batch_size/baseline_energy,
+        "speedup":w.batch_size/interval/baseline.timing.tokens_per_s,
+        "energy_efficiency_gain":baseline_energy/nmp_energy,
+    }
+    payload=dict(summary=summary,activity=activity.as_dict(),placement=placement.as_dict(),
+        power_map=power_map.as_dict(),baseline=baseline.as_dict(),workload=w.model_dump())
+    output_dir.mkdir(parents=True,exist_ok=True)
+    (output_dir/"nmp_locality_placement.json").write_text(json.dumps(payload,indent=2),encoding="utf-8")
+    return payload
+
+
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--output-dir',type=Path,default=ROOT/'runs/nmp_locality_placement'); x=run(p.parse_args().output_dir)
-    for r in x['rows']:
-        for q in r['points']: print(f"N={r['requests']} P={q['nmp_aggregate_tflops']:.0f} NMP={q['nmp_gain']:.3f}x placement={q['placement_incremental_gain']:.3f}x combined={q['combined_A_gain']:.3f}x")
-if __name__=='__main__': main()
+    p=argparse.ArgumentParser()
+    p.add_argument("--output-dir",type=Path,default=ROOT/"runs/nmp_attention_nominal")
+    print(json.dumps(run(p.parse_args().output_dir)["summary"],indent=2))
+
+if __name__ == "__main__":
+    main()
