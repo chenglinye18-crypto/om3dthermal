@@ -1287,8 +1287,8 @@ def test_active_cases_parse_and_resolve_system_power():
     hbm_geometry = resolve_case_geometry(hbm_case)
     hbm_system = resolve_system_power(
         hbm_case, project_root=ROOT, geometry=hbm_geometry)
-    # Rev v2: H200-anchored bandwidth-saturated point (was 300.0 W).
-    assert hbm_system.gpu_power_W == 269.84
+    # H200-anchored range-midpoint bandwidth-saturated compatibility point.
+    assert hbm_system.gpu_power_W == 367.568
     assert hbm_system.memory_result is not None
     hbm = hbm_system.memory_result
     assert hbm.diagnostics["activated_row_data_utilization"] == 0.10
@@ -1341,7 +1341,7 @@ def test_active_case_surface_is_minimal_and_single_file():
         raw_text = path.read_text(encoding="utf-8")
         raw = yaml.safe_load(raw_text)
         case = load_case_config(path)
-        assert case.power.gpu.power_W == 269.84  # rev v2 H200-anchored
+        assert case.power.gpu.power_W == 367.568  # H200 range midpoint
         assert case.architecture.geometry_source is None
         assert not any(token in raw_text for token in forbidden)
         assert "gpu" not in raw.get("thermal", {})
@@ -1359,7 +1359,7 @@ def test_active_case_system_mapping_uses_resolved_power():
         mapping = map_system_power_to_thermal(case, system)
         assert mapping.unresolved is False
         assert mapping.total_mapped_power_W == pytest.approx(
-            269.84 + system.resolved_total_memory_power_W)  # rev v2 GPU power
+            367.568 + system.resolved_total_memory_power_W)
 
 
 def test_m3d_si_unresolved_is_na_not_zero():

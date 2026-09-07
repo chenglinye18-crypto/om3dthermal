@@ -30,8 +30,9 @@ E8 的 scoped system J/token 仍是 GPU + memory dynamic，不包含 memory refr
 ## 两个历史 GPU-PCG 接线验证点（已被 rev v2 参数取代）
 
 以下数值只记录 2026-09-05 的旧 100/300 W、4.9 TB/s 参数接线验证，
-不是当前 canonical 结果。当前模型使用 74 W、5.10 pJ/bit、4.8 TB/s，
-bandwidth-saturated decode 工作点为 269.84 W。
+不是当前 canonical 结果。当前模型使用 74 W、6.28–9.01 pJ/bit reference-derived
+range、7.645 pJ/bit nominal midpoint 和 4.8 TB/s；bandwidth-saturated nominal
+decode 工作点为 367.568 W。独立 memory energy 不从 GPU coefficient 中扣除。
 
 | 量 | 历史满带宽点 | 历史半带宽验证点 |
 |---|---:|---:|

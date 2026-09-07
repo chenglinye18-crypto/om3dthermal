@@ -48,8 +48,8 @@ def test_all_per_die_carriers_and_package_power_close(frozen_n8):
     sources = config.thermal_power_sources.sources
     assert len(regions) == 106  # rev v2
     assert len(sources) == 1 + 3 * 106  # rev v2
-    assert system.gpu_power_W == pytest.approx(269.84)  # rev v2 H200-anchored
-    assert sources[0].total_power == pytest.approx(269.84)  # rev v2
+    assert system.gpu_power_W == pytest.approx(367.568)  # H200 range midpoint
+    assert sources[0].total_power == pytest.approx(367.568)
     assert sum(x.thermal_memory_carrier_W for x in power_map.die_powers) == pytest.approx(
         power_map.aggregate_memory_read_dynamic_W
         + power_map.aggregate_memory_write_dynamic_W + power_map.aggregate_refresh_W)
@@ -60,7 +60,7 @@ def test_all_per_die_carriers_and_package_power_close(frozen_n8):
     assert sum(source.total_power for source in sources[1:]) == pytest.approx(
         power_map.aggregate_total_W)
     assert sum(source.total_power for source in sources) == pytest.approx(
-        269.84 + power_map.aggregate_total_W)  # rev v2 GPU power
+        367.568 + power_map.aggregate_total_W)
     assert power_map.aggregate_refresh_W == pytest.approx(power_map.refresh_total_W)
     assert all(row.nmp_logic_overhead_factor == 1.0 for row in power_map.die_powers)
     assert gain == pytest.approx(3.950, rel=2e-3)

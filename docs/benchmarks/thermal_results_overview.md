@@ -4,7 +4,7 @@ Conventional 2x1 is the only Conventional reference. Its canonical case is
 `configs/cases/conventional_hbm_2x1.yaml`.
 
 > **rev v2 状态（2026-09-07）**：平台修订 v2 已实施（H200 锚定 GPU 功率
-> 269.84 W、新封装几何 32×24 mm、106 slabs）。下表为 rev v2 之前的
+> 367.568 W nominal、新封装几何 32×24 mm、106 slabs）。下表为 rev v2 之前的
 > 历史回归锚点，对应旧几何/旧功率；新冻结值待全量 formal 实验
 > （三架构 × rho）真实 GPU-PCG 重跑后替换。实施细节与漂移记录见
 > [platform_revision_v2_spec](../research/platform_revision_v2_spec_2026-09-06.md) §4。

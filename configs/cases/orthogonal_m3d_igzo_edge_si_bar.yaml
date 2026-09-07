@@ -219,7 +219,7 @@ workload:
   control_address_reuse: 64
 
 power:
-  gpu: {model: fixed, power_W: 269.84}
+  gpu: {model: fixed, power_W: 367.568}
   memory: {model: analytical, status: CONDITIONAL_ASSUMPTION}
   refresh:
     enabled: true

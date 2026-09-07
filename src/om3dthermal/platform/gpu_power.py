@@ -9,11 +9,11 @@ bottleneck's actual service rate, not directly from tokens::
     F_actual = min(F_demand, F_effective)
     P_gpu_compute = P_static + e_compute_dynamic * F_actual
 
-``e_decode`` is the GPU-side effective decode coefficient inferred from
-measured decode dynamic power after subtracting memory energy accounted for
-separately by E4. It is not a memory-I/O coefficient. The compatibility field
-``peak_decode_power_W`` is a derived closure check, never an independent
-power-model parameter.
+``e_decode`` is the project-level GPU decode dynamic energy-per-bit
+coefficient used by the bandwidth-bounded GPU power model. Memory energy is
+modeled independently elsewhere, without subtraction from this coefficient.
+The compatibility field ``peak_decode_power_W`` is a derived closure check,
+never an independent power-model parameter.
 
 Both regimes share the 74 W static anchor. Their dynamic terms are alternatives,
 not additive components.
@@ -161,7 +161,9 @@ class AffineGPUDecodePowerSpec(BaseModel):
 
     model: Literal["AFFINE_UTILIZATION_MODEL"]
     static_power_W: float = Field(gt=0.0)
+    e_decode_J_per_bit_min: float = Field(gt=0.0)
     e_decode_J_per_bit: float = Field(gt=0.0)
+    e_decode_J_per_bit_max: float = Field(gt=0.0)
     peak_memory_bandwidth_bytes_per_s: float = Field(gt=0.0)
     # Compatibility/reporting field: validator enforces its derived value.
     peak_decode_power_W: float = Field(gt=0.0)
@@ -176,6 +178,8 @@ class AffineGPUDecodePowerSpec(BaseModel):
         "MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED",
         "VENDOR_SPEC_H200_PEAK_HBM3E_BANDWIDTH",
     ]
+    coefficient_range_status: Literal["REFERENCE_DERIVED_RANGE"]
+    coefficient_nominal_status: Literal["MODELING_CHOICE_RANGE_MIDPOINT"]
     model_form_status: Literal[
         "MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING"
     ]
@@ -192,6 +196,15 @@ class AffineGPUDecodePowerSpec(BaseModel):
 
     @model_validator(mode="after")
     def _closure(self) -> "AffineGPUDecodePowerSpec":
+        if self.e_decode_J_per_bit_max < self.e_decode_J_per_bit_min:
+            raise ValueError("decode coefficient maximum must not be below minimum")
+        midpoint = 0.5 * (
+            self.e_decode_J_per_bit_min + self.e_decode_J_per_bit_max)
+        if not math.isclose(
+            self.e_decode_J_per_bit, midpoint, rel_tol=1e-12, abs_tol=1e-18
+        ):
+            raise ValueError(
+                "e_decode_J_per_bit must equal the configured range midpoint")
         if not math.isclose(
             self.peak_decode_power_W,
             self.derived_peak_decode_power_W,

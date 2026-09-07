@@ -85,24 +85,28 @@ unresolved，不发明混合规则，也不把两种 dynamic power 相加。
 | 量 | canonical nominal | 状态 |
 |---|---:|---|
 | `P_static` | 74 W | H200 SXM measured-reference idle floor |
-| `e_decode` | 5.10 pJ/bit | GPU-side effective decode coefficient |
+| `e_decode` range | 6.28–9.01 pJ/bit | REFERENCE_DERIVED_RANGE |
+| `e_decode` nominal | 7.645 pJ/bit | MODELING_CHOICE_RANGE_MIDPOINT |
 | `B_gpu_peak` | 4.8 TB/s | H200 vendor peak HBM3e bandwidth |
-| `P_decode_at_bw_peak` | 269.84 W | 派生/校验量 |
+| `P_decode_at_bw_peak` | 367.568 W | nominal 派生/校验量 |
 | `F_peak_vendor` | 989.5 TFLOP/s | H200 BF16 dense VENDOR_SPEC |
 | `P_compute_bound` | 525–700 W | measured-reference range |
 | `e_compute_dynamic` | 0.4557857504–0.6326427489 pJ/FLOP | static 扣除后的 sensitivity range |
 
 ```text
 P_decode_at_bw_peak
-= 74 + 5.10e-12 * 8 * 4.8e12
-= 269.84 W
+= 74 + 7.645e-12 * 8 * 4.8e12
+= 367.568 W
 ```
 
-`e_decode` 从实测 decode 动态功耗反推，并扣除了 E4 memory energy 模块已经
-单独计账的部分。它是 GPU-side effective decode coefficient，不能重新解释为
-单纯 memory-I/O energy。GPU power 不按 token 定义；W、B/s、bit/s 与 FLOP/s
-是基本量。token time 仅用于把 workload 量换算为 rate，以及将已解析的 W 换算
-成 J/token。两个 regime 共用同一个 `P_static=74 W`，且 static 只加一次。
+`e_decode` 是项目 bandwidth-bounded GPU power model 使用的 GPU decode
+dynamic energy-per-bit coefficient。保留的参考派生范围是 6.28–9.01 pJ/bit，
+nominal 取区间中点 7.645 pJ/bit；中点是 modeling choice，不是 paper-reported
+measurement。这里不应用 HBM-energy subtraction。HBM/M3D memory energy 仍在
+独立 memory model 中建模，但不会改变 GPU decode coefficient。GPU power 不按
+token 定义；W、B/s、bit/s 与 FLOP/s 是基本量。token time 仅用于把 workload
+量换算为 rate，以及将已解析的 W 换算成 J/token。两个 regime 共用同一个
+`P_static=74 W`，且 static 只加一次。
 
 YAML 中为兼容性保留 `peak_decode_power_W`，但 schema 强制它等于
 `P_static + e_decode * 8 * B_gpu_peak`。它不是可独立标定或扫描的物理参数。
@@ -139,9 +143,12 @@ refresh/background/logic 仍由 E5 各加一次，因此不能把这些静态项
 
 | Demand | Actual | Dynamic | Total | Saturated |
 |---|---:|---:|---:|---|
-| `0.5 * B_peak = 2.4 TB/s` | 2.4 TB/s | 97.92 W | 171.92 W | false |
-| `B_peak = 4.8 TB/s` | 4.8 TB/s | 195.84 W | 269.84 W | false |
-| `1.2 * B_peak = 5.76 TB/s` | 4.8 TB/s | 195.84 W | 269.84 W | true |
+| `0.5 * B_peak = 2.4 TB/s` | 2.4 TB/s | 146.784 W | 220.784 W | false |
+| `B_peak = 4.8 TB/s` | 4.8 TB/s | 293.568 W | 367.568 W | false |
+| `1.2 * B_peak = 5.76 TB/s` | 4.8 TB/s | 293.568 W | 367.568 W | true |
+
+满带宽范围端点闭合：`315.152 / 367.568 / 419.984 W` 分别对应
+`6.28 / 7.645 / 9.01 pJ/bit`。
 
 Compute lower endpoint (`e_dynamic_min`)：
 

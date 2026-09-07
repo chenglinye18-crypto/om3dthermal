@@ -81,7 +81,7 @@ def test_three_architecture_source_selection_and_gpu_once(frozen) -> None:
         assert set(names) == expected[name]
         assert names.count("gpu") == 1
         assert next(source for source in mapping.sources
-                    if source.name == "gpu").power_W == 269.84
+                    if source.name == "gpu").power_W == 367.568
 
 
 def test_hbm_dynamic_decomposition_and_visible_group_split_close(frozen) -> None:

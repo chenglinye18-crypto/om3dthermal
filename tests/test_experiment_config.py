@@ -1,5 +1,6 @@
 from pathlib import Path
 import copy
+import csv
 
 import pytest
 import yaml
@@ -45,12 +46,14 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
         and item.classification == "SOFTWARE_DERIVED"
         for item in workload.provenance
     )
-    # Rev v2 (2026-09-06): H200-anchored bandwidth-saturated operating
-    # point 74 W + 5.10 pJ/bit x 4.8 TB/s x 8 = 269.84 W (was 300.0).
-    assert platform.fixed_gpu_power_W == 269.84
-    assert platform.gpu_decode_power.e_decode_J_per_bit == 5.10e-12
+    # H200-anchored range-midpoint bandwidth-saturated operating point:
+    # 74 W + 7.645 pJ/bit x 4.8 TB/s x 8 = 367.568 W.
+    assert platform.fixed_gpu_power_W == 367.568
+    assert platform.gpu_decode_power.e_decode_J_per_bit_min == 6.28e-12
+    assert platform.gpu_decode_power.e_decode_J_per_bit == 7.645e-12
+    assert platform.gpu_decode_power.e_decode_J_per_bit_max == 9.01e-12
     assert platform.gpu_decode_power.derived_peak_decode_power_W == pytest.approx(
-        269.84)
+        367.568)
     assert platform.gpu_decode_power.peak_power_status == (
         "DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH")
     compute = platform.gpu_compute_power
@@ -77,6 +80,21 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
     assert experiment.output_policy == "ERROR_IF_EXISTS"
     assert experiment.experiment_id == (
         "m3d_igzo_llama31_8b_decode_conditional_v0")
+
+
+def test_gpu_platform_ledger_matches_decode_reference_range_and_nominal() -> None:
+    path = ROOT / "docs" / "research" / "gpu_platform_table_2026-09-06.csv"
+    with path.open(encoding="utf-8", newline="") as stream:
+        rows = {row["name"]: row for row in csv.DictReader(stream)}
+    for name in (
+        "H200 SXM",
+        "IOM3D baseline GPU+HBM (rev v2, planned)",
+        "IOM3D-HBM proposed (rev v2, planned)",
+    ):
+        row = rows[name]
+        assert float(row["e_decode_dynamic_pJ_per_bit_min"]) == 6.28
+        assert float(row["e_decode_dynamic_pJ_per_bit_nominal"]) == 7.645
+        assert float(row["e_decode_dynamic_pJ_per_bit_max"]) == 9.01
 
 
 def test_architecture_descriptors_do_not_duplicate_workload_or_scenario() -> None:

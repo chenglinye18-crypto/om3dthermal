@@ -78,12 +78,12 @@ Tmax 81.925634 °C；差异来自先前容量几何变更所影响的刷新功�
 当前 canonical 模型：`P_gpu = P_static + e_decode·8·min(B_demand,B_peak)`。
 
 - 参数（`configs/platform/gpu_package_h200_reference.yaml`）：
-  P_static = 74 W，e_decode = 5.10 pJ/bit，BW_peak = 4.8 TB/s；
-  满带宽派生功率为 269.84 W。
+  P_static = 74 W，e_decode range = 6.28–9.01 pJ/bit，nominal midpoint =
+  7.645 pJ/bit，BW_peak = 4.8 TB/s；满带宽 nominal 派生功率为 367.568 W。
 - 证据锚点（MEASURED_REFERENCE）：ML.ENERGY longitudinal（Llama 3.1 8B on H100）、
   TokenPowerBench（AAAI 2026，decode 相功率平稳且低于 prefill ~90 W）、
   From Words to Watts（HPEC 2023，decode 对功耗帽不敏感）。
-- 满带宽点：P_gpu = **269.84 W**；具体 E_gpu/token 由该解析功率乘以
+- 满带宽 nominal 点：P_gpu = **367.568 W**；具体 E_gpu/token 由该解析功率乘以
   当前 runner 的 token time 得到。
 - 实现：`platform/gpu_power.py` + `evaluator/llm_decode_gpu_energy.py`，
   runner 已接入；超过 GPU 峰值带宽后 dynamic power 不再增长。

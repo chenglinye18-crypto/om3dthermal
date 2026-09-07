@@ -16,10 +16,10 @@ class StrictModel(BaseModel):
 
 # Rev v2 (2026-09-06): canonical cases are anchored to the H200-class
 # platform's H200-anchored bandwidth-saturated decode operating point
-# nominal: 74 W measured idle floor + 5.10 pJ/bit x 4.8e12 B/s x 8
-# = 269.84 W.  See docs/research/platform_revision_v2_spec_2026-09-06.md
+# nominal: 74 W measured idle floor + 7.645 pJ/bit x 4.8e12 B/s x 8
+# = 367.568 W.  See docs/research/platform_revision_v2_spec_2026-09-06.md
 # and configs/platform/gpu_package_h200_reference.yaml.
-CANONICAL_GPU_POWER_W = 269.84
+CANONICAL_GPU_POWER_W = 367.568
 
 
 class BinaryProbability(StrictModel):

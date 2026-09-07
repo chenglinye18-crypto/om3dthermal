@@ -148,9 +148,12 @@ def gpu_operating_point():
         ROOT / "configs/platform/gpu_package_h200_reference.yaml",
         project_root=ROOT).gpu_decode_power
     # Dimensionally consistent small-number fixture: 2 B/s demand is half of
-    # the 4 B/s peak, with e_decode chosen to retain the canonical endpoints.
+    # the 4 B/s peak.
     spec = type(nominal).model_validate(nominal.model_dump() | {
-        "e_decode_J_per_bit": 6.12,
+        "e_decode_J_per_bit_min": 1.0,
+        "e_decode_J_per_bit": 1.0,
+        "e_decode_J_per_bit_max": 1.0,
+        "peak_decode_power_W": 106.0,
         "peak_memory_bandwidth_bytes_per_s": 4.0,
     })
     energy, performance = _energy(), _performance(aggregate=1.0)
@@ -164,11 +167,11 @@ def test_affine_power_replaces_fixed_gpu_reference_once(gpu_operating_point):
         energy, performance, _system(gpu=300),
         unresolved_logic_background_policy="REQUIRE_RESOLVED", gpu_decode_energy=gpu)
     # The fixture's actual byte rate is half the peak, so power is
-    # 74 W + 6.12 J/bit x 8 bit/byte x 2 B/s = 171.92 W.
-    assert power.gpu_power_W == pytest.approx(171.92)
+    # 74 W + 1 J/bit x 8 bit/byte x 2 B/s = 90 W.
+    assert power.gpu_power_W == pytest.approx(90.0)
     assert power.fixed_gpu_power_W == 300.0
     assert power.package_workload_total_W == pytest.approx(
-        171.92 + power.memory_workload_total_W)
+        90.0 + power.memory_workload_total_W)
     assert power.gpu_power_status == "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY"
 
 

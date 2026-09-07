@@ -3,19 +3,23 @@ platform_id: gpu_package_h200_reference
 # Rev v2 GPU decode operating point. fixed_gpu_power_W is compatibility-only;
 # the dynamic path derives power from static power, the GPU-side effective
 # decode coefficient, and actual bandwidth capped at the GPU peak.
-fixed_gpu_power_W: 269.84
+fixed_gpu_power_W: 367.568
 gpu_power_status: FIXED_EXISTING_BASELINE_NOT_WORKLOAD_ENERGY_MODEL
 package_profile_status: EXISTING_CANONICAL_CASE_THERMAL_PACKAGE
 gpu_decode_power:
   model: AFFINE_UTILIZATION_MODEL
   static_power_W: 74.0
-  e_decode_J_per_bit: 5.10e-12
+  e_decode_J_per_bit_min: 6.28e-12
+  e_decode_J_per_bit: 7.645e-12
+  e_decode_J_per_bit_max: 9.01e-12
   # Compatibility/reporting check only; not an independent physical input.
-  peak_decode_power_W: 269.84
+  peak_decode_power_W: 367.568
   peak_memory_bandwidth_bytes_per_s: 4.8e12
   static_power_status: MEASURED_REFERENCE_H200_SXM_IDLE_FLOOR
   peak_power_status: DERIVED_FROM_STATIC_E_DECODE_AND_PEAK_BANDWIDTH
   bandwidth_status: VENDOR_SPEC_H200_PEAK_HBM3E_BANDWIDTH
+  coefficient_range_status: REFERENCE_DERIVED_RANGE
+  coefficient_nominal_status: MODELING_CHOICE_RANGE_MIDPOINT
   model_form_status: MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING
   provenance:
     - record_id: ml_energy_llama31_8b_h100_v0
@@ -70,20 +74,14 @@ gpu_decode_power:
       source_location: decode power fraction 45-60% TDP on A100/H100-class GPUs
       status: DERIVED_BOARD_LEVEL_RANGE_WITH_DIE_ONLY_MODEL_PARAMETER
       notes: >-
-        Board-level e_decode_dynamic = (P_decode - P_static)/(BW x 8) spans
-        6.28-9.01 pJ/bit for H200 (decode 315-420 W = 45-60% of 700 W TDP,
-        P_static 74 W, BW 4.8 TB/s).  The board-level value includes HBM
-        dynamic energy; because the E2E model books memory energy separately
-        (E4), the model parameter is the GPU-side effective decode value:
-        subtracting the HBM per-bit read energy (1.397 pJ/bit DreamRAM) gives
-        4.88-7.61 pJ/bit.  The nominal 5.10 pJ/bit (legacy continuity) lies
-        inside that range, giving P_peak_decode = 74 + 5.10e-12 x 4.8e12 x 8
-        = 269.84 W.  The same parameter is used for the proposed M3D row:
-        It must not be interpreted as memory-I/O energy. The same parameter
-        is used for the proposed M3D row: identical GPU silicon implies an
-        identical GPU-side parameter and
-        memory-technology differences are booked entirely on the E4 side.
-        Range endpoints are used in sensitivity analyses.
+        The retained H200 decode range is 6.28-9.01 pJ/bit, derived from
+        P_decode = 45-60% of 700 W TDP, P_static = 74 W, and BW = 4.8 TB/s.
+        The nominal 7.645 pJ/bit is the range midpoint and is a modeling
+        choice, not a paper-reported measurement. No HBM-energy subtraction
+        is applied. Memory energy remains independently modeled elsewhere.
+        Identical GPU silicon gives H200, baseline, and proposed rows the same
+        GPU decode coefficient. The range endpoints remain available for
+        sensitivity analyses.
 gpu_compute_power:
   model: AFFINE_COMPUTE_RATE_MODEL
   static_power_W: 74.0

@@ -106,7 +106,7 @@ The formal scenario remains conditional:
   measured-reference ranges). The runner evaluates
   E8 before E5/E6 and shares its GPU power with the package total, thermal
   source and E7 row, including logic-background sensitivities. The canonical
-  bandwidth-saturated point is 269.84 W; demand above 4.8 TB/s cannot increase
+  bandwidth-saturated nominal point is 367.568 W; demand above 4.8 TB/s cannot increase
   bandwidth-dependent GPU power. Compute-bound rows use an explicit
   dynamic-only coefficient selected from 0.4557857504–0.6326427489 pJ/FLOP;
   the 989.5 TFLOP/s vendor peak remains separate from scenario `F_effective`.

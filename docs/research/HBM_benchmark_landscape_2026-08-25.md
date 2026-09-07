@@ -275,7 +275,7 @@ R_{scan}=\frac{BW_{peak}}{Capacity}
 ### Layer B - Historical thermal reference
 
 该文档当时保留 Conventional 2x1 和 MOSAIC-derived 300 W geometry 作为
-空间 thermal comparison；当前 canonical 已迁移到 H200-anchored 269.84 W
+空间 thermal comparison；当前 canonical 已迁移到 H200-anchored 367.568 W
 bandwidth-saturated decode operating point。
 
 ### Layer C - Silicon anchors

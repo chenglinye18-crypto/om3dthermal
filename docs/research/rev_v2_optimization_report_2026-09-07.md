@@ -10,14 +10,15 @@
 ### 1. GPU 功耗模型：300 W 名义值 → H200 实测锚定仿射模型
 
 - 旧：fixed 300 W 无依据名义值。
-- 新：P = P_static + e_decode·BW_eff·8，P_static = 74 W（H200 SXM 实测
-  idle floor），e_decode = 5.10 pJ/bit（die-only 模型主值，落在板级扣存后
-  区间 4.88–7.61 内），P_peak 派生 = **269.84 W**（= 74 + 5.10e-12×4.8e12×8）。
+- 新：P = P_static + e_decode·BW_actual·8，P_static = 74 W（H200 SXM 实测
+  idle floor），e_decode 保留 6.28–9.01 pJ/bit 参考派生范围，nominal 取中点
+  7.645 pJ/bit；P_peak nominal 派生 = **367.568 W**。不应用 HBM-energy
+  subtraction，memory energy 保持独立建模。
 - 三架构（baseline / proposed / H200 参考行）同值同硅片论证；平台峰值带宽
   4.9 → 4.8 TB/s（H200 厂商值），场景 cap 4.9 TB/s → u=1.02 钳位于 1。
 - 平台文件：`configs/platform/gpu_package_h200_reference.yaml`
   （旧 300w 文件已删除）；300 W 硬编码校验器改写为
-  `CANONICAL_GPU_POWER_W = 269.84` 常量 + 豁免 legacy unresolved 案例。
+  `CANONICAL_GPU_POWER_W = 367.568` 常量 + 豁免 legacy unresolved 案例。
 
 ### 2. 封装几何：对齐 H200 GH100-class
 
@@ -85,7 +86,7 @@ Llama-3.1-8B BF16 @128K，balanced 放置：
 | 1 | **算子分工（MAC/GPU split）** | 未实施。当前 NMP 包揽 decode 全部 82.68 GFLOP/token，其中 ATTENTION_KV 68.7 GFLOP（83.1%）不应由 FEOL MAC 承担。目标：MAC 只接权重 GEMV（~14 GFLOP/token，memory-bound），GPU 接 attention。规格草稿：`mac_gpu_operator_division_spec_2026-09-05.md`。改完 NMP 增益预计从 ~4.4× 回落但更可信，GPU 利用率叙事闭合 |
 | 2 | **全量 formal 热重跑** | 三架构 × rho(0/1/100/1000) 真实 GPU-PCG，产出新 Tmax/cells 冻结值，替换 `test_llm_decode_e2e.py` 旧锚点与 `thermal_results_overview.md` 历史表 |
 | 3 | **A/B 双臂热消融求解** | 机制与 case 就绪，跑两臂 Tmax 对比，分离 Si 条贡献 |
-| 4 | **e_decode 区间敏感性** | 主值 5.10 pJ/bit；板级扣存区间端点（4.88 / 7.61）做敏感性行 |
+| 4 | **e_decode 区间敏感性** | nominal 7.645 pJ/bit；保留范围端点（6.28 / 9.01）做敏感性行 |
 | 5 | **compute-bound GPU power** | 已建立 dynamic-only 0.4557857504–0.6326427489 pJ/FLOP sensitivity range；不把含 static 的 0.531–0.707 pJ/FLOP 直接用于 `P_static + dynamic`，且未选择 nominal |
 | 6 | **host 链路敏感性** | 主结果 PCIe Gen5 64 GB/s；C2C 450 GB/s robustness 行待跑 |
 | 7 | **M3D slab IO 物理论证** | 50 ch/slab、8 Gbps/ch 为设计值，论文补通道数×pin rate 可行性一段 |

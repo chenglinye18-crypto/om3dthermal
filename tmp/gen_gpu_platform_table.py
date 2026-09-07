@@ -27,15 +27,12 @@ Derived invariants:
 The total-equivalent coefficient includes static power. Only the dynamic-only
 coefficient may be used in P_gpu = P_static + e_compute_dynamic * FLOP_rate.
 
-Decode section records exactly two model parameters, nothing else:
+Decode section records the reference-derived range and project nominal:
   static_power_W            measured idle floor (per-second billing)
   e_decode_dynamic_pJ/bit = (P_decode - P_static) / (BW_peak x 8)
-                            (per-bit billing; board-level, includes HBM
-                            dynamic energy -- when the E2E model books memory
-                            energy separately (E4), subtract the memory
-                            per-bit term from this parameter to avoid
-                            double counting: baseline HBM 1.397 pJ/bit,
-                            proposed M3D 0.855 pJ/bit)
+  nominal                  midpoint of the retained min/max range
+No HBM/M3D memory-energy subtraction is applied. Memory energy remains
+independently modeled elsewhere.
   1 W / (1 TB/s) = 0.125 pJ/bit
 
 Decisions recorded (2026-09-06):
@@ -67,6 +64,7 @@ header = [
     "peak_compute_BF16_dense_TFLOPS", "TDP_W", "static_power_W",
     "decode_power_frac_TDP_min", "decode_power_frac_TDP_max",
     "e_decode_dynamic_pJ_per_bit_min", "e_decode_dynamic_pJ_per_bit_max",
+    "e_decode_dynamic_pJ_per_bit_nominal",
     "prefill_power_frac_TDP_min", "prefill_power_frac_TDP_max",
     "compute_bound_power_W_min", "compute_bound_power_W_max",
     "e_compute_total_equivalent_pJ_per_FLOP_min",
@@ -81,7 +79,13 @@ header = [
     "notes", "provenance_status", "source",
 ]
 N_COLS = len(header)
-assert N_COLS == 29
+assert N_COLS == 30
+
+H200_DECODE_MODEL_ROWS = {
+    "H200 SXM",
+    "IOM3D baseline GPU+HBM (rev v2, planned)",
+    "IOM3D-HBM proposed (rev v2, planned)",
+}
 
 # (name, mem, cap, BW_TBs, TFLOPS, TDP, dfrac, pfrac, static_W|None,
 #  host_link_GBps|None, notes, provenance, source)
@@ -114,8 +118,9 @@ GPU_ROWS = [
      (0.45, 0.60), (0.75, 1.00), 74.0, 64.0,
      "H200-anchored; 4x 36.24 GB stacks 11.8x12.2 mm; PCIe Gen5 host link; "
      "P_static = 74 W (H200 SXM measured idle floor); e_decode_dynamic "
-     "identical to H200 by construction; board-level value includes HBM "
-     "dynamic energy (1.397 pJ/bit, booked separately in E4); "
+     "identical to H200 by construction; nominal 7.645 pJ/bit is the "
+     "6.28-9.01 pJ/bit range midpoint; memory energy remains independently "
+     "modeled with no subtraction from the GPU coefficient; "
      "not yet implemented in configs",
      "PLANNED_REV_V2",
      "H200 datasheet + arXiv:2604.10852v1 frac + measured idle anchors; "
@@ -124,8 +129,9 @@ GPU_ROWS = [
      497.9, 4.80, 989.5, 700,
      (0.45, 0.60), (0.75, 1.00), 74.0, 64.0,
      "same H200 GPU silicon -> GPU-side e_decode_dynamic and P_static "
-     "identical to baseline; M3D memory energy (0.855 pJ/bit) booked "
-     "separately in E4, not subtracted here; scenario matched bw capped "
+     "identical to baseline; nominal 7.645 pJ/bit is the 6.28-9.01 pJ/bit "
+     "range midpoint; M3D memory energy remains independently modeled; "
+     "scenario matched bw capped "
      "at 39.2 Tb/s (4.9 TB/s) -> u = 4.9/4.8 clamps at 1; 106-slab "
      "capability 42.4 Tb/s held as design margin; "
      "not yet implemented in configs",
@@ -207,10 +213,11 @@ with OUT.open("w", newline="") as f:
         else:
             e_cmp_dyn = ("", "")
             e_dyn = ("", "")
+        e_decode_nominal = 7.645 if name in H200_DECODE_MODEL_ROWS else ""
         row = [
             "gpu_energy", name, mem, cap, bw, tf, tdp,
             static_w if static_w is not None else "",
-            dfrac[0], dfrac[1], e_dyn[0], e_dyn[1],
+            dfrac[0], dfrac[1], e_dyn[0], e_dyn[1], e_decode_nominal,
             pfrac[0], pfrac[1], round(p_pre[0], 1), round(p_pre[1], 1),
             round(e_cmp[0], 3), round(e_cmp[1], 3),
             (e_cmp_dyn[0] if e_cmp_dyn[0] == "" else round(e_cmp_dyn[0], 15)),
@@ -227,7 +234,7 @@ with OUT.open("w", newline="") as f:
         print(f"{name:44s} static {static_w} W{dyn_str}")
     for (name, link, per_dir, bidir, host_mem, host_bw, coh,
          notes, prov, src) in LINK_ROWS:
-        row = (["host_link", name] + [""] * 18
+        row = (["host_link", name] + [""] * 19
                + [link, per_dir, bidir, host_mem, host_bw or "", coh,
                   notes, prov, src])
         assert len(row) == N_COLS, (name, len(row))
@@ -236,7 +243,7 @@ with OUT.open("w", newline="") as f:
         print(f"{name:44s} {per_dir} GB/s/dir ({link})")
     for (name, tdp, idle, notes, prov, src) in IDLE_ROWS:
         row = (["idle_power_anchor", name, "", "", "", "", tdp, idle]
-               + [""] * 18 + [notes, prov, src])
+               + [""] * 19 + [notes, prov, src])
         assert len(row) == N_COLS, (name, len(row))
         w.writerow(row)
         rows_written += 1

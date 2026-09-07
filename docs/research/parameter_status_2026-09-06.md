@@ -33,8 +33,8 @@
 | 参数 | 现状 | 需要做什么 |
 |---|---|---|
 | P_static（GPU 静息功耗） | **74 W**（H200 SXM 实测 idle floor，白皮书 72+ 次实测；H200 NVL 121 W 留作敏感性上界）；baseline/proposed 与 H200 同值 | ✅ 已定并实施：platform YAML（gpu_package_h200_reference.yaml）static=74 W |
-| e_decode 动态 | **5.10 pJ/bit** GPU-side effective decode coefficient（三架构同值同硅片） | ✅ 已定并实施：由实测 decode 动态功耗反推并扣除 E4 单独计账的 memory energy；不是 memory-I/O energy |
-| P_decode_at_bw_peak | **269.84 W**（=74 + 5.10e-12×4.8e12×8） | ✅ 已实施：派生/校验量，不是独立物理参数 |
+| e_decode 动态 | **6.28–9.01 pJ/bit；nominal 7.645 pJ/bit**（三架构同值同硅片） | ✅ 已实施：REFERENCE_DERIVED_RANGE；nominal 是 MODELING_CHOICE_RANGE_MIDPOINT；不扣除独立 memory energy |
+| P_decode_at_bw_peak | **367.568 W**（=74 + 7.645e-12×4.8e12×8） | ✅ 已实施：nominal 派生/校验量，不是独立物理参数；min/max 为 315.152/419.984 W |
 | GPU 峰值带宽（平台侧） | **4.8 TB/s**（H200 厂商值） | ✅ 已实施；场景带宽 cap 4.9 TB/s → u = 4.9/4.8 ≈ 1.02 截断于 1，测试断言 utilization_clamped=True 已重冻结 |
 | e_compute total-equivalent | 0.531–0.707 pJ/FLOP | 只用于解释原始 525–700 W / 989.5 TFLOP/s，包含 static，禁止直接放入 `P_static + dynamic` |
 | e_compute dynamic-only | **0.4557857504–0.6326427489 pJ/FLOP** | ✅ 已实施 min/max schema：`(P_compute_bound - 74)/989.5e12`；未选 nominal |
