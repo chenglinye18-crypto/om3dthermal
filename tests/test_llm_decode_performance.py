@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from om3dthermal.architecture_comparison import (
+    _resolve_case_gpu_operating_point,
+)
 from om3dthermal.architecture_capacity import (
     ResolvedArchitectureCapacity,
     resolve_architecture_capacity,
@@ -129,7 +132,9 @@ def _capacity_feasibility(
 def _resolve_architecture_capacity(name: str) -> ResolvedArchitectureCapacity:
     case = load_case_config(CASES / f"{name}.yaml")
     geometry = resolve_case_geometry(case)
-    system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+    system = resolve_system_power(
+        case, project_root=ROOT, geometry=geometry,
+        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
     return resolve_architecture_capacity(case, geometry, system)
 
 

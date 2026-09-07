@@ -6,6 +6,7 @@ import pytest
 
 from om3dthermal.cli import build_scene
 from om3dthermal.architecture_comparison import (
+    _resolve_case_gpu_operating_point,
     _resolved_capacity,
     compile_case_thermal,
 )
@@ -29,7 +30,9 @@ NAMES = (
 def _resolved(name):
     case = load_case_config(CASES / f"{name}.yaml")
     geometry = resolve_case_geometry(case)
-    system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+    system = resolve_system_power(
+        case, project_root=ROOT, geometry=geometry,
+        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
     return case, geometry, system
 
 

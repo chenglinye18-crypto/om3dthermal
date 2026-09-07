@@ -23,7 +23,7 @@
 
 开放项：无功耗取点待定项。canonical nominal 冻结为 `P_static=74 W`、
 `e_decode=7.645 pJ/bit`、`B_gpu_peak=4.8 TB/s`。nominal 是 6.28–9.01
-pJ/bit 参考派生范围的中点 modeling choice；不应用 HBM-energy subtraction。
+pJ/bit 参考派生范围的中点 modeling choice；不从该系数扣减 HBM energy。
 Memory energy 保持独立建模；GPU power 全部由实际带宽派生。
 
 ## 2. 几何变更

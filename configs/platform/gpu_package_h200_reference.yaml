@@ -64,13 +64,14 @@ gpu_decode_power:
       classification: SOFTWARE_DERIVED
       source: docs/research/gpu_platform_table_2026-09-06.csv; arXiv:2604.10852v1 Fig.8
       source_location: decode power fraction 45-60% TDP on A100/H100-class GPUs
-      status: DERIVED_BOARD_LEVEL_RANGE_WITH_DIE_ONLY_MODEL_PARAMETER
+      status: REFERENCE_DERIVED_RANGE
       notes: >-
         The retained H200 decode range is 6.28-9.01 pJ/bit, derived from
         P_decode = 45-60% of 700 W TDP, P_static = 74 W, and BW = 4.8 TB/s.
         The nominal 7.645 pJ/bit is the range midpoint and is a modeling
-        choice, not a paper-reported measurement. No HBM-energy subtraction
-        is applied. Memory energy remains independently modeled elsewhere.
+        choice, not a paper-reported measurement. HBM energy is not deducted
+        from this coefficient. Memory energy remains independently modeled
+        elsewhere.
         Identical GPU silicon gives H200, baseline, and proposed rows the same
         GPU decode coefficient. The range endpoints remain available for
         sensitivity analyses.

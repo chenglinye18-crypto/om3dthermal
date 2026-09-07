@@ -28,8 +28,7 @@ def resolve_architecture_spec(
     *,
     project_root: Path,
     gpu_operating_point: (
-        GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint
-        | None) = None,
+        GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint),
 ) -> ResolvedArchitecture:
     """Resolve without copying or changing any canonical physical parameter."""
 

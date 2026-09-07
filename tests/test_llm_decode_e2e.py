@@ -6,6 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from om3dthermal.architecture_comparison import (
+    _resolve_case_gpu_operating_point,
+)
 from om3dthermal.architecture_capacity import resolve_architecture_capacity
 from om3dthermal.evaluator import (
     LLMDecodeWorkloadThermalMetrics,
@@ -107,7 +110,9 @@ def frozen():
     for name in ARCHITECTURES:
         case = load_case_config(ROOT / "configs" / "cases" / f"{name}.yaml")
         geometry = resolve_case_geometry(case)
-        system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+        system = resolve_system_power(
+            case, project_root=ROOT, geometry=geometry,
+            gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
         fit = evaluate_architecture_capacity_feasibility(
             workload, resolve_architecture_capacity(case, geometry, system),
             reserved_capacity_bytes=0)

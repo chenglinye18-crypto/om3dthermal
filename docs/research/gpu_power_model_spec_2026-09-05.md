@@ -102,7 +102,7 @@ P_decode_at_bw_peak
 `e_decode` 是项目 bandwidth-bounded GPU power model 使用的 GPU decode
 dynamic energy-per-bit coefficient。保留的参考派生范围是 6.28–9.01 pJ/bit，
 nominal 取区间中点 7.645 pJ/bit；中点是 modeling choice，不是 paper-reported
-measurement。这里不应用 HBM-energy subtraction。HBM/M3D memory energy 仍在
+measurement。这里不从该系数扣减 HBM energy。HBM/M3D memory energy 仍在
 独立 memory model 中建模，但不会改变 GPU decode coefficient。GPU power 不按
 token 定义；W、B/s、bit/s 与 FLOP/s 是基本量。token time 仅用于把 workload
 量换算为 rate，以及将已解析的 W 换算成 J/token。两个 regime 共用同一个
@@ -111,6 +111,8 @@ token 定义；W、B/s、bit/s 与 FLOP/s 是基本量。token time 仅用于把
 YAML 只保存 `P_static`、`e_decode` 和 `B_gpu_peak` 三个独立 decode 参数。
 峰值 decode 功率由只读 property 按
 `P_static + e_decode * 8 * B_gpu_peak` 即时派生，不是配置输入。
+`gpu_platform_table_2026-09-06.csv` 仅是 research/provenance ledger；runtime
+唯一读取的参数源是 platform YAML。
 
 ## 5. Canonical data flow and closure
 

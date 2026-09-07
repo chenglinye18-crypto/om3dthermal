@@ -9,8 +9,6 @@ from typing import Any
 from om3dthermal.platform import (
     GPUComputePowerOperatingPoint,
     GPUDecodePowerOperatingPoint,
-    load_platform_spec_file,
-    resolve_gpu_decode_power,
 )
 
 from .config import CanonicalCaseConfig
@@ -62,26 +60,10 @@ def resolve_system_power(
         case: CanonicalCaseConfig, *, project_root: Path,
         geometry: ResolvedGeometry,
         gpu_operating_point: (
-            GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint
-            | None) = None,
+            GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint),
 ) -> ResolvedSystemPower:
     """Resolve package power from memory facts and one resolved GPU point."""
     assert case.power.memory is not None
-    if gpu_operating_point is None:
-        platform = load_platform_spec_file(
-            project_root / "configs/platform/gpu_package_h200_reference.yaml")
-        if platform.gpu_decode_power is None:
-            raise ValueError("canonical platform is missing gpu_decode_power")
-        spec = platform.gpu_decode_power
-        gpu_operating_point = resolve_gpu_decode_power(
-            static_power_W=spec.static_power_W,
-            e_decode_J_per_bit=spec.e_decode_J_per_bit,
-            bandwidth_demand_bytes_per_s=(
-                (case.workload.read_bandwidth_gbps
-                 + case.workload.write_bandwidth_gbps) * 1e9 / 8.0),
-            peak_bandwidth_bytes_per_s=(
-                spec.peak_memory_bandwidth_bytes_per_s),
-        )
     gpu_power_W = gpu_operating_point.gpu_power_W
     mode = case.power.memory
     if mode.model == "unresolved":

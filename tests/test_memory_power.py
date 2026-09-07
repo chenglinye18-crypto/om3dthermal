@@ -6,6 +6,9 @@ from pathlib import Path
 import pytest
 import yaml
 
+from om3dthermal.architecture_comparison import (
+    _resolve_case_gpu_operating_point,
+)
 from om3dthermal.power import (
     calculate_memory_power,
     load_case_config,
@@ -1285,7 +1288,8 @@ def test_active_cases_parse_and_resolve_system_power():
         CASE_CONFIGS / "conventional_hbm_2x1.yaml")
     hbm_geometry = resolve_case_geometry(hbm_case)
     hbm_system = resolve_system_power(
-        hbm_case, project_root=ROOT, geometry=hbm_geometry)
+        hbm_case, project_root=ROOT, geometry=hbm_geometry,
+        gpu_operating_point=_resolve_case_gpu_operating_point(hbm_case, ROOT))
     # H200-anchored range-midpoint bandwidth-saturated compatibility point.
     assert hbm_system.gpu_power_W == 367.568
     assert hbm_system.memory_result is not None
@@ -1354,7 +1358,9 @@ def test_active_case_system_mapping_uses_resolved_power():
     ):
         case = load_case_config(CASE_CONFIGS / name)
         geometry = resolve_case_geometry(case)
-        system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+        system = resolve_system_power(
+            case, project_root=ROOT, geometry=geometry,
+            gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
         mapping = map_system_power_to_thermal(case, system)
         assert mapping.unresolved is False
         assert mapping.total_mapped_power_W == pytest.approx(
@@ -1367,7 +1373,9 @@ def test_m3d_si_unresolved_is_na_not_zero():
         "orthogonal_m3d_si.yaml")
     case = load_case_config(path)
     geometry = resolve_case_geometry(case)
-    system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+    system = resolve_system_power(
+        case, project_root=ROOT, geometry=geometry,
+        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
     mapping = map_system_power_to_thermal(case, system)
     assert system.memory_power_status == "NOT_VALIDATED"
     assert system.memory_access_energy_pJ_per_bit is None

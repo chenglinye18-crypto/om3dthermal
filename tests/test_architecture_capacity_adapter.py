@@ -47,7 +47,10 @@ def _resolve_capacity(name: str) -> ResolvedArchitectureCapacity:
     case = load_case_config(CASES / f"{name}.yaml")
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
-        case, project_root=ROOT, geometry=geometry)
+        case, project_root=ROOT, geometry=geometry,
+        gpu_operating_point=(
+            architecture_comparison._resolve_case_gpu_operating_point(
+                case, ROOT)))
     return resolve_architecture_capacity(case, geometry, system)
 
 
@@ -103,7 +106,10 @@ def test_architecture_comparison_compatibility_uses_public_resolver(
     case = load_case_config(CASES / "conventional_hbm_2x1.yaml")
     geometry = resolve_case_geometry(case)
     system = resolve_system_power(
-        case, project_root=ROOT, geometry=geometry)
+        case, project_root=ROOT, geometry=geometry,
+        gpu_operating_point=(
+            architecture_comparison._resolve_case_gpu_operating_point(
+                case, ROOT)))
     called = False
     public_resolver = resolve_architecture_capacity
 

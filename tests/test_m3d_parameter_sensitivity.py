@@ -2,6 +2,9 @@ from pathlib import Path
 
 import pytest
 
+from om3dthermal.architecture_comparison import (
+    _resolve_case_gpu_operating_point,
+)
 from om3dthermal.architecture_capacity import resolve_architecture_capacity
 from om3dthermal.evaluation import evaluate_architecture_capacity_feasibility
 from om3dthermal.evaluator import (
@@ -51,7 +54,9 @@ def _fake_thermal(mapping):
 def test_m3d_interface_and_logic_sensitivities_are_separate_and_close():
     case = load_case_config(ROOT / "configs/cases/orthogonal_m3d_igzo.yaml")
     geometry = resolve_case_geometry(case)
-    system = resolve_system_power(case, project_root=ROOT, geometry=geometry)
+    system = resolve_system_power(
+        case, project_root=ROOT, geometry=geometry,
+        gpu_operating_point=_resolve_case_gpu_operating_point(case, ROOT))
     workload = evaluate_llm_decode(LLMDecodeInput(
         n_param=8_000_000_000, n_layers=32, n_heads_q=32, n_heads_kv=8,
         d_model=4096, d_ff=14336, vocab_size=128_256,

@@ -31,7 +31,7 @@ Decode section records the reference-derived range and project nominal:
   static_power_W            measured idle floor (per-second billing)
   e_decode_dynamic_pJ/bit = (P_decode - P_static) / (BW_peak x 8)
   nominal                  midpoint of the retained min/max range
-No HBM/M3D memory-energy subtraction is applied. Memory energy remains
+HBM/M3D memory energy is not deducted from the GPU coefficient. Memory energy remains
 independently modeled elsewhere.
   1 W / (1 TB/s) = 0.125 pJ/bit
 
