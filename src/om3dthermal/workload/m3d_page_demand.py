@@ -124,6 +124,13 @@ def build_m3d_workload_page_demand(
 
     object_by_id = {obj.object_id: obj for obj in objects}
     demands: list[ResidentPageAccessDemand] = []
+    pages_remaining = {parent_id: sum(
+        page.parent_object_id == parent_id for page in page_layout.pages)
+        for parent_id in object_by_id}
+    read_remaining = {}
+    for parent_id,parent in object_by_id.items():
+        read_remaining[parent_id] = (weight_read if parent.object_type == "WEIGHT"
+            else kv_read_per_request if parent.object_type == "KV" else 0.0)
     for page in page_layout.pages:
         parent = object_by_id[page.parent_object_id]
         if parent.object_type == "WEIGHT":
@@ -132,7 +139,11 @@ def build_m3d_workload_page_demand(
             object_read = kv_read_per_request
         else:
             object_read = 0.0
-        demand = object_read * page.size_bytes / parent.size_bytes
+        pages_remaining[page.parent_object_id] -= 1
+        demand = (read_remaining[page.parent_object_id]
+                  if pages_remaining[page.parent_object_id] == 0
+                  else object_read * page.size_bytes / parent.size_bytes)
+        read_remaining[page.parent_object_id] -= demand
         demands.append(ResidentPageAccessDemand(
             page_id=page.page_id,
             parent_object_id=page.parent_object_id,
@@ -202,9 +213,9 @@ def build_m3d_workload_page_demand(
         top_10_percent_page_traffic_share=_top_fraction_share(values, total, 0.10),
         top_25_percent_page_traffic_share=_top_fraction_share(values, total, 0.25),
         demand_max_min_ratio=(None if minimum == 0.0 else maximum / minimum),
-        weight_traffic_closure_error_bytes=weight_page_read - weight_read,
-        kv_traffic_closure_error_bytes=kv_page_read - kv_read,
-        total_traffic_closure_error_bytes=total_page_read - workload_aggregate_read,
+        weight_traffic_closure_error_bytes=_reported_closure_error(weight_page_read, weight_read),
+        kv_traffic_closure_error_bytes=_reported_closure_error(kv_page_read, kv_read),
+        total_traffic_closure_error_bytes=_reported_closure_error(total_page_read, workload_aggregate_read),
         weight_traffic_semantics=(
             "EXISTING_AGGREGATE_DECODE_STEP_ACTIVE_WEIGHT_TRAFFIC_WITH_"
             "BATCH_TILE_REUSE_ALREADY_INCLUDED"),
@@ -265,6 +276,11 @@ def _require_close(actual: float, expected: float, label: str) -> None:
         raise PageAccessDemandTrafficMismatchError(
             "PAGE_ACCESS_DEMAND_TRAFFIC_MISMATCH: "
             f"{label}: actual={actual}, expected={expected}")
+
+
+def _reported_closure_error(actual: float, expected: float) -> float:
+    """Report analytical closure, suppressing only floating summation noise."""
+    return 0.0 if math.isclose(actual, expected, rel_tol=1e-12, abs_tol=1e-9) else actual-expected
 
 
 def _percentile(ordered: tuple[float, ...], fraction: float) -> float:

@@ -65,11 +65,11 @@ def test_all_per_die_carriers_and_package_power_close(frozen_n8):
         expected_gpu + power_map.aggregate_total_W)
     assert power_map.aggregate_refresh_W == pytest.approx(power_map.refresh_total_W)
     assert all(row.nmp_logic_overhead_factor == 1.0 for row in power_map.die_powers)
-    baseline_seconds=(16e9+8*(2*32*131072*8*128*2+2*32*8*128*2))/2.4e12
+    baseline_seconds=(15_009_316_864+8*(2*32*131072*8*128*2+2*32*8*128*2))/2.4e12
     assert gain == pytest.approx(baseline_seconds/(activity["decode_step_interval_ms"]*1e-3))
     # This model exposes no direct die-to-die path: ownership is local and all
     # remaining bytes are explicitly attributed to the external boundary.
-    assert placement.locality_constraint.startswith("LEXICOGRAPHIC_MINIMUM_DIE_SPAN")
+    assert placement.locality_constraint == "ROW_BLOCKS_AND_WHOLE_TOKEN_KV_HEAD_VECTORS__PAIRED_KV_COLOCATION"
 
 
 def test_residual_external_mapping_is_explicit_coarse_feol(frozen_n8):

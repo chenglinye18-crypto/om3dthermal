@@ -127,9 +127,10 @@ class LLMDecodeInput(BaseModel):
     )
 
     # Modeling choices (frozen for v0)
-    weight_activity_model: Literal["full_footprint"] = Field(
+    weight_activity_model: Literal["full_footprint", "dimension_derived_active_operators"] = Field(
         default="full_footprint",
-        description="MODELING_CHOICE: v0 assumes all resident weights are read each step",
+        description=("MODELING_CHOICE: either read the full resident footprint or "
+                     "only dimension-derived active decode operators"),
     )
     weight_reuse_model: Literal["tile_reuse"] = Field(
         default="tile_reuse",
@@ -264,7 +265,7 @@ class LLMDecodeMetrics(BaseModel):
     flops_sanity_per_token: int
 
     # Provenance / modeling choices ( echoed for audit )
-    weight_activity_model: Literal["full_footprint"]
+    weight_activity_model: Literal["full_footprint", "dimension_derived_active_operators"]
     weight_reuse_model: Literal["tile_reuse"]
     kv_read_model: Literal["full_reread"]
 
@@ -306,8 +307,14 @@ def evaluate_llm_decode(inp: LLMDecodeInput) -> LLMDecodeMetrics:
     # Formula: Nparam * bw / 8  (true division; exact analytical byte-equivalent)
     bytes_weight_footprint = Nparam * bw / 8
 
-    # MODELING_CHOICE (v0): conservative – assume all resident weights read.
-    bytes_weight_active_per_step = bytes_weight_footprint
+    if inp.weight_activity_model == "full_footprint":
+        bytes_weight_active_per_step = bytes_weight_footprint
+    else:
+        # Local import avoids a module cycle. The dense operator ledger remains
+        # the single source of truth for named active-weight traffic.
+        from .dense_decode_ledger import active_weight_read_bytes, build_dense_decode_placement_units
+        bytes_weight_active_per_step = active_weight_read_bytes(
+            build_dense_decode_placement_units(inp))
 
     # -------------------------------------------------------------
     # 5. KV footprint

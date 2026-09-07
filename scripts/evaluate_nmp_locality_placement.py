@@ -46,16 +46,28 @@ def run(output_dir: Path):
     # Same accounting boundary: memory dynamic + refresh + GPU dynamic + static.
     primitive=power_map.primitives
     baseline_write=primitive.igzo_weighted_write_pj_per_bit+power.E_vertical_pj_bit+power.E_feol_route_pj_bit+power.E_base_route_pj_bit+power.E_interface_pj_bit
-    baseline_memory_j=8*(d.total_read_bytes_per_decode_step*power.E_access_total_pj_bit+d.kv_write_bytes_per_decode_step*baseline_write)*1e-12
+    active_weight=sum(x.weight_read_bytes for x in placement.unit_loads)
+    baseline_memory_j=8*((active_weight+d.total_kv_read_bytes_per_decode_step)*power.E_access_total_pj_bit+d.kv_write_bytes_per_decode_step*baseline_write)*1e-12
     baseline_energy=baseline_memory_j+(power.P_refresh_W or 0)*baseline_s+8*baseline.traffic.external_interface_bytes*gpu_power.e_decode_J_per_bit+gpu_power.static_power_W*baseline_s
     loads=placement.unit_loads
+    stage_rows=[x for x in activity.stages if "memory_ms" in x]
+    transfer_ms=lambda name:sum(x["time_ms"] for x in activity.stages if x["operator"]==name)
+    spans_by_operator={name:sorted({x["execution_die_span"] for x in stage_rows if x["operator"]==name})
+                       for name in sorted({x["operator"] for x in stage_rows})}
+    local_dynamic_j=(power_map.aggregate_memory_read_dynamic_W+power_map.aggregate_memory_write_dynamic_W)*interval
+    mac_j=power_map.aggregate_mac_dynamic_W*interval
+    residual_interface_j=power_map.aggregate_residual_external_W*interval
+    refresh_j=power_map.aggregate_refresh_W*interval
     summary={
         "qk_flops_per_token":sum(x.nmp_flops for x in loads if x.unit.operator_type=="ATTENTION_QK")/w.batch_size,
         "av_flops_per_token":sum(x.nmp_flops for x in loads if x.unit.operator_type=="ATTENTION_AV")/w.batch_size,
         "weight_nmp_flops_per_token":sum(x.nmp_flops for x in loads if x.unit.weight_bytes)/w.batch_size,
         "total_nmp_flops_per_token":sum(x.nmp_flops for x in loads)/w.batch_size,
         "local_weight_bytes_per_token":sum(x.weight_read_bytes for x in loads)/w.batch_size,
+        "active_weight_GB_per_token":sum(x.weight_read_bytes for x in loads)/w.batch_size/1e9,
+        "resident_weight_GB":sum(x.unit.weight_bytes for x in loads)/1e9,
         "local_kv_bytes_per_token":sum(x.kv_read_bytes+x.kv_write_bytes for x in loads)/w.batch_size,
+        "kv_GB_per_token":sum(x.kv_read_bytes+x.kv_write_bytes for x in loads)/w.batch_size/1e9,
         "score_MB_per_token":activity.score_bytes/w.batch_size/1e6,
         "probability_MB_per_token":activity.probability_bytes/w.batch_size/1e6,
         "partial_MB_per_token":activity.partial_bytes/w.batch_size/1e6,
@@ -64,18 +76,40 @@ def run(output_dir: Path):
         "effective_boundary_BW_bytes_per_s":activity.transfer["bandwidth_actual_bytes_per_s"],
         "boundary_ms_per_token":activity.boundary_time_ms/w.batch_size,
         "softmax_ms_per_token":activity.softmax_time_ms/w.batch_size,
+        "score_transfer_ms_per_token":transfer_ms("SCORE_TRANSFER")/w.batch_size,
+        "probability_transfer_ms_per_token":transfer_ms("PROBABILITY_TRANSFER")/w.batch_size,
+        "av_partial_transfer_ms_per_token":transfer_ms("PARTIAL_TRANSFER")/w.batch_size,
         "nmp_compute_ms_per_token":sum(x["compute_ms"] for x in activity.stages if "compute_ms" in x)/w.batch_size,
         "nmp_local_memory_ms_per_token":sum(x["memory_ms"] for x in activity.stages if "memory_ms" in x)/w.batch_size,
+        "operator_execution_die_spans":spans_by_operator,
+        "mean_exec_die_span":activity.mean_exec_die_span,
+        "median_exec_die_span":activity.median_exec_die_span,
+        "max_exec_die_span":activity.max_exec_die_span,
+        "aggregate_local_bandwidth_bytes_per_s":activity.aggregate_local_bandwidth_bytes_per_s,
+        "realized_effective_local_bandwidth_bytes_per_s":activity.realized_effective_local_bandwidth_bytes_per_s,
         "decode_ms_per_token":activity.decode_step_interval_ms/w.batch_size,
         "tokens_per_s":w.batch_size/interval,"J_per_token":nmp_energy/w.batch_size,"tokens_per_J":w.batch_size/nmp_energy,
+        "nmp_local_memory_dynamic_J_per_token":local_dynamic_j/w.batch_size,
+        "mac_J_per_token":mac_j/w.batch_size,
+        "residual_interface_J_per_token":residual_interface_j/w.batch_size,
+        "softmax_dynamic_J_per_token":activity.softmax_dynamic_energy_j/w.batch_size,
+        "gpu_static_J_per_token":activity.gpu_static_energy_j/w.batch_size,
+        "refresh_J_per_token":refresh_j/w.batch_size,
         "baseline_decode_ms_per_token":baseline.timing.total_step_ms/w.batch_size,
         "baseline_tokens_per_s":baseline.timing.tokens_per_s,
         "baseline_J_per_token":baseline_energy/w.batch_size,"baseline_tokens_per_J":w.batch_size/baseline_energy,
         "speedup":w.batch_size/interval/baseline.timing.tokens_per_s,
         "energy_efficiency_gain":baseline_energy/nmp_energy,
     }
+    layer0=[x for x in stage_rows if x["layer"]==0]
+    attention_owner_counts={str(layer):{
+        "QK_by_request":{str(request):len(owners) for request,owners in row["qk_request_owners"].items()},
+        "AV_by_request":{str(request):len(owners) for request,owners in row["av_request_owners"].items()}}
+        for layer,row in activity.attention_layers.items()}
     payload=dict(summary=summary,activity=activity.as_dict(),placement=placement.as_dict(),
-        power_map=power_map.as_dict(),baseline=baseline.as_dict(),workload=w.model_dump())
+        power_map=power_map.as_dict(),baseline=baseline.as_dict(),workload=w.model_dump(),
+        diagnostics={"layer0_stage_example":layer0,"attention_owner_counts_by_layer":attention_owner_counts,
+            "realized_bandwidth_definition":"total active local bytes divided by summed memory-dominated stage latency"})
     output_dir.mkdir(parents=True,exist_ok=True)
     (output_dir/"nmp_locality_placement.json").write_text(json.dumps(payload,indent=2),encoding="utf-8")
     return payload

@@ -14,7 +14,7 @@ decode:
   weight_bits: 16
   kv_bits: 16
   runtime_bytes: 0
-  weight_activity_model: full_footprint
+  weight_activity_model: dimension_derived_active_operators
   weight_reuse_model: tile_reuse
   kv_read_model: full_reread
 provenance:
@@ -27,3 +27,8 @@ provenance:
     source: LLM decode workload dimensions
     status: EXACT_INTEGER_DERIVATION
     transformation: d_head = d_model / n_heads_q
+  - record_id: active_decode_weight_traffic
+    classification: SOFTWARE_DERIVED
+    source: dense decode operator ledger
+    status: RESIDENT_RESIDUAL_EXCLUDED_FROM_DYNAMIC_TRAFFIC
+    transformation: Q/K/V/O + FFN_GATE/UP/DOWN + LM_HEAD active reads; OTHER_WEIGHT resident only

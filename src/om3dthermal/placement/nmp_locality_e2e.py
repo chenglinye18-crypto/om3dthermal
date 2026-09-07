@@ -20,7 +20,8 @@ Case = Literal["NON_NMP_GPU", "NMP_NAIVE", "NMP_LOCALITY_AWARE_PLACEMENT"]
 NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS = 1.0
 NMP_LOCAL_ROUTE_PROVENANCE = "MODELING_CHOICE_FIXED_LOCAL_NMP_ROUTE_DELAY__NOT_PHYSICALLY_EXTRACTED__NOT_OPTIMIZED__NOT_POSITION_DEPENDENT"
 
-from om3dthermal.workload.dense_decode_ledger import (DenseDecodePlacementUnit, build_dense_decode_placement_units, boundary_bytes_per_die)
+from om3dthermal.workload.dense_decode_ledger import (DenseDecodePlacementUnit,
+    active_weight_read_bytes, build_dense_decode_placement_units, boundary_bytes_per_die)
 
 @dataclass(frozen=True)
 class NMPPlacementMetrics:
@@ -106,16 +107,18 @@ def build_locality_aware_unit_ownership(workload: LLMDecodeInput, layout: Physic
 
 def _traffic(case: Case, demand: M3DWorkloadPageDemand, units: tuple[DenseDecodePlacementUnit, ...],
              placement: NMPPlacementMetrics, layout: PhysicalCapacityLayout) -> NMPTraffic:
-    weight=demand.total_weight_read_bytes_per_decode_step; kvread=demand.total_kv_read_bytes_per_decode_step; kvwrite=demand.kv_write_bytes_per_decode_step
+    weight=active_weight_read_bytes(units); kvread=sum(u.kv_bytes for u in units); kvwrite=demand.kv_write_bytes_per_decode_step
     if case == "NON_NMP_GPU":
         return NMPTraffic(0,0,0,weight,kvread+kvwrite,0,0,0,0,0,0,weight+kvread+kvwrite)
     spans,_=_spans(units,layout,case=="NMP_LOCALITY_AWARE_PLACEMENT")
     score=sum(u.score_bytes for u in units)
     prob=sum(u.probability_bytes for u in units)
-    activation=sum(u.activation_input_bytes*len(o) for u,o in zip(units,spans))
+    activation=sum(u.activation_input_bytes*len(o) for u,o in zip(units,spans)
+                   if u.shard_mode=="ROW_PARALLEL")
     boundary=sum(boundary_bytes_per_die(units,spans,layout.slab_count))
-    partial=boundary-score-prob-2*activation
-    return NMPTraffic(weight,kvread,kvwrite,0,0,activation+prob,partial,score,activation,0,
+    output=sum(u.partial_output_bytes for u in units if u.shard_mode=="ROW_PARALLEL")
+    partial=boundary-score-prob-activation-output
+    return NMPTraffic(weight,kvread,kvwrite,0,0,activation+prob,partial,score,output,0,
         weight+kvread+kvwrite,boundary)
 
 def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPageDemand,

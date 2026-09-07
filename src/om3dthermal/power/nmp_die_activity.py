@@ -5,6 +5,7 @@ import math, statistics
 from om3dthermal.platform import load_platform_spec_file, resolve_gpu_bandwidth_service, resolve_local_memory_gpu_transfer
 from pathlib import Path
 from om3dthermal.workload.dense_decode_ledger import boundary_bytes_per_die, attention_boundary_by_layer, build_dense_decode_placement_units
+from om3dthermal.placement.nmp_load_balance import NMPPlacementUnitLoad, shard_fractions
 from om3dthermal.power.memory_bandwidth import ArchitectureBandwidthClosure
 from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
 from om3dthermal.workload.llm_decode import LLMDecodeInput
@@ -59,6 +60,10 @@ class NMPDieActivitySummary:
     softmax_time_ms: float
     softmax_dynamic_energy_j: float
     gpu_static_energy_j: float
+    mean_exec_die_span: float
+    median_exec_die_span: float
+    max_exec_die_span: int
+    realized_effective_local_bandwidth_bytes_per_s: float
     def as_dict(self): return asdict(self)
 
 def canonical_nmp_hardware(physical_die_count:int)->NMPHardware:
@@ -84,14 +89,17 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         stage_mem,stage_flops=stages_by_key.setdefault(key,([0.0]*n,[0.0]*n))
         score+=u.score_bytes; probability+=u.probability_bytes
 
-        for die in owners:
-            share=1/len(owners)
-            weights[die]+=u.weight_bytes*share
+        unit_flops=(workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops
+        load=NMPPlacementUnitLoad(u,u.weight_bytes+u.kv_bytes,u.active_weight_read_bytes,
+            u.kv_bytes,u.kv_write_bytes,u.active_weight_read_bytes+u.kv_bytes+u.kv_write_bytes,
+            unit_flops,1)
+        fractions=shard_fractions(load,len(owners))
+        for die,share in zip(owners,fractions,strict=True):
+            weights[die]+=u.active_weight_read_bytes*share
             kvreads[die]+=u.kv_bytes*share
             kvwrites[die]+=u.kv_write_bytes*share
-            unit_flops=(workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops
             flops[die]+=unit_flops*share
-            stage_mem[die]+=(u.weight_bytes+u.kv_bytes+u.kv_write_bytes)*share
+            stage_mem[die]+=(u.active_weight_read_bytes+u.kv_bytes+u.kv_write_bytes)*share
             stage_flops[die]+=unit_flops*share
     platform=load_platform_spec_file(Path(__file__).resolve().parents[3]/"configs/platform/gpu_package_h200_reference.yaml")
     gpu=platform.gpu_decode_power
@@ -117,9 +125,12 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         memory_ms=max(mem)/bw_die*1e3
         compute_ms=max(compute)/hw.peak_flops_per_die*1e3
         stage_ms=max(max(m/bw_die,f/hw.peak_flops_per_die)*1e3 for m,f in zip(mem,compute))
-        stages.append(dict(layer=layer,operator=operator,memory_ms=memory_ms,compute_ms=compute_ms,time_ms=stage_ms))
+        stage_owners=set(d for u,o in zip(units,spans,strict=True)
+                         if u.layer_id==layer and u.operator_type==operator for d in o)
+        stages.append(dict(layer=layer,operator=operator,execution_die_span=len(stage_owners),
+            memory_ms=memory_ms,compute_ms=compute_ms,stage_ms=stage_ms,time_ms=stage_ms))
         if operator not in ("ATTENTION_QK","ATTENTION_AV"):
-            weight_boundary=sum((2*u.activation_input_bytes+u.partial_output_bytes)*len(o)
+            weight_boundary=sum(u.activation_input_bytes*len(o)+u.partial_output_bytes
                 for u,o in zip(units,spans) if u.layer_id==layer and u.operator_type==operator)
             if weight_boundary:
                 stages.append(dict(layer=layer,operator=operator+"_GPU_BOUNDARY",
@@ -131,8 +142,8 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         if operator == "ATTENTION_AV":
             layer_partial=attention_layers[layer]["partial_bytes"]
             stages.append(dict(layer=layer,operator="PARTIAL_TRANSFER",time_ms=layer_partial/transfer.bandwidth_actual_bytes_per_s*1e3))
-    for actual,expected in ((sum(weights),demand.total_weight_read_bytes_per_decode_step),
-                            (sum(kvreads),demand.total_kv_read_bytes_per_decode_step),
+    for actual,expected in ((sum(weights),sum(u.active_weight_read_bytes for u in units)),
+                            (sum(kvreads),sum(u.kv_bytes for u in units)),
                             (sum(kvwrites),demand.kv_write_bytes_per_decode_step)):
         if not math.isclose(actual,expected,rel_tol=1e-12):
             raise ValueError("workload ledger and page demand disagree")
@@ -149,10 +160,15 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         rows.append(NMPDieWorkloadActivity(i,weights[i],kvreads[i],kvwrites[i],totals[i],flops[i],ai,mem_ms[i],comp_ms[i],service[i],mem_ms[i]/stage,comp_ms[i]/stage,label,energy,
             NMPDiePower(i,power,None,None,None,"COMPUTE_DYNAMIC_RESOLVED__DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B")))
     ordered=sorted(service); p90=ordered[math.ceil(.9*len(ordered))-1]
+    exec_spans=tuple(len(o) for u,o in zip(units,spans) if u.shard_mode!="RESIDENT_ONLY")
+    memory_stage_seconds=sum(s["stage_ms"] for s in stages
+        if "memory_ms" in s and s["memory_ms"]>=s["compute_ms"])*1e-3
+    realized_bw=sum(totals)/memory_stage_seconds if memory_stage_seconds else 0.0
     return NMPDieActivitySummary(hw,local_access_latency_ns,1.0,bw_die,bw_die*n,ai_balance,tuple(rows),stage,interval,service.index(max(service)),statistics.fmean(service),p90,max(service),
         sum(r.bottleneck=="MEMORY_BOUND" for r in rows),sum(r.bottleneck=="COMPUTE_BOUND" for r in rows),sum(r.bottleneck=="BALANCED" for r in rows),
         sum(r.compute_energy_j for r in rows),sum(r.power.compute_dynamic_W for r in rows),"DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B",
         "SERIAL_DEPENDENT_STAGES_WITH_GPU_SOFTMAX_BARRIERS",tuple(stages),attention_layers,
         score,probability,partial,score+probability+partial,boundary,external_boundary_time_ms,transfer.model_dump(),
         score+probability,softmax_ms,8*(score+probability)*gpu.e_decode_J_per_bit,
-        gpu.static_power_W*interval*1e-3)
+        gpu.static_power_W*interval*1e-3,statistics.fmean(exec_spans),statistics.median(exec_spans),
+        max(exec_spans),realized_bw)
