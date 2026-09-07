@@ -27,7 +27,8 @@ REQUIRED = {
     "HOST_OFFLOAD_DYNAMIC_PATH", "CONVENTIONAL_HBM_READ", "M3D_INTERNAL",
     "M3D_MAT_LOCAL_READ", "M3D_GLOBAL_ROUTING", "M3D_MIV",
     "M3D_FEOL_ROUTE", "M3D_CONTACTLESS_INTERFACE", "M3D_TOTAL_READ",
-    "GPU_MEMORY_INTERFACE", "GPU_DECODE_DYNAMIC", "M3D_GPU_SHARED_TRANSFER",
+    "GPU_MEMORY_INTERFACE", "GPU_SUSTAINED_BANDWIDTH_SERVICE",
+    "GPU_DECODE_DYNAMIC", "M3D_GPU_SHARED_TRANSFER",
 }
 
 
@@ -85,9 +86,13 @@ def test_host_bandwidth_and_energy_closure(rows) -> None:
 
 def test_gpu_range_and_nominal_match_canonical_sources(rows) -> None:
     gpu = rows["GPU_DECODE_DYNAMIC"]
-    assert gpu.energy_min_pJ_per_bit == 6.28
-    assert gpu.energy_nominal_pJ_per_bit == pytest.approx(7.645)
-    assert gpu.energy_max_pJ_per_bit == 9.01
+    assert gpu.energy_min_pJ_per_bit == 12.56
+    assert gpu.energy_nominal_pJ_per_bit == pytest.approx(15.29)
+    assert gpu.energy_max_pJ_per_bit == 18.02
+    service = rows["GPU_SUSTAINED_BANDWIDTH_SERVICE"]
+    assert service.bandwidth_max_GBps == pytest.approx(4800.0)
+    assert service.bandwidth_efficiency == pytest.approx(0.5)
+    assert service.bandwidth_nominal_GBps == pytest.approx(2400.0)
 
 
 def test_blank_is_not_zero_and_hbm_is_resolver_derived(rows) -> None:
@@ -113,8 +118,8 @@ def test_generator_contains_no_handwritten_physics_values() -> None:
     source = (ROOT / "scripts/generate_e2e_bandwidth_energy_ledger.py").read_text(
         encoding="utf-8")
     for forbidden in (
-        "5300", "4800", "0.855260", "7.645", "167.9", "24.7093",
-        "56.2", "6.28", "9.01",
+        "5300", "4800", "0.855260", "15.29", "167.9", "24.7093",
+        "56.2", "12.56", "18.02",
     ):
         assert forbidden not in source
 

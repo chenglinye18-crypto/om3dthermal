@@ -68,7 +68,9 @@ def test_m3d_interface_and_logic_sensitivities_are_separate_and_close():
         reserved_capacity_bytes=0)
     performance = evaluate_llm_decode_performance(
         workload, capacity, batch_size=1,
-        matched_payload_bandwidth_bits_per_second=39.2e12,
+        matched_payload_bandwidth_bits_per_second=(
+            operating_points["bandwidth_service_operating_point"]
+            .sustained_bandwidth_bytes_per_s * 8.0),
         effective_compute_flops_per_second=100e12)
     result = run_m3d_parameter_sensitivity(
         case=case, system=system, workload=workload, capacity=capacity,
@@ -79,11 +81,13 @@ def test_m3d_interface_and_logic_sensitivities_are_separate_and_close():
         gpu_decode_power=load_platform_spec(
             ROOT / "configs/platform/gpu_package_h200_reference.yaml",
             project_root=ROOT).gpu_decode_power,
-        transfer_operating_point=operating_points["transfer_operating_point"])
+        transfer_operating_point=operating_points["transfer_operating_point"],
+        bandwidth_service_operating_point=(
+            operating_points["bandwidth_service_operating_point"]))
 
     assert result.status == "PARAMETRIC_SENSITIVITY"
     assert [row.interface_power_at_actual_bandwidth_W
-            for row in result.interface_rows] == pytest.approx((9.6, 19.2, 38.4))
+            for row in result.interface_rows] == pytest.approx((4.8, 9.6, 19.2))
     assert [row.read_total_energy_pj_per_bit
             for row in result.interface_rows] == pytest.approx(
                 (0.6052605756733209, 0.8552605756733209,

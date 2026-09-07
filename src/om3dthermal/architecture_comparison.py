@@ -31,10 +31,12 @@ from .power.config import CanonicalCaseConfig, find_project_root
 from .power.geometry import ResolvedGeometry
 from .power.system import ResolvedSystemPower
 from .platform import (
+    GPUBandwidthServiceOperatingPoint,
     GPUDecodePowerOperatingPoint,
     LocalMemoryGPUTransferOperatingPoint,
     load_platform_spec_file,
     resolve_gpu_decode_power,
+    resolve_gpu_bandwidth_service,
     resolve_local_memory_gpu_transfer,
 )
 
@@ -82,6 +84,7 @@ def _resolve_case_power_operating_points(
 ) -> tuple[
     GPUDecodePowerOperatingPoint,
     LocalMemoryGPUTransferOperatingPoint | None,
+    GPUBandwidthServiceOperatingPoint,
 ]:
     """Resolve standalone case demand through canonical memory/GPU limits."""
     platform = load_platform_spec_file(
@@ -120,14 +123,27 @@ def _resolve_case_power_operating_points(
             transfer.bandwidth_demand_bytes_per_s,
             transfer.memory_capability_bytes_per_s,
         )
-    gpu = resolve_gpu_decode_power(
+    ceiling = resolve_gpu_decode_power(
         static_power_W=spec.static_power_W,
         e_decode_J_per_bit=spec.e_decode_J_per_bit,
         bandwidth_demand_bytes_per_s=gpu_input_demand,
         peak_bandwidth_bytes_per_s=(
             spec.peak_memory_bandwidth_bytes_per_s),
     )
-    return gpu, transfer
+    service_spec = platform.gpu_bandwidth_service
+    service = resolve_gpu_bandwidth_service(
+        transfer_ceiling_bytes_per_s=ceiling.bandwidth_actual_bytes_per_s,
+        gpu_bandwidth_utilization=service_spec.nominal_utilization,
+        utilization_status=service_spec.utilization_status,
+        utilization_provenance=service_spec.provenance,
+    )
+    gpu = resolve_gpu_decode_power(
+        static_power_W=spec.static_power_W,
+        e_decode_J_per_bit=spec.e_decode_J_per_bit,
+        bandwidth_demand_bytes_per_s=service.sustained_bandwidth_bytes_per_s,
+        peak_bandwidth_bytes_per_s=spec.peak_memory_bandwidth_bytes_per_s,
+    )
+    return gpu, transfer, service
 
 
 def _resolve_case_gpu_operating_point(
@@ -143,10 +159,12 @@ def _resolve_case_power_operating_point_kwargs(
     project_root: Path,
 ) -> dict[str, object]:
     """Explicit keyword bundle for system/architecture resolver calls."""
-    gpu, transfer = _resolve_case_power_operating_points(case, project_root)
+    gpu, transfer, service = _resolve_case_power_operating_points(
+        case, project_root)
     return {
         "gpu_operating_point": gpu,
         "transfer_operating_point": transfer,
+        "bandwidth_service_operating_point": service,
     }
 
 
@@ -378,12 +396,13 @@ def run_architecture_comparison(
         case = load_case_config(path)
         geometry = resolve_case_geometry(case)
         root = find_project_root(path)
-        gpu_point, transfer_point = _resolve_case_power_operating_points(
+        gpu_point, transfer_point, service_point = _resolve_case_power_operating_points(
             case, root)
         system = resolve_system_power(
             case, project_root=root, geometry=geometry,
             gpu_operating_point=gpu_point,
-            transfer_operating_point=transfer_point)
+            transfer_operating_point=transfer_point,
+            bandwidth_service_operating_point=service_point)
         capacity = _resolved_capacity(case, geometry, system)
         mapping = map_system_power_to_thermal(case, system)
         assert system.resolved_total_memory_power_W is not None

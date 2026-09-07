@@ -14,6 +14,24 @@ from om3dthermal.provenance import ProvenanceRecord
 from .gpu_power import AffineGPUComputePowerSpec, AffineGPUDecodePowerSpec
 
 
+class GPUBandwidthServiceSpec(BaseModel):
+    """Independent platform choice for achieved GPU-side memory service."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model: Literal["SUSTAINED_FRACTION_OF_TRANSFER_CEILING"]
+    nominal_utilization: float = Field(gt=0.0, le=1.0)
+    utilization_status: Literal[
+        "MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION"]
+    provenance: tuple[ProvenanceRecord, ...]
+
+    @model_validator(mode="after")
+    def _provenance_required(self) -> "GPUBandwidthServiceSpec":
+        if not self.provenance:
+            raise ValueError("GPU bandwidth service spec requires provenance")
+        return self
+
+
 class HostOffloadSpec(BaseModel):
     """Host transport facts plus optional incremental dynamic-only power."""
 
@@ -98,6 +116,7 @@ class PlatformSpec(BaseModel):
     platform_id: str = Field(min_length=1)
     package_profile_status: str = Field(min_length=1)
     host_offload: HostOffloadSpec | None = None
+    gpu_bandwidth_service: GPUBandwidthServiceSpec
     gpu_decode_power: "AffineGPUDecodePowerSpec | None" = None
     gpu_compute_power: "AffineGPUComputePowerSpec | None" = None
     provenance: tuple[ProvenanceRecord, ...] = ()

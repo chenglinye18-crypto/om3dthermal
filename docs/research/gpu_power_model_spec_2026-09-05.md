@@ -7,6 +7,15 @@
 performance bottleneck 选择一个 regime；bandwidth 与 compute dynamic power
 不相加。这是稳态 decode 平均功耗模型，不是瞬态模型。
 
+2026-09-07 一致性修正：正式 nominal GPU bandwidth utilization 为 0.5。
+4.9 TB/s demand、5.3 TB/s M3D raw capability 与 4.8 TB/s GPU peak 先形成
+4.8 TB/s transfer ceiling，再形成 2.4 TB/s sustained/actual bandwidth。
+roofline、M3D dynamic read power 与 GPU bandwidth-bound dynamic power
+统一消费 2.4 TB/s。GPU decode coefficient 已按 actual/sustained bit
+重新归一化为 12.56–18.02 pJ/bit，nominal 15.29 pJ/bit；因此 nominal
+GPU power anchor 仍为 74 + 15.29e-12 × 8 × 2.4e12 = 367.568 W。
+本节取代下文仍以 vendor peak 为归一化分母的历史数值说明。
+
 ## 1. 统一性能模型
 
 ```text

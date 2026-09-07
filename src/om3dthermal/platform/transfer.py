@@ -11,8 +11,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from om3dthermal.provenance import ProvenanceRecord
+
 
 TransferBottleneck = Literal["DEMAND", "MEMORY", "GPU"]
+GPU_BANDWIDTH_UTILIZATION_STATUS = (
+    "MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION")
 
 
 class LocalMemoryGPUTransferOperatingPoint(BaseModel):
@@ -28,6 +32,23 @@ class LocalMemoryGPUTransferOperatingPoint(BaseModel):
     memory_limited: bool
     gpu_limited: bool
     bottleneck: TransferBottleneck
+
+
+class GPUBandwidthServiceOperatingPoint(BaseModel):
+    """GPU-side sustained service applied after the transfer ceiling.
+
+    This object resolves rate only. It does not define GPU power, workload
+    traffic, memory capability, token throughput, or NMP-local activity.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    transfer_ceiling_bytes_per_s: float = Field(gt=0.0)
+    gpu_bandwidth_utilization: float = Field(gt=0.0, le=1.0)
+    sustained_bandwidth_bytes_per_s: float = Field(gt=0.0)
+    utilization_status: Literal[
+        "MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION"]
+    utilization_provenance: tuple[ProvenanceRecord, ...]
 
 
 def _finite_rate(name: str, value: float, *, allow_zero: bool) -> float:
@@ -88,4 +109,41 @@ def resolve_local_memory_gpu_transfer(
         memory_limited=memory_limited,
         gpu_limited=gpu_limited,
         bottleneck=bottleneck,
+    )
+
+
+def resolve_gpu_bandwidth_service(
+    *,
+    transfer_ceiling_bytes_per_s: float,
+    gpu_bandwidth_utilization: float,
+    utilization_status: Literal[
+        "MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION"],
+    utilization_provenance: tuple[ProvenanceRecord, ...],
+) -> GPUBandwidthServiceOperatingPoint:
+    """Resolve sustained GPU service as utilization times transfer ceiling.
+
+    The result is the shared actual rate for formal roofline performance,
+    memory dynamic power, and bandwidth-bound GPU dynamic power.
+    """
+
+    ceiling = _finite_rate(
+        "transfer_ceiling_bytes_per_s",
+        transfer_ceiling_bytes_per_s,
+        allow_zero=False,
+    )
+    utilization = _finite_rate(
+        "gpu_bandwidth_utilization",
+        gpu_bandwidth_utilization,
+        allow_zero=False,
+    )
+    if utilization > 1.0:
+        raise ValueError("gpu_bandwidth_utilization must not exceed one")
+    if not utilization_provenance:
+        raise ValueError("GPU bandwidth utilization requires provenance")
+    return GPUBandwidthServiceOperatingPoint(
+        transfer_ceiling_bytes_per_s=ceiling,
+        gpu_bandwidth_utilization=utilization,
+        sustained_bandwidth_bytes_per_s=utilization * ceiling,
+        utilization_status=utilization_status,
+        utilization_provenance=utilization_provenance,
     )

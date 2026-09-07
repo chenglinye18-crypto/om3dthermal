@@ -14,7 +14,10 @@ from pathlib import Path
 
 from om3dthermal.platform.models import PlatformSpec, load_platform_spec_file
 from om3dthermal.platform.host_offload_power import resolve_host_offload_power
-from om3dthermal.platform.transfer import resolve_local_memory_gpu_transfer
+from om3dthermal.platform.transfer import (
+    resolve_gpu_bandwidth_service,
+    resolve_local_memory_gpu_transfer,
+)
 from om3dthermal.power import (
     calculate_memory_power,
     load_case_config,
@@ -140,6 +143,13 @@ def _validate_rows(rows: tuple[LedgerRow, ...]) -> None:
     ):
         raise ValueError("shared M3D-to-GPU transfer bandwidth does not close")
     if not math.isclose(
+        float(by_id["GPU_SUSTAINED_BANDWIDTH_SERVICE"].bandwidth_nominal_GBps),
+        float(by_id["GPU_SUSTAINED_BANDWIDTH_SERVICE"].bandwidth_max_GBps)
+        * float(by_id["GPU_SUSTAINED_BANDWIDTH_SERVICE"].bandwidth_efficiency),
+        rel_tol=1e-13,
+    ):
+        raise ValueError("GPU sustained service bandwidth does not close")
+    if not math.isclose(
         float(by_id["HOST_OFFLOAD_EFFECTIVE"].bandwidth_nominal_GBps),
         min(
             float(by_id["HOST_DDR"].bandwidth_nominal_GBps),
@@ -207,6 +217,14 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
             m3d_case.workload.read_bandwidth_gbps * 1e9 / 8.0),
         memory_capability_bytes_per_s=m3d_raw.effective_bandwidth_bytes_per_s,
         gpu_peak_bandwidth_bytes_per_s=gpu.peak_memory_bandwidth_bytes_per_s,
+    )
+    bandwidth_service = resolve_gpu_bandwidth_service(
+        transfer_ceiling_bytes_per_s=transfer.bandwidth_actual_bytes_per_s,
+        gpu_bandwidth_utilization=(
+            platform.gpu_bandwidth_service.nominal_utilization),
+        utilization_status=(
+            platform.gpu_bandwidth_service.utilization_status),
+        utilization_provenance=platform.gpu_bandwidth_service.provenance,
     )
 
     host_ddr = _record(host, "amd_epyc_9654_ddr5_capability_v0")
@@ -405,15 +423,38 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
             notes="Energy intentionally blank: the GPU decode coefficient is not interface energy.",
         ),
         LedgerRow(
+            "GPU_SUSTAINED_BANDWIDTH_SERVICE", "gpu",
+            "nominal GPU-side sustained service after transfer ceiling",
+            bandwidth_service.sustained_bandwidth_bytes_per_s / 1e9,
+            bandwidth_max_GBps=(
+                bandwidth_service.transfer_ceiling_bytes_per_s / 1e9),
+            bandwidth_efficiency=(
+                bandwidth_service.gpu_bandwidth_utilization),
+            bandwidth_semantics=(
+                "sustained actual = eta_gpu_bandwidth * transfer ceiling"),
+            bandwidth_status=bandwidth_service.utilization_status,
+            bandwidth_provenance="MODELING_CHOICE",
+            included_in_system_bandwidth_min=True,
+            runtime_source=(
+                platform_runtime + " -> resolve_gpu_bandwidth_service"),
+            source_reference=(
+                bandwidth_service.utilization_provenance[0].source),
+            notes=(
+                "Formal roofline performance, M3D dynamic read power, and GPU "
+                "bandwidth-bound dynamic power consume this sustained rate."),
+        ),
+        LedgerRow(
             "GPU_DECODE_DYNAMIC", "gpu", "GPU-only bandwidth-bound decode dynamic accounting",
-            gpu.peak_memory_bandwidth_bytes_per_s / 1e9,
-            bandwidth_semantics="bandwidth-bounded GPU operating-regime reference ceiling",
+            bandwidth_service.sustained_bandwidth_bytes_per_s / 1e9,
+            bandwidth_max_GBps=gpu.peak_memory_bandwidth_bytes_per_s / 1e9,
+            bandwidth_efficiency=bandwidth_service.gpu_bandwidth_utilization,
+            bandwidth_semantics="GPU dynamic power uses nominal sustained actual bandwidth",
             bandwidth_status=gpu.bandwidth_status,
             bandwidth_provenance="CANONICAL_GPU_PLATFORM_BOUNDARY",
             energy_nominal_pJ_per_bit=gpu.e_decode_J_per_bit * 1e12,
             energy_min_pJ_per_bit=gpu_min,
             energy_max_pJ_per_bit=gpu_max,
-            energy_semantics="GPU-only decode dynamic coefficient used by project accounting",
+            energy_semantics="GPU decode dynamic energy normalized per actual/sustained transferred bit",
             energy_status=gpu.coefficient_nominal_status,
             energy_provenance=gpu.coefficient_range_status,
             included_in_system_bandwidth_min=True,
@@ -421,7 +462,7 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
             double_counting_note="Independent of memory read energy and may be added to M3D_TOTAL_READ; no memory-energy subtraction is applied.",
             runtime_source=platform_runtime,
             source_reference=gpu_range_source,
-            notes="Range endpoints are provenance/sensitivity values; runtime nominal comes only from platform YAML.",
+            notes="Range endpoints are provenance/sensitivity values; runtime nominal comes only from platform YAML and is normalized by eta_bw * peak bandwidth.",
         ),
         LedgerRow(
             "M3D_GPU_SHARED_TRANSFER", "system", "shared M3D-to-GPU transfer operating point",
@@ -433,7 +474,7 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
             included_in_system_bandwidth_min=True,
             runtime_source=m3d_runtime + "; " + platform_runtime + " -> resolve_local_memory_gpu_transfer",
             source_reference="canonical M3D workload demand, M3D bandwidth resolver, and H200 platform spec",
-            notes="Same actual rate drives M3D dynamic read power and bandwidth-bound GPU decode power; this is not a new energy component.",
+            notes="Physical transfer ceiling only. Formal dynamic power and performance consume GPU_SUSTAINED_BANDWIDTH_SERVICE.",
         ),
     )
     _validate_rows(rows)

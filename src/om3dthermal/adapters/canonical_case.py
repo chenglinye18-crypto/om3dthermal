@@ -18,6 +18,7 @@ from om3dthermal.power import (
     resolve_system_power,
 )
 from om3dthermal.platform import (
+    GPUBandwidthServiceOperatingPoint,
     GPUComputePowerOperatingPoint,
     GPUDecodePowerOperatingPoint,
     LocalMemoryGPUTransferOperatingPoint,
@@ -31,6 +32,8 @@ def resolve_architecture_spec(
     gpu_operating_point: (
         GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint),
     transfer_operating_point: LocalMemoryGPUTransferOperatingPoint | None,
+    bandwidth_service_operating_point: (
+        GPUBandwidthServiceOperatingPoint | None) = None,
 ) -> ResolvedArchitecture:
     """Resolve without copying or changing any canonical physical parameter."""
 
@@ -42,7 +45,8 @@ def resolve_architecture_spec(
     system = resolve_system_power(
         case, project_root=project_root, geometry=geometry,
         gpu_operating_point=gpu_operating_point,
-        transfer_operating_point=transfer_operating_point)
+        transfer_operating_point=transfer_operating_point,
+        bandwidth_service_operating_point=bandwidth_service_operating_point)
     if system.memory_result is None:
         raise ValueError(
             "formal architecture resolution requires analytical packing evidence")

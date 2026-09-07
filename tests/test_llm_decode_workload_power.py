@@ -392,26 +392,32 @@ def frozen():
     for name in ARCHITECTURES:
         case = load_case_config(CASES / f"{name}.yaml")
         geometry = resolve_case_geometry(case)
+        operating_points = _resolve_case_power_operating_point_kwargs(case, ROOT)
         system = resolve_system_power(
             case, project_root=ROOT, geometry=geometry,
-            **_resolve_case_power_operating_point_kwargs(case, ROOT))
+            **operating_points)
         capacity = resolve_architecture_capacity(case, geometry, system)
         feasibility = evaluate_architecture_capacity_feasibility(
             workload, capacity, reserved_capacity_bytes=0)
         performance = evaluate_llm_decode_performance(
             workload, feasibility, batch_size=1,
-            matched_payload_bandwidth_bits_per_second=39.2e12,
+            matched_payload_bandwidth_bits_per_second=(
+                operating_points["bandwidth_service_operating_point"]
+                .sustained_bandwidth_bytes_per_s * 8.0),
             effective_compute_flops_per_second=100e12)
         policy = ("EXISTING_PLACEHOLDER_ZERO" if name == "orthogonal_m3d_igzo"
                   else "REQUIRE_RESOLVED")
-        resolved[name] = (workload, feasibility, performance, system, policy)
+        resolved[name] = (
+            workload, feasibility, performance, system, policy,
+            operating_points)
     return resolved
 
 
 def _frozen_rows(frozen):
     rows = []
     for name in ARCHITECTURES:
-        workload, capacity, performance, system, policy = frozen[name]
+        workload, capacity, performance, system, policy, operating_points = (
+            frozen[name])
         for rho in RHOS:
             energy = evaluate_architecture_decode_memory_energy(
                 workload, capacity, system, rho=rho)
@@ -422,7 +428,12 @@ def _frozen_rows(frozen):
                     performance, energy,
                     load_platform_spec(
                         ROOT / "configs/platform/gpu_package_h200_reference.yaml",
-                        project_root=ROOT).gpu_decode_power)))
+                        project_root=ROOT).gpu_decode_power,
+                    transfer_operating_point=(
+                        operating_points["transfer_operating_point"]),
+                    bandwidth_service_operating_point=(
+                        operating_points[
+                            "bandwidth_service_operating_point"]))))
     return rows
 
 
@@ -456,7 +467,7 @@ def test_rho_one_anchor_and_memory_total_close_for_three_architectures(frozen) -
     m3d = next(row for row in rows if row.architecture == "orthogonal_m3d_igzo")
     # Rev v2 re-frozen: refresh scales with capacity 428.75 -> 463.75 GiB
     # (was 33.5603645761 W).
-    assert m3d.memory_workload_total_W == pytest.approx(32.8789438715)
+    assert m3d.memory_workload_total_W == pytest.approx(16.4579408186)
     assert m3d.logic_background_raw_W is None
     assert m3d.logic_background_effective_W == 0
 

@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from om3dthermal.platform import (
     AffineGPUComputePowerSpec,
     AffineGPUDecodePowerSpec,
+    GPUBandwidthServiceOperatingPoint,
     GPUComputePowerOperatingPoint,
     GPUDecodePowerOperatingPoint,
     LocalMemoryGPUTransferOperatingPoint,
@@ -137,6 +138,8 @@ def evaluate_gpu_decode_energy(
     compute_spec: AffineGPUComputePowerSpec | None = None,
     *,
     transfer_operating_point: LocalMemoryGPUTransferOperatingPoint | None = None,
+    bandwidth_service_operating_point: (
+        GPUBandwidthServiceOperatingPoint | None) = None,
     compute_energy_dynamic_J_per_FLOP: float | None = None,
 ) -> GPUDecodeEnergyMetrics:
     """Evaluate regime-selected GPU decode energy for one architecture/rho.
@@ -226,19 +229,39 @@ def evaluate_gpu_decode_energy(
             performance.read_bytes_per_token
             + performance.write_bytes_per_token)
         gpu_bandwidth_demand = gpu_side_bytes / token_time_s
-        if transfer_operating_point is not None:
+        if bandwidth_service_operating_point is not None:
             if not math.isclose(
                 gpu_bandwidth_demand,
-                transfer_operating_point.bandwidth_demand_bytes_per_s,
+                bandwidth_service_operating_point
+                .sustained_bandwidth_bytes_per_s,
                 rel_tol=1e-12,
                 abs_tol=1e-6,
             ):
                 raise ValueError(
-                    "performance demand and transfer demand do not close")
-            gpu_bandwidth_demand = min(
-                transfer_operating_point.bandwidth_demand_bytes_per_s,
-                transfer_operating_point.memory_capability_bytes_per_s,
-            )
+                    "performance rate and sustained GPU bandwidth do not close")
+        if transfer_operating_point is not None:
+            if bandwidth_service_operating_point is None:
+                if not math.isclose(
+                    gpu_bandwidth_demand,
+                    transfer_operating_point.bandwidth_demand_bytes_per_s,
+                    rel_tol=1e-12,
+                    abs_tol=1e-6,
+                ):
+                    raise ValueError(
+                        "performance demand and transfer demand do not close")
+                gpu_bandwidth_demand = min(
+                    transfer_operating_point.bandwidth_demand_bytes_per_s,
+                    transfer_operating_point.memory_capability_bytes_per_s,
+                )
+            elif not math.isclose(
+                bandwidth_service_operating_point
+                .transfer_ceiling_bytes_per_s,
+                transfer_operating_point.bandwidth_actual_bytes_per_s,
+                rel_tol=1e-12,
+                abs_tol=1e-6,
+            ):
+                raise ValueError(
+                    "GPU bandwidth service must consume the transfer ceiling")
         operating_point = resolve_gpu_decode_power(
             static_power_W=spec.static_power_W,
             e_decode_J_per_bit=spec.e_decode_J_per_bit,
@@ -247,6 +270,7 @@ def evaluate_gpu_decode_energy(
                 spec.peak_memory_bandwidth_bytes_per_s),
         )
         if (transfer_operating_point is not None
+                and bandwidth_service_operating_point is None
                 and not math.isclose(
                     operating_point.bandwidth_actual_bytes_per_s,
                     transfer_operating_point.bandwidth_actual_bytes_per_s,
@@ -254,6 +278,15 @@ def evaluate_gpu_decode_energy(
                     abs_tol=1e-6)):
             raise RuntimeError(
                 "GPU and transfer actual bandwidth do not close")
+        if (bandwidth_service_operating_point is not None
+                and not math.isclose(
+                    operating_point.bandwidth_actual_bytes_per_s,
+                    bandwidth_service_operating_point
+                    .sustained_bandwidth_bytes_per_s,
+                    rel_tol=1e-12,
+                    abs_tol=1e-6)):
+            raise RuntimeError(
+                "GPU power operating point and sustained service do not close")
         bandwidth_values = {
             "memory_bandwidth_utilization": (
                 operating_point.bandwidth_utilization),
@@ -268,6 +301,9 @@ def evaluate_gpu_decode_energy(
         gpu_power_W = operating_point.gpu_power_W
         gpu_power_regime = "MEMORY"
     elif performance.bottleneck == "COMPUTE":
+        if bandwidth_service_operating_point is not None:
+            raise ValueError(
+                "compute-bound GPU energy does not consume bandwidth service")
         if compute_spec is None:
             raise ValueError(
                 "compute-bound GPU power requires a compute power spec")

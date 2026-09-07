@@ -29,7 +29,9 @@ from om3dthermal.evaluator import (
 from om3dthermal.evaluation import evaluate_architecture_capacity_feasibility
 from om3dthermal.provenance import RunProvenance
 from om3dthermal.platform import (
+    GPUBandwidthServiceOperatingPoint,
     LocalMemoryGPUTransferOperatingPoint,
+    resolve_gpu_bandwidth_service,
     resolve_gpu_decode_power,
     resolve_local_memory_gpu_transfer,
 )
@@ -215,6 +217,7 @@ def run_experiment(
     if platform.gpu_decode_power is None:
         raise ValueError("formal decode evaluation requires gpu_decode_power")
     decode_spec = platform.gpu_decode_power
+    bandwidth_service_spec = platform.gpu_bandwidth_service
     workload_spec = load_workload_spec(
         experiment.workload_config, project_root=root)
     architecture_specs = tuple(
@@ -243,6 +246,7 @@ def run_experiment(
             experiment.scenario, architecture_inputs))
     bandwidth_demand_bytes_per_s = matched_bandwidth_bits_per_s / 8.0
     transfers: dict[str, LocalMemoryGPUTransferOperatingPoint | None] = {}
+    bandwidth_services: dict[str, GPUBandwidthServiceOperatingPoint] = {}
     resolved_items = []
     for item in architecture_inputs:
         transfer = _resolve_m3d_transfer_operating_point(
@@ -260,7 +264,7 @@ def run_experiment(
                 transfer.memory_capability_bytes_per_s,
             )
         )
-        gpu_point = resolve_gpu_decode_power(
+        ceiling_point = resolve_gpu_decode_power(
             static_power_W=decode_spec.static_power_W,
             e_decode_J_per_bit=decode_spec.e_decode_J_per_bit,
             bandwidth_demand_bytes_per_s=gpu_input_demand,
@@ -268,18 +272,36 @@ def run_experiment(
                 decode_spec.peak_memory_bandwidth_bytes_per_s),
         )
         if transfer is not None and not math.isclose(
-            gpu_point.bandwidth_actual_bytes_per_s,
+            ceiling_point.bandwidth_actual_bytes_per_s,
             transfer.bandwidth_actual_bytes_per_s,
             rel_tol=1e-12,
             abs_tol=1e-6,
         ):
             raise RuntimeError("GPU and transfer bandwidth resolution diverged")
+        bandwidth_service = resolve_gpu_bandwidth_service(
+            transfer_ceiling_bytes_per_s=(
+                ceiling_point.bandwidth_actual_bytes_per_s),
+            gpu_bandwidth_utilization=(
+                bandwidth_service_spec.nominal_utilization),
+            utilization_status=bandwidth_service_spec.utilization_status,
+            utilization_provenance=bandwidth_service_spec.provenance,
+        )
+        gpu_point = resolve_gpu_decode_power(
+            static_power_W=decode_spec.static_power_W,
+            e_decode_J_per_bit=decode_spec.e_decode_J_per_bit,
+            bandwidth_demand_bytes_per_s=(
+                bandwidth_service.sustained_bandwidth_bytes_per_s),
+            peak_bandwidth_bytes_per_s=(
+                decode_spec.peak_memory_bandwidth_bytes_per_s),
+        )
         transfers[item.spec.architecture_id] = transfer
+        bandwidth_services[item.spec.architecture_id] = bandwidth_service
         resolved_items.append(resolve_architecture_spec(
             item.spec,
             project_root=root,
             gpu_operating_point=gpu_point,
             transfer_operating_point=transfer,
+            bandwidth_service_operating_point=bandwidth_service,
         ))
     resolved_architectures = tuple(resolved_items)
 
@@ -292,6 +314,7 @@ def run_experiment(
     gpu_energies = []
     for resolved in resolved_architectures:
         reference_system = resolved.system_power
+        bandwidth_service = bandwidth_services[resolved.spec.architecture_id]
         capacity = evaluate_architecture_capacity_feasibility(
             workload_demand,
             resolved.packing,
@@ -302,7 +325,7 @@ def run_experiment(
             capacity,
             batch_size=workload_spec.decode.batch_size,
             matched_payload_bandwidth_bits_per_second=(
-                matched_bandwidth_bits_per_s),
+                bandwidth_service.sustained_bandwidth_bytes_per_s * 8.0),
             effective_compute_flops_per_second=(
                 experiment.scenario.effective_compute_flops_per_second),
             bandwidth_status=experiment.scenario.bandwidth_status,
@@ -316,12 +339,19 @@ def run_experiment(
                 if performance.bottleneck == "MEMORY"
                 else None
             )
+            active_bandwidth_service = (
+                bandwidth_service
+                if performance.bottleneck == "MEMORY"
+                else None
+            )
             energy = evaluate_architecture_decode_memory_energy(
                 workload, capacity, reference_system, rho=rho)
             gpu_energy = evaluate_gpu_decode_energy(
                 performance, energy, decode_spec,
                 platform.gpu_compute_power,
-                transfer_operating_point=active_transfer)
+                transfer_operating_point=active_transfer,
+                bandwidth_service_operating_point=(
+                    active_bandwidth_service))
             system = (
                 resolve_system_power(
                     resolved.case,
@@ -329,6 +359,8 @@ def run_experiment(
                     geometry=resolved.geometry,
                     gpu_operating_point=gpu_energy.gpu_power_operating_point,
                     transfer_operating_point=active_transfer,
+                    bandwidth_service_operating_point=(
+                        active_bandwidth_service),
                 )
                 if gpu_energy.evaluation_status
                 == "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY"
@@ -387,6 +419,8 @@ def run_experiment(
             thermal_runner=run_llm_decode_workload_thermal,
             gpu_decode_power=platform.gpu_decode_power,
             transfer_operating_point=transfers[sensitivity.architecture_id],
+            bandwidth_service_operating_point=(
+                bandwidth_services[sensitivity.architecture_id]),
         )
 
     input_paths = {
@@ -431,6 +465,10 @@ def run_experiment(
                 architecture_id: (
                     None if point is None else point.model_dump())
                 for architecture_id, point in transfers.items()
+            },
+            "gpu_bandwidth_service_operating_points": {
+                architecture_id: point.model_dump()
+                for architecture_id, point in bandwidth_services.items()
             },
             "write_energy_model_status": "NOT_VALIDATED",
             "gpu_energy_model_status": (

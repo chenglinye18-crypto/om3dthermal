@@ -21,6 +21,7 @@ from om3dthermal.power.config import CanonicalCaseConfig
 from om3dthermal.power.system import ResolvedSystemPower
 from om3dthermal.platform import (
     AffineGPUDecodePowerSpec,
+    GPUBandwidthServiceOperatingPoint,
     LocalMemoryGPUTransferOperatingPoint,
 )
 from om3dthermal.workload import LLMDecodeMetrics
@@ -70,6 +71,7 @@ def run_m3d_parameter_sensitivity(
     thermal_runner: Callable = run_llm_decode_workload_thermal,
     gpu_decode_power: AffineGPUDecodePowerSpec,
     transfer_operating_point: LocalMemoryGPUTransferOperatingPoint,
+    bandwidth_service_operating_point: GPUBandwidthServiceOperatingPoint,
 ) -> M3DParameterSensitivityResult:
     """Run interface-only energy and logic-only power/thermal sensitivities."""
     if case.geometry.type != "orthogonal_m3d":
@@ -77,7 +79,8 @@ def run_m3d_parameter_sensitivity(
     if system.memory_result is None:
         raise ValueError("M3D parameter sensitivity requires resolved memory")
     bandwidth_bps = (
-        transfer_operating_point.bandwidth_actual_bytes_per_s * 8.0)
+        bandwidth_service_operating_point.sustained_bandwidth_bytes_per_s
+        * 8.0)
     interface_rows = []
     for value in interface_energy_values_pj_per_bit:
         energy = evaluate_architecture_decode_memory_energy(
@@ -102,7 +105,8 @@ def run_m3d_parameter_sensitivity(
         workload, capacity, system, rho=1.0)
     gpu_energy = evaluate_gpu_decode_energy(
         performance, nominal_energy, gpu_decode_power,
-        transfer_operating_point=transfer_operating_point)
+        transfer_operating_point=transfer_operating_point,
+        bandwidth_service_operating_point=bandwidth_service_operating_point)
     operating_system = replace(
         system, gpu_power_W=gpu_energy.gpu_power_operating_point.gpu_power_W)
     logic_rows = []

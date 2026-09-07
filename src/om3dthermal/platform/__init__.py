@@ -12,10 +12,17 @@ from .host_offload_power import (
     HostOffloadPowerOperatingPoint,
     resolve_host_offload_power,
 )
-from .models import HostOffloadSpec, PlatformSpec, load_platform_spec_file
+from .models import (
+    GPUBandwidthServiceSpec,
+    HostOffloadSpec,
+    PlatformSpec,
+    load_platform_spec_file,
+)
 from .transfer import (
+    GPUBandwidthServiceOperatingPoint,
     LocalMemoryGPUTransferOperatingPoint,
     TransferBottleneck,
+    resolve_gpu_bandwidth_service,
     resolve_local_memory_gpu_transfer,
 )
 
@@ -24,6 +31,8 @@ __all__ = [
     "AffineGPUDecodePowerSpec",
     "GPUComputePowerOperatingPoint",
     "GPUDecodePowerOperatingPoint",
+    "GPUBandwidthServiceOperatingPoint",
+    "GPUBandwidthServiceSpec",
     "HostOffloadSpec",
     "HostOffloadPowerOperatingPoint",
     "PlatformSpec",
@@ -31,6 +40,7 @@ __all__ = [
     "TransferBottleneck",
     "load_platform_spec_file",
     "resolve_gpu_compute_power",
+    "resolve_gpu_bandwidth_service",
     "resolve_gpu_decode_power",
     "resolve_host_offload_power",
     "resolve_local_memory_gpu_transfer",

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from om3dthermal.platform import (
+    GPUBandwidthServiceOperatingPoint,
     GPUComputePowerOperatingPoint,
     GPUDecodePowerOperatingPoint,
     LocalMemoryGPUTransferOperatingPoint,
@@ -39,6 +40,9 @@ class ResolvedSystemPower:
     resolved_total_memory_power_W: float | None
     memory_result: MemoryPowerResult | None
     diagnostics: dict[str, Any]
+    gpu_bandwidth_utilization: float | None = None
+    gpu_sustained_bandwidth_bytes_per_s: float | None = None
+    gpu_bandwidth_utilization_status: str | None = None
 
     def as_dict(self, *, display_na: bool = False) -> dict[str, Any]:
         data = asdict(self)
@@ -71,6 +75,8 @@ def resolve_system_power(
             GPUDecodePowerOperatingPoint | GPUComputePowerOperatingPoint),
         transfer_operating_point: (
             LocalMemoryGPUTransferOperatingPoint | None),
+        bandwidth_service_operating_point: (
+            GPUBandwidthServiceOperatingPoint | None) = None,
 ) -> ResolvedSystemPower:
     """Resolve package power from explicit GPU and transfer operating points."""
     assert case.power.memory is not None
@@ -78,22 +84,36 @@ def resolve_system_power(
     gpu_power_W = gpu_operating_point.gpu_power_W
     is_m3d = case.geometry.type == "orthogonal_m3d"
     if isinstance(gpu_operating_point, GPUDecodePowerOperatingPoint):
+        if bandwidth_service_operating_point is not None and not math.isclose(
+            bandwidth_service_operating_point.sustained_bandwidth_bytes_per_s,
+            gpu_operating_point.bandwidth_actual_bytes_per_s,
+            rel_tol=1e-12,
+            abs_tol=1e-6,
+        ):
+            raise ValueError(
+                "GPU sustained service must equal the GPU power "
+                "operating-point bandwidth")
         if is_m3d and mode.model == "analytical":
             if transfer_operating_point is None:
                 raise ValueError(
                     "bandwidth-bound M3D power requires a shared "
                     "memory-to-GPU transfer operating point")
-            if not math.isclose(
+            if (bandwidth_service_operating_point is None and not math.isclose(
                 gpu_operating_point.bandwidth_actual_bytes_per_s,
                 transfer_operating_point.bandwidth_actual_bytes_per_s,
                 rel_tol=1e-12,
                 abs_tol=1e-6,
-            ):
+            )):
                 raise ValueError(
                     "GPU and M3D power must share the same actual bandwidth")
-            expected_gpu_demand = min(
-                transfer_operating_point.bandwidth_demand_bytes_per_s,
-                transfer_operating_point.memory_capability_bytes_per_s,
+            expected_gpu_demand = (
+                min(
+                    transfer_operating_point.bandwidth_demand_bytes_per_s,
+                    transfer_operating_point.memory_capability_bytes_per_s,
+                )
+                if bandwidth_service_operating_point is None
+                else bandwidth_service_operating_point
+                .sustained_bandwidth_bytes_per_s
             )
             if not math.isclose(
                 gpu_operating_point.bandwidth_demand_bytes_per_s,
@@ -104,7 +124,7 @@ def resolve_system_power(
                 raise ValueError(
                     "GPU demand must equal memory-deliverable transfer demand")
             expected_utilization = (
-                transfer_operating_point.bandwidth_actual_bytes_per_s
+                gpu_operating_point.bandwidth_actual_bytes_per_s
                 / transfer_operating_point.gpu_peak_bandwidth_bytes_per_s)
             if not math.isclose(
                 gpu_operating_point.bandwidth_utilization,
@@ -114,21 +134,43 @@ def resolve_system_power(
             ):
                 raise ValueError(
                     "GPU utilization must use the transfer GPU peak")
+            if (bandwidth_service_operating_point is not None
+                    and not math.isclose(
+                        bandwidth_service_operating_point
+                        .transfer_ceiling_bytes_per_s,
+                        transfer_operating_point.bandwidth_actual_bytes_per_s,
+                        rel_tol=1e-12,
+                        abs_tol=1e-6)):
+                raise ValueError(
+                    "sustained GPU service must consume the shared transfer "
+                    "ceiling")
+        elif transfer_operating_point is not None:
+            raise ValueError(
+                "local M3D-to-GPU transfer is invalid for non-M3D memory")
+
+        if bandwidth_service_operating_point is not None:
+            read_bandwidth_gbps = (
+                bandwidth_service_operating_point
+                .sustained_bandwidth_bytes_per_s * 8.0 / 1e9)
+            bandwidth_source = (
+                "GPU_SUSTAINED_BANDWIDTH_SERVICE_OPERATING_POINT")
+        else:
             read_bandwidth_gbps = (
                 transfer_operating_point.bandwidth_actual_bytes_per_s
-                * 8.0 / 1e9)
+                * 8.0 / 1e9
+                if transfer_operating_point is not None
+                else case.workload.read_bandwidth_gbps)
             bandwidth_source = (
-                "SHARED_MEMORY_GPU_TRANSFER_OPERATING_POINT")
-        else:
-            if transfer_operating_point is not None:
-                raise ValueError(
-                    "local M3D-to-GPU transfer is invalid for non-M3D memory")
-            read_bandwidth_gbps = case.workload.read_bandwidth_gbps
-            bandwidth_source = "SCENARIO_DEMAND_NON_M3D_UNCHANGED"
+                "SHARED_MEMORY_GPU_TRANSFER_OPERATING_POINT"
+                if transfer_operating_point is not None
+                else "SCENARIO_DEMAND_NON_M3D_UNCHANGED")
     else:
         if transfer_operating_point is not None:
             raise ValueError(
                 "compute-bound GPU power does not consume a bandwidth transfer")
+        if bandwidth_service_operating_point is not None:
+            raise ValueError(
+                "compute-bound GPU power does not consume GPU bandwidth service")
         read_bandwidth_gbps = case.workload.read_bandwidth_gbps
         bandwidth_source = "COMPUTE_REGIME_SCENARIO_DEMAND_UNCHANGED"
 
@@ -148,6 +190,16 @@ def resolve_system_power(
         "memory_gpu_transfer_bottleneck": (
             None if transfer_operating_point is None
             else transfer_operating_point.bottleneck),
+        "gpu_bandwidth_utilization": (
+            None if bandwidth_service_operating_point is None
+            else bandwidth_service_operating_point.gpu_bandwidth_utilization),
+        "gpu_sustained_bandwidth_bytes_per_s": (
+            None if bandwidth_service_operating_point is None
+            else bandwidth_service_operating_point
+            .sustained_bandwidth_bytes_per_s),
+        "gpu_bandwidth_utilization_status": (
+            None if bandwidth_service_operating_point is None
+            else bandwidth_service_operating_point.utilization_status),
         "memory_dynamic_power_bandwidth_source": bandwidth_source,
     }
     if mode.model == "unresolved":

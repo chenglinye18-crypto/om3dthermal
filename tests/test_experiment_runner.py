@@ -81,7 +81,7 @@ def test_formal_runner_assembles_exact_three_by_four_table(formal_run) -> None:
         for rho in (0.0, 1.0, 100.0, 1000.0)
     ]
     assert all(row.aggregate_tokens_per_second == pytest.approx(
-        147.67932375509625) for row in formal_run.rows)
+        72.3327300024961) for row in formal_run.rows)
     assert all(row.bandwidth_capability_status == "NOT_VALIDATED"
                for row in formal_run.rows)
 
@@ -121,14 +121,14 @@ def test_formal_runner_evaluates_gpu_decode_energy_stage(formal_run) -> None:
     for gpu in gpu_rows:
         assert gpu.evaluation_status == (
             "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY")
-        # Matched-bandwidth scenario is memory-bound; the 4.9 TB/s payload
-        # slightly exceeds the H200 4.8 TB/s peak, so actual bandwidth clamps
-        # to 4.8 TB/s and power remains at the derived 367.568 W point.
-        assert gpu.memory_bandwidth_utilization == pytest.approx(1.0)
-        assert gpu.utilization_clamped is True
-        assert gpu.bandwidth_demand_bytes_per_s == pytest.approx(4.9e12)
-        assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(4.8e12)
-        assert gpu.bandwidth_saturated is True
+        # Performance consumes the separately resolved 2.4 TB/s sustained
+        # service.  Until measurement distinguishes the power interpretation,
+        # formal GPU power conservatively remains at the 4.8 TB/s ceiling OP.
+        assert gpu.memory_bandwidth_utilization == pytest.approx(0.5)
+        assert gpu.utilization_clamped is False
+        assert gpu.bandwidth_demand_bytes_per_s == pytest.approx(2.4e12)
+        assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(2.4e12)
+        assert gpu.bandwidth_saturated is False
         assert gpu.gpu_dynamic_power_W == pytest.approx(293.568)
         assert gpu.gpu_decode_power_W == pytest.approx(367.568)
         assert gpu.gpu_energy_j_per_token == pytest.approx(
@@ -175,34 +175,30 @@ def test_runner_shares_gpu_operating_point_in_energy_power_and_thermal(
     power_rows = json.loads((result.output_dir / "power.json").read_text())
     thermal_rows = json.loads((result.output_dir / "thermal.json").read_text())
     bandwidth_demand = 4.9e12 * bandwidth_scale
-    bandwidth_actual = min(bandwidth_demand, 4.8e12)
-    expected_gpu = 74.0 + 7.645e-12 * 8.0 * bandwidth_actual
+    bandwidth_ceiling = min(bandwidth_demand, 4.8e12)
+    bandwidth_actual = 0.5 * bandwidth_ceiling
+    expected_gpu = 74.0 + 15.29e-12 * 8.0 * bandwidth_actual
     for row, gpu, power, thermal in zip(
             result.rows, result.gpu_decode_energy, power_rows, thermal_rows):
         assert row.gpu_power_W == pytest.approx(expected_gpu)
         assert gpu.bandwidth_demand_bytes_per_s == pytest.approx(
-            bandwidth_demand)
+            bandwidth_actual)
         assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(
             bandwidth_actual)
-        assert gpu.bandwidth_saturated is (bandwidth_demand > 4.8e12)
+        assert gpu.bandwidth_saturated is False
         assert power["gpu_power_W"] == gpu.gpu_decode_power_W == row.gpu_power_W
         assert thermal["source_power_breakdown_W"]["gpu"] == row.gpu_power_W
         assert gpu.gpu_energy_j_per_token * row.aggregate_tokens_per_second == (
             pytest.approx(row.gpu_power_W))
         assert row.package_power_W == pytest.approx(
             row.gpu_power_W + row.memory_total_power_W)
-        # This task does not redefine token throughput/J. M3D power alone
-        # consumes the shared actual transfer rate, so scale its existing
-        # per-token memory energy by actual/demand for this power closure.
+        # M3D dynamic power and throughput consume the same sustained service,
+        # so per-token dynamic energy closes directly without a second scale.
         static_memory = (power["refresh_power_W"] + power["memory_background_power_W"]
                          + power["logic_background_effective_W"])
-        memory_rate_scale = (
-            bandwidth_actual / bandwidth_demand
-            if row.architecture == "orthogonal_m3d_igzo"
-            else 1.0)
         assert row.package_power_W == pytest.approx(
             (gpu.gpu_energy_j_per_token
-             + gpu.memory_dynamic_energy_j_per_token * memory_rate_scale)
+             + gpu.memory_dynamic_energy_j_per_token)
             * row.aggregate_tokens_per_second
             + static_memory)
         assert thermal["mapped_package_power_W"] == pytest.approx(row.package_power_W)
@@ -242,9 +238,9 @@ def test_single_platform_coefficient_propagates_to_power_and_thermal(
         result = run_experiment(CONFIG, project_root=ROOT, write_bundle=False)
         return result, mappings
 
-    nominal, nominal_mappings = run_with(7.645e-12)
-    changed, changed_mappings = run_with(8.645e-12)
-    expected_delta_W = 1.0e-12 * 8.0 * 4.8e12
+    nominal, nominal_mappings = run_with(15.29e-12)
+    changed, changed_mappings = run_with(16.29e-12)
+    expected_delta_W = 1.0e-12 * 8.0 * 2.4e12
     for before, after, before_map, after_map in zip(
             nominal.rows, changed.rows,
             nominal_mappings[:len(nominal.rows)],
@@ -352,6 +348,13 @@ def test_runner_records_derived_matched_bandwidth_provenance(formal_run) -> None
     assert transfer["gpu_peak_bandwidth_bytes_per_s"] == pytest.approx(4.8e12)
     assert transfer["bandwidth_actual_bytes_per_s"] == pytest.approx(4.8e12)
     assert transfer["bottleneck"] == "GPU"
+    service = environment["gpu_bandwidth_service_operating_points"][
+        "orthogonal_m3d_igzo"]
+    assert service["transfer_ceiling_bytes_per_s"] == pytest.approx(4.8e12)
+    assert service["gpu_bandwidth_utilization"] == pytest.approx(0.5)
+    assert service["sustained_bandwidth_bytes_per_s"] == pytest.approx(2.4e12)
+    assert service["utilization_status"] == (
+        "MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION")
 
 
 def test_capped_derivation_pins_bandwidth_below_derived_capability() -> None:

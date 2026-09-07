@@ -1,18 +1,21 @@
 """Canonical regime-bounded GPU decode power models (E8 platform facts).
 
-The steady-state decode operating point is resolved from the selected
-bottleneck's actual service rate, not directly from tokens::
+The steady-state decode operating point is resolved from the GPU-side
+sustained service rate, not directly from tokens. The formal runner resolves
+that rate as a modeled fraction of the physical transfer ceiling::
 
-    B_actual = min(B_demand, B_gpu_peak)
-    P_gpu_memory = P_static + e_decode * 8 * B_actual
+    B_ceiling = min(B_demand, B_memory, B_gpu_peak)
+    B_sustained = eta_gpu_bandwidth * B_ceiling
+    P_gpu_memory = P_static + e_decode * 8 * B_sustained
 
     F_actual = min(F_demand, F_effective)
     P_gpu_compute = P_static + e_compute_dynamic * F_actual
 
 ``e_decode`` is the project-level GPU decode dynamic energy-per-bit
-coefficient used by the bandwidth-bounded GPU power model. Memory energy is
-modeled independently elsewhere, without subtraction from this coefficient.
-Peak decode power is a read-only derived value, never an input.
+coefficient used by the bandwidth-bounded GPU power model and is normalized
+per sustained/actual bit. Memory energy is modeled independently elsewhere,
+without subtraction from this coefficient. Peak-rate extrapolation remains a
+read-only mathematical property, never an input or the formal nominal point.
 
 Both regimes share the 74 W static anchor. Their dynamic terms are alternatives,
 not additive components.

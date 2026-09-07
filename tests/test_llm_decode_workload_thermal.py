@@ -54,15 +54,18 @@ def frozen():
     for name in ARCHITECTURES:
         case = load_case_config(CASES / f"{name}.yaml")
         geometry = resolve_case_geometry(case)
+        operating_points = _resolve_case_power_operating_point_kwargs(case, ROOT)
         system = resolve_system_power(
             case, project_root=ROOT, geometry=geometry,
-            **_resolve_case_power_operating_point_kwargs(case, ROOT))
+            **operating_points)
         capacity = resolve_architecture_capacity(case, geometry, system)
         fit = evaluate_architecture_capacity_feasibility(
             workload, capacity, reserved_capacity_bytes=0)
         performance = evaluate_llm_decode_performance(
             workload, fit, batch_size=1,
-            matched_payload_bandwidth_bits_per_second=39.2e12,
+            matched_payload_bandwidth_bits_per_second=(
+                operating_points["bandwidth_service_operating_point"]
+                .sustained_bandwidth_bytes_per_s * 8.0),
             effective_compute_flops_per_second=100e12)
         policy = ("EXISTING_PLACEHOLDER_ZERO"
                   if name == "orthogonal_m3d_igzo" else "REQUIRE_RESOLVED")
@@ -71,7 +74,11 @@ def frozen():
             energy = evaluate_architecture_decode_memory_energy(
                 workload, fit, system, rho=rho)
             gpu_energy = evaluate_gpu_decode_energy(
-                performance, energy, GPU_SPEC)
+                performance, energy, GPU_SPEC,
+                transfer_operating_point=(
+                    operating_points["transfer_operating_point"]),
+                bandwidth_service_operating_point=(
+                    operating_points["bandwidth_service_operating_point"]))
             powers[rho] = evaluate_llm_decode_workload_power(
                 energy, performance, system,
                 unresolved_logic_background_policy=policy,

@@ -56,8 +56,7 @@ def test_access_energy_regressions_and_system_bandwidth_are_frozen():
                 0.8552605756733209)
     for name, energy in zip(NAMES, expected):
         _, _, system = _resolved(name)
-        expected_bandwidth = (
-            38400.0 if name == "orthogonal_m3d_igzo" else 39200.0)
+        expected_bandwidth = 19200.0
         assert system.read_bandwidth_gbps == expected_bandwidth
         assert system.memory_access_energy_pJ_per_bit == energy
         assert system.memory_access_power_W == pytest.approx(

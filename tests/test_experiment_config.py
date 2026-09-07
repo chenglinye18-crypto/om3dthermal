@@ -46,13 +46,14 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
         and item.classification == "SOFTWARE_DERIVED"
         for item in workload.provenance
     )
-    # H200-anchored range-midpoint bandwidth-saturated operating point:
-    # 74 W + 7.645 pJ/bit x 4.8 TB/s x 8 = 367.568 W.
+    # GPU coefficient is normalized to the nominal sustained 2.4 TB/s rate:
+    # 74 W + 15.29 pJ/actual-bit x 2.4 TB/s x 8 = 367.568 W.
     assert platform.gpu_decode_power.static_power_W == 74.0
-    assert platform.gpu_decode_power.e_decode_J_per_bit == 7.645e-12
+    assert platform.gpu_decode_power.e_decode_J_per_bit == 15.29e-12
     assert platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s == 4.8e12
+    assert platform.gpu_bandwidth_service.nominal_utilization == 0.5
     assert platform.gpu_decode_power.derived_peak_decode_power_W == pytest.approx(
-        367.568)
+        661.136)
     raw_platform = yaml.safe_load(experiment.platform_config.read_text())
     assert set(raw_platform["gpu_decode_power"]) == {
         "model", "static_power_W", "e_decode_J_per_bit",
@@ -108,9 +109,9 @@ def test_gpu_platform_ledger_matches_decode_reference_range_and_nominal() -> Non
         "IOM3D-HBM proposed (rev v2, planned)",
     ):
         row = rows[name]
-        assert float(row["e_decode_dynamic_pJ_per_bit_min"]) == 6.28
-        assert float(row["e_decode_dynamic_pJ_per_bit_nominal"]) == 7.645
-        assert float(row["e_decode_dynamic_pJ_per_bit_max"]) == 9.01
+        assert float(row["e_decode_dynamic_pJ_per_bit_min"]) == 12.56
+        assert float(row["e_decode_dynamic_pJ_per_bit_nominal"]) == 15.29
+        assert float(row["e_decode_dynamic_pJ_per_bit_max"]) == 18.02
 
 
 def test_architecture_descriptors_do_not_duplicate_workload_or_scenario() -> None:

@@ -13,6 +13,7 @@ from om3dthermal.experiment.config import (
     load_platform_spec,
 )
 from om3dthermal.platform import (
+    resolve_gpu_bandwidth_service,
     resolve_gpu_compute_power,
     resolve_gpu_decode_power,
     resolve_local_memory_gpu_transfer,
@@ -113,16 +114,24 @@ def _resolve_m3d_system(
         memory_capability_bytes_per_s=raw.effective_bandwidth_bytes_per_s,
         gpu_peak_bandwidth_bytes_per_s=peak_bytes_per_s)
     spec = load_platform_spec(PLATFORM_PATH, project_root=ROOT).gpu_decode_power
+    service_spec = load_platform_spec(
+        PLATFORM_PATH, project_root=ROOT).gpu_bandwidth_service
+    bandwidth_service = resolve_gpu_bandwidth_service(
+        transfer_ceiling_bytes_per_s=transfer.bandwidth_actual_bytes_per_s,
+        gpu_bandwidth_utilization=service_spec.nominal_utilization,
+        utilization_status=service_spec.utilization_status,
+        utilization_provenance=service_spec.provenance,
+    )
     gpu = resolve_gpu_decode_power(
         static_power_W=spec.static_power_W,
         e_decode_J_per_bit=spec.e_decode_J_per_bit,
-        bandwidth_demand_bytes_per_s=min(
-            transfer.bandwidth_demand_bytes_per_s,
-            transfer.memory_capability_bytes_per_s),
+        bandwidth_demand_bytes_per_s=(
+            bandwidth_service.sustained_bandwidth_bytes_per_s),
         peak_bandwidth_bytes_per_s=peak_bytes_per_s)
     system = resolve_system_power(
         case, project_root=ROOT, geometry=geometry,
-        gpu_operating_point=gpu, transfer_operating_point=transfer)
+        gpu_operating_point=gpu, transfer_operating_point=transfer,
+        bandwidth_service_operating_point=bandwidth_service)
     return case, raw, transfer, gpu, system
 
 
@@ -132,16 +141,15 @@ def test_nominal_m3d_gpu_transfer_and_power_close() -> None:
     assert raw.effective_bandwidth_bytes_per_s == pytest.approx(5.3e12)
     assert transfer.bandwidth_actual_bytes_per_s == 4.8e12
     assert transfer.bottleneck == "GPU"
-    assert gpu.bandwidth_actual_bytes_per_s == (
-        transfer.bandwidth_actual_bytes_per_s)
-    assert system.read_bandwidth_gbps == 38_400
+    assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(2.4e12)
+    assert system.read_bandwidth_gbps == 19_200
     assert system.memory_result.E_access_total_pj_bit == pytest.approx(
         0.8552605756733209)
     assert system.memory_result.P_read_W == pytest.approx(
-        32.842006105855525)
+        16.421003052927762)
     assert gpu.gpu_power_W == pytest.approx(367.568)
     assert system.memory_dynamic_power_bandwidth_source == (
-        "SHARED_MEMORY_GPU_TRANSFER_OPERATING_POINT")
+        "GPU_SUSTAINED_BANDWIDTH_SERVICE_OPERATING_POINT")
 
 
 def test_gpu_peak_override_propagates_to_both_dynamic_powers() -> None:
@@ -149,8 +157,8 @@ def test_gpu_peak_override_propagates_to_both_dynamic_powers() -> None:
     _, _, lower_transfer, lower_gpu, lower_system = _resolve_m3d_system(
         peak_bytes_per_s=4.0e12)
     assert lower_transfer.bandwidth_actual_bytes_per_s == 4.0e12
-    assert lower_gpu.bandwidth_actual_bytes_per_s == 4.0e12
-    assert lower_system.read_bandwidth_gbps == 32_000
+    assert lower_gpu.bandwidth_actual_bytes_per_s == 2.0e12
+    assert lower_system.read_bandwidth_gbps == 16_000
     assert lower_gpu.gpu_dynamic_power_W < nominal_gpu.gpu_dynamic_power_W
     assert lower_system.memory_result.P_read_W < nominal_system.memory_result.P_read_W
 
@@ -161,7 +169,7 @@ def test_m3d_link_capability_override_propagates_to_both_sides() -> None:
     assert raw.effective_bandwidth_bytes_per_s == pytest.approx(4.24e12)
     assert transfer.bottleneck == "MEMORY"
     assert transfer.bandwidth_actual_bytes_per_s == pytest.approx(4.24e12)
-    assert gpu.bandwidth_actual_bytes_per_s == transfer.bandwidth_actual_bytes_per_s
+    assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(2.12e12)
     assert gpu.gpu_dynamic_power_W < nominal_gpu.gpu_dynamic_power_W
     assert system.memory_result.P_read_W < nominal_system.memory_result.P_read_W
 
