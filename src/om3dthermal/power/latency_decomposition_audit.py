@@ -433,7 +433,9 @@ def run_feol_resistance_sensitivity(
         wire = feol_spec.wire.model_copy(
             update={"resistance_ohm_per_um": resistance})
         copied_spec = feol_spec.model_copy(update={"wire": wire})
-        feol = calculate_feol_route(copied_spec, topology)
+        copied_architecture = case.architecture.model_copy(
+            update={"feol_route": copied_spec})
+        feol = calculate_feol_route(copied_architecture, topology)
         delays = feol.feol_delay_per_cluster_ns
         if delays is None:
             raise RuntimeError("FEOL sensitivity delay resolution failed")

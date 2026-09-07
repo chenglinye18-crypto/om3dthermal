@@ -37,8 +37,9 @@ CASE = ROOT / "configs/cases/orthogonal_m3d_igzo.yaml"
 WORKLOAD = ROOT / "configs/workload/llama31_8b_decode_b1_s131072.yaml"
 EXPERIMENT = (
     ROOT / "configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
+_CASE = load_case_config(CASE)
 MATCHED_BW_BITS_PER_S = derive_orthogonal_slab_io_bandwidth_bits_per_second(
-    load_case_config(CASE).geometry.orthogonal,
+    _CASE.geometry.orthogonal, _CASE.architecture.memory_service.coil,
     architecture_id="orthogonal_m3d_igzo")
 
 
@@ -50,7 +51,7 @@ def canonical():
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -68,8 +69,7 @@ def canonical():
         expected_total_bits=power.diagnostics["total_stored_bits"],
     )
     bandwidth = derive_architecture_bandwidth(
-        case.architecture.memory_service, layout, topology,
-        feol_io_channels=case.architecture.feol_route.io_channels)
+        case.architecture.memory_service, layout, topology)
     workload = load_workload_spec(WORKLOAD, project_root=ROOT).decode
     scenario = load_experiment_spec(EXPERIMENT, project_root=ROOT).scenario
     return case, geometry, power, topology, feol, latency, layout, bandwidth, workload, scenario

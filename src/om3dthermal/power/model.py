@@ -250,8 +250,10 @@ def calculate_memory_power(
     if config.architecture.feol_route is not None:
         if m3d_subarray is None:
             raise ValueError("FEOL route requires resolved M3D topology")
+        if config.architecture.memory_service is None:
+            raise ValueError("FEOL route requires contactless interface lanes")
         feol_route_result = calculate_feol_route(
-            config.architecture.feol_route, m3d_subarray)
+            config.architecture, m3d_subarray)
     feol_route = (
         0.0 if feol_route_result is None
         else feol_route_result.feol_route_energy_pj_per_bit)

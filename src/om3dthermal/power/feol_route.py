@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 import math
 import statistics
 
-from .config import FEOLRouteInput
+from .config import ArchitectureInput
 from .m3d_subarray import M3DSubarrayResult
 
 
@@ -131,16 +131,24 @@ def _percentile(values: tuple[float, ...], fraction: float) -> float:
 
 
 def calculate_feol_route(
-        spec: FEOLRouteInput, topology: M3DSubarrayResult,
+        architecture: ArchitectureInput, topology: M3DSubarrayResult,
         ) -> FEOLRouteResult:
-    """Map every cluster center to its nearest centered-bin edge channel."""
+    """Map clusters to FEOL lanes derived from contactless-interface links."""
+    spec = architecture.feol_route
+    service = architecture.memory_service
+    if spec is None or service is None:
+        raise ValueError(
+            "FEOL routing requires contactless memory-service inputs")
+    service_lanes_per_slab = service.coil.links_per_slab
+    if service_lanes_per_slab <= 0:
+        raise ValueError("FEOL service lane count must be positive")
     if (not math.isfinite(spec.wire.capacitance_fF_per_um)
             or spec.wire.capacitance_fF_per_um <= 0.0):
         raise ValueError("FEOL capacitance per length must be positive")
     centers = _cluster_centers(topology)
     pitch, ports = _edge_ports(
         edge=spec.edge,
-        count=spec.io_channels,
+        count=service_lanes_per_slab,
         slab_x_um=topology.slab_x_um,
         slab_y_um=topology.slab_y_um,
     )
@@ -265,7 +273,7 @@ def calculate_feol_route(
     return FEOLRouteResult(
         feol_route_type=spec.type,
         feol_io_edge=spec.edge,
-        feol_io_channel_count=spec.io_channels,
+        feol_io_channel_count=service_lanes_per_slab,
         feol_io_channel_pitch_um=pitch,
         feol_io_channel_distribution=spec.io_channel_distribution,
         feol_io_channel_coordinates_um=ports,
@@ -327,6 +335,7 @@ def calculate_feol_route(
         feol_route_end="EDGE_IO_INTERFACE_INPUT",
         interface_boundary="EDGE_IO_INTERFACE_INPUT_TO_GPU_RECEIVER",
         feol_route_topology_provenance=spec.topology_provenance,
-        feol_io_channel_count_source=spec.io_channel_count_source,
+        feol_io_channel_count_source=(
+            "DERIVED_FROM_CONTACTLESS_INTERFACE_LINKS_PER_SLAB"),
         feol_serialization_applied=False,
     )

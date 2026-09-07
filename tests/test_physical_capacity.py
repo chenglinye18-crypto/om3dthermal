@@ -32,7 +32,7 @@ def canonical_layout():
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -188,7 +188,9 @@ def test_capacity_layout_has_no_cluster_access_assumption_dependence(
     case, _, power, topology, feol, _, baseline = canonical_layout
     changed_spec = case.architecture.feol_route.model_copy(
         update={"access_assumption": "SYNTHETIC_NON_WORKLOAD_ASSUMPTION"})
-    changed_feol = calculate_feol_route(changed_spec, topology)
+    changed_feol = calculate_feol_route(
+        case.architecture.model_copy(update={"feol_route": changed_spec}),
+        topology)
     changed_latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=changed_feol,

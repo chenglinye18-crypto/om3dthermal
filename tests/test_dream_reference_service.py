@@ -55,7 +55,7 @@ def m3d():
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -76,7 +76,6 @@ def m3d():
         case.architecture.memory_service,
         layout,
         topology,
-        feol_io_channels=case.architecture.feol_route.io_channels,
     )
     return case, latency, layout, closure
 
@@ -210,9 +209,9 @@ def test_m3d_coil_derivation_unchanged(m3d) -> None:
     _, _, layout, closure = m3d
     # Rev v2: 106 slabs on the 32 mm GPU die.
     expected_bits = 106 * 50 * 8.0 * 1e9
-    assert closure.num_m3d_dies == layout.slab_count == 106
-    assert closure.coil_links_per_die == 50
-    assert closure.coil_data_rate_gbps_per_link == 8.0
+    assert closure.slab_count == layout.slab_count == 106
+    assert closure.links_per_slab == 50
+    assert closure.rate_gbps_per_link == 8.0
     assert closure.coil_bandwidth_bits_per_s == expected_bits == 42.4e12
     assert closure.coil_bandwidth_bytes_per_s == expected_bits / 8
 

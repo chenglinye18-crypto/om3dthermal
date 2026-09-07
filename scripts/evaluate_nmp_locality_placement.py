@@ -19,7 +19,7 @@ from om3dthermal.workload import build_m3d_workload_page_demand
 
 def run(output_dir: Path):
     layout, bandwidth=_architecture(); case=load_case_config(ROOT/"configs/cases/orthogonal_m3d_igzo.yaml"); geo=resolve_case_geometry(case); power=calculate_memory_power(case,project_root=ROOT,geometry=geo)
-    topology=calculate_m3d_subarray(case.architecture.m3d_subarray,geo.m3d); feol=calculate_feol_route(case.architecture.feol_route,topology)
+    topology=calculate_m3d_subarray(case.architecture.m3d_subarray,geo.m3d); feol=calculate_feol_route(case.architecture,topology)
     physical=calculate_physical_access_latency(case.architecture.physical_access_latency,feol_route=feol,miv_length_per_layer_um=power.diagnostics['miv_length_per_layer_um'],miv_delay_per_layer_ns=power.diagnostics['miv_delay_per_layer_ns'],miv_status=power.diagnostics['miv_latency_status'],miv_parameter_status=power.diagnostics['miv_resistance_parameter_status'],miv_provenance=power.diagnostics['miv_resistance_provenance'])
     base=load_workload_spec(ROOT/"configs/workload/llama31_8b_decode_b1_s131072.yaml",project_root=ROOT).decode
     experiment=load_experiment_spec(ROOT/"configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",project_root=ROOT)
@@ -49,7 +49,7 @@ def run(output_dir: Path):
         hardware=canonical_nmp_hardware(layout.slab_count)
         canonical_naive=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_NAIVE',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
         canonical=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=hardware.aggregate_peak_flops/1e12,gpu_compute_flops_per_s=gpu,external_bandwidth_cap_bytes_per_s=cap_bps)
-        hardware_bw_die=(bandwidth.local_service_groups_per_die*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*canonical.placement.local_access_latency_ns*1e-9))
+        hardware_bw_die=(bandwidth.local_service_groups_per_slab*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*canonical.placement.local_access_latency_ns*1e-9))
         locality_placement=build_locality_only_placement(w,d,layout,
             bandwidth_per_die_bytes_per_s=hardware_bw_die,compute_per_die_flops_per_s=hardware.peak_flops_per_die)
         external_bytes=remaining_external_bytes_for_ownership(locality_placement.unit_loads,locality_placement.ownership)

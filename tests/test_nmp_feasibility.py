@@ -53,7 +53,7 @@ def architecture():
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -71,8 +71,7 @@ def architecture():
         expected_total_bits=power.diagnostics["total_stored_bits"],
     )
     bandwidth = derive_architecture_bandwidth(
-        case.architecture.memory_service, layout, topology,
-        feol_io_channels=case.architecture.feol_route.io_channels)
+        case.architecture.memory_service, layout, topology)
     base = load_moe_workload_spec(WORKLOAD, project_root=ROOT).decode
     profile = load_fiddler_published_profile(
         PROFILE, PROFILE.with_suffix(".metadata.json"))
@@ -81,7 +80,8 @@ def architecture():
     # IO capability capped by the experiment scenario cap; the uncapped
     # capability is design margin, not the operating point.
     capability_bw = derive_orthogonal_slab_io_bandwidth_bits_per_second(
-        case.geometry.orthogonal, architecture_id=case.name)
+        case.geometry.orthogonal, case.architecture.memory_service.coil,
+        architecture_id=case.name)
     derivation = experiment.scenario.matched_bandwidth_derivation
     cap_bw = (derivation.cap_bits_per_second
               if derivation is not None else None)
@@ -187,8 +187,8 @@ def test_coil_is_derived_and_weights_stay_local(n1, architecture):
     *_, bandwidth, _, _, _, _ = architecture
     _, _, _, result = n1
     assert bandwidth.coil_bandwidth_bytes_per_s == (
-        bandwidth.num_m3d_dies * bandwidth.coil_links_per_die
-        * bandwidth.coil_data_rate_gbps_per_link * 1e9 / 8)
+        bandwidth.slab_count * bandwidth.links_per_slab
+        * bandwidth.rate_gbps_per_link * 1e9 / 8)
     for point in (result.p0, result.p1, result.p2):
         assert point.coil_bandwidth_bytes_per_s == (
             bandwidth.coil_bandwidth_bytes_per_s)

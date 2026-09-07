@@ -169,7 +169,7 @@ def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPage
     # Full slab-count local service capacity with path-correct MAT+MIV latency.
     # NMP local service is array-topology derived.  It must not reuse the
     # 50 external coil/FEOL IO lanes per die.
-    local_bw=(layout.slab_count*bandwidth.local_service_groups_per_die*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*placement.local_access_latency_ns*1e-9))
+    local_bw=(layout.slab_count*bandwidth.local_service_groups_per_slab*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*placement.local_access_latency_ns*1e-9))
     local_ms=traffic.local_memory_bytes/local_bw*1e3; external_ms=traffic.external_interface_bytes/external_bw*1e3
     flops=sum((workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops for u in units); nmp_ms=flops/(nmp_aggregate_tflops*1e12)*1e3
     total=max(local_ms,nmp_ms)+external_ms

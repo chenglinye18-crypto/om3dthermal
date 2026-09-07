@@ -112,8 +112,8 @@ def _resolve_matched_bandwidth_bits_per_second(
     """Resolve (applied, capability) matched payload bandwidth [bit/s].
 
     Literal scenarios return (literal, None).  Derived scenarios compute
-    slab_count x io_channels_per_slab x io_channel_rate_gbps from the
-    referenced architecture's canonical case geometry; an optional cap pins
+    slab_count x links_per_slab x data_rate_gbps_per_link from the referenced
+    architecture's geometry and contactless-interface spec; an optional cap pins
     the applied value below the derived capability, with the difference
     recorded as design margin.  The platform GPU decode-power peak bandwidth
     is a separate hardware capability anchor (their ratio defines the
@@ -135,6 +135,7 @@ def _resolve_matched_bandwidth_bits_per_second(
             f"architecture {derivation.architecture_id!r} in the experiment")
     capability = derive_orthogonal_slab_io_bandwidth_bits_per_second(
         matches[0].case.geometry.orthogonal,
+        matches[0].case.architecture.memory_service.coil,
         architecture_id=derivation.architecture_id)
     applied = capability
     if derivation.cap_bits_per_second is not None:

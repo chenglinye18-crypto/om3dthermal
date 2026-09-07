@@ -28,7 +28,7 @@ def canonical():
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     audit = calculate_hierarchical_mat_to_coil(feol)
     return case, geometry, topology, feol, audit
 
@@ -178,7 +178,7 @@ def test_diagnostic_does_not_mutate_canonical_or_frozen_inputs(canonical):
     assert case.architecture.physical_access_latency.mat_latency_ns == 10.0
     assert case.architecture.vertical.miv_resistance_ohm_per_um == 10.0
     assert case.architecture.memory_service.coil.data_rate_gbps_per_link == 8.0
-    assert case.architecture.memory_service.coil.links_per_die == 50
+    assert case.architecture.memory_service.coil.links_per_slab == 50
     assert case.architecture.m3d_subarray.access.accessed_clusters_per_access == 4
     assert power_after.E_vertical_pj_bit == power_before.E_vertical_pj_bit
     assert power_after.E_feol_route_pj_bit == power_before.E_feol_route_pj_bit

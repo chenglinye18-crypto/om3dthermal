@@ -1,4 +1,8 @@
-"""Hierarchical M3D internal, contactless-coil, and GPU bandwidth model."""
+"""Hierarchical M3D internal and contactless-interface bandwidth model.
+
+``coil`` names the inductive/contactless link layer. GPU bandwidth is a
+downstream system constraint and is intentionally absent from this module.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,7 @@ from .m3d_subarray import M3DSubarrayResult
 from .physical_capacity import PhysicalCapacityLayout
 
 
-BandwidthBottleneck = Literal["INTERNAL", "COIL_INTERFACE", "GPU_INTERNAL"]
+BandwidthBottleneck = Literal["INTERNAL", "COIL_INTERFACE"]
 
 
 @dataclass(frozen=True)
@@ -24,11 +28,10 @@ class InternalBandwidthPrefix:
 
 @dataclass(frozen=True)
 class ArchitectureBandwidthClosure:
-    num_m3d_dies: int
-    die_count_source: str
-    coil_links_per_die: int
-    external_coil_links_per_die: int
-    coil_data_rate_gbps_per_link: float
+    slab_count: int
+    slab_count_source: str
+    links_per_slab: int
+    rate_gbps_per_link: float
     coil_bandwidth_bits_per_s: float
     coil_bandwidth_bytes_per_s: float
     coil_classification: str
@@ -36,7 +39,7 @@ class ArchitectureBandwidthClosure:
     internal_service_model: str
     internal_service_unit: str
     parallel_service_units_per_slab: int
-    local_service_groups_per_die: int
+    local_service_groups_per_slab: int
     total_local_service_groups: int
     local_service_group_source: str
     parallel_slabs: int
@@ -54,8 +57,6 @@ class ArchitectureBandwidthClosure:
     internal_bandwidth_average_bytes_per_s: float
     internal_bandwidth_slow_bytes_per_s: float
     prefix_bandwidth: tuple[InternalBandwidthPrefix, ...]
-    gpu_internal_bandwidth_bytes_per_s: float | None
-    gpu_internal_status: str
     internal_classification: str
     access_topology_provenance: str
     payload_status: str
@@ -74,7 +75,6 @@ class EffectiveBandwidth:
     internal_parallelism_scale: float
     internal_bandwidth_bytes_per_s: float
     coil_bandwidth_bytes_per_s: float
-    gpu_internal_bandwidth_bytes_per_s: float | None
     effective_bandwidth_bytes_per_s: float
     bottleneck: BandwidthBottleneck
     model_name: Literal["HIERARCHICAL_BANDWIDTH_MODEL"]
@@ -84,17 +84,13 @@ def derive_architecture_bandwidth(
     spec: HierarchicalMemoryServiceInput,
     physical_layout: PhysicalCapacityLayout,
     topology: M3DSubarrayResult,
-    *,
-    feol_io_channels: int,
 ) -> ArchitectureBandwidthClosure:
     """Resolve bandwidth only from architecture and explicit choices."""
-    if feol_io_channels <= 0:
-        raise ValueError("FEOL IO channel count must be positive")
     if physical_layout.slab_count <= 0:
         raise ValueError("physical layout must contain slabs")
     # This is deliberately retained as the long-FEOL/external-service resource.
     # It is not an NMP-local memory parallelism parameter.
-    parallel_per_slab = feol_io_channels
+    parallel_per_slab = spec.coil.links_per_slab
     clusters_per_service = topology.accessed_clusters_per_access
     if parallel_per_slab * clusters_per_service > (
             physical_layout.clusters_per_slab):
@@ -141,15 +137,14 @@ def derive_architecture_bandwidth(
         ))
     coil_bits = (
         slabs
-        * spec.coil.links_per_die
+        * spec.coil.links_per_slab
         * spec.coil.data_rate_gbps_per_link
         * 1e9)
     return ArchitectureBandwidthClosure(
-        num_m3d_dies=slabs,
-        die_count_source=spec.die_count_source,
-        coil_links_per_die=spec.coil.links_per_die,
-        external_coil_links_per_die=spec.coil.links_per_die,
-        coil_data_rate_gbps_per_link=(
+        slab_count=slabs,
+        slab_count_source=spec.slab_count_source,
+        links_per_slab=spec.coil.links_per_slab,
+        rate_gbps_per_link=(
             spec.coil.data_rate_gbps_per_link),
         coil_bandwidth_bits_per_s=coil_bits,
         coil_bandwidth_bytes_per_s=coil_bits / 8.0,
@@ -159,7 +154,7 @@ def derive_architecture_bandwidth(
         internal_service_model=spec.internal.model,
         internal_service_unit=spec.internal.service_unit,
         parallel_service_units_per_slab=parallel_per_slab,
-        local_service_groups_per_die=local_groups,
+        local_service_groups_per_slab=local_groups,
         total_local_service_groups=slabs * local_groups,
         local_service_group_source=(
             "TOPOLOGY_DERIVED_PARALLEL_SERVICE_GROUP_COUNT__"
@@ -182,9 +177,6 @@ def derive_architecture_bandwidth(
         internal_bandwidth_slow_bytes_per_s=(
             numerator_bytes / (slow_cycle * 1e-9)),
         prefix_bandwidth=tuple(prefixes),
-        gpu_internal_bandwidth_bytes_per_s=(
-            spec.gpu_internal.bandwidth_bytes_per_s),
-        gpu_internal_status=spec.gpu_internal.status,
         internal_classification=spec.internal.classification,
         access_topology_provenance=topology.access_provenance,
         payload_status="DERIVED_FROM_M3D_ACCESS_TOPOLOGY",
@@ -218,9 +210,6 @@ def resolve_effective_bandwidth(
         (internal, "INTERNAL"),
         (closure.coil_bandwidth_bytes_per_s, "COIL_INTERFACE"),
     ]
-    if closure.gpu_internal_bandwidth_bytes_per_s is not None:
-        candidates.append((
-            closure.gpu_internal_bandwidth_bytes_per_s, "GPU_INTERNAL"))
     effective, bottleneck = min(candidates, key=lambda item: item[0])
     return EffectiveBandwidth(
         physical_access_latency_ns=latency,
@@ -228,8 +217,6 @@ def resolve_effective_bandwidth(
         internal_parallelism_scale=parallelism,
         internal_bandwidth_bytes_per_s=internal,
         coil_bandwidth_bytes_per_s=closure.coil_bandwidth_bytes_per_s,
-        gpu_internal_bandwidth_bytes_per_s=(
-            closure.gpu_internal_bandwidth_bytes_per_s),
         effective_bandwidth_bytes_per_s=effective,
         bottleneck=bottleneck,
         model_name="HIERARCHICAL_BANDWIDTH_MODEL",
@@ -240,11 +227,11 @@ def resolve_internal_service_bandwidth(
         closure: ArchitectureBandwidthClosure,
         physical_access_latency_ns: float,
         *, internal_parallelism_scale: float = 1.0) -> float:
-    """Return raw internal/FEOL service capacity without coil/GPU min().
+    """Return raw internal/FEOL service capacity without interface min().
 
     Use this only when the caller explicitly times the external interface as a
     separate pipeline stage.  ``resolve_effective_bandwidth`` retains its
-    historical end-to-end bottleneck semantics.
+    raw M3D internal/contactless bottleneck semantics.
     """
     latency = _positive_finite(physical_access_latency_ns, "physical_access_latency_ns")
     parallelism = _positive_finite(internal_parallelism_scale, "internal_parallelism_scale")

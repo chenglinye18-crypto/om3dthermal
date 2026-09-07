@@ -199,24 +199,22 @@ def test_slab_io_bandwidth_derivation_scales_with_slab_count() -> None:
     case = load_case_config(
         ROOT / "configs" / "cases" / "orthogonal_m3d_igzo.yaml")
     orthogonal = case.geometry.orthogonal
+    coil = case.architecture.memory_service.coil
     assert orthogonal is not None
-    assert orthogonal.io_channels_per_slab == 50
-    assert orthogonal.io_channel_rate_gbps == 8.0
-    assert orthogonal.io_provenance == "MODELING_CHOICE"
+    assert coil.links_per_slab == 50
+    assert coil.data_rate_gbps_per_link == 8.0
 
     derived = derive_orthogonal_slab_io_bandwidth_bits_per_second(
-        orthogonal, architecture_id=case.name)
+        orthogonal, coil, architecture_id=case.name)
     # Rev v2: slab_count 98 -> 106 on the 32 mm GPU die.
     assert derived == pytest.approx(106 * 50 * 8.0e9)
     assert derived == pytest.approx(4.24e13)
 
     more_slabs = orthogonal.model_copy(update={"slab_count": 112})
     assert derive_orthogonal_slab_io_bandwidth_bits_per_second(
-        more_slabs, architecture_id=case.name) == pytest.approx(4.48e13)
+        more_slabs, coil,
+        architecture_id=case.name) == pytest.approx(4.48e13)
 
-    no_io = orthogonal.model_copy(
-        update={"io_channels_per_slab": None, "io_channel_rate_gbps": None,
-                "io_provenance": None})
-    with pytest.raises(ValueError, match="slab IO fields"):
+    with pytest.raises(ValueError, match="contactless-interface inputs"):
         derive_orthogonal_slab_io_bandwidth_bits_per_second(
-            no_io, architecture_id=case.name)
+            orthogonal, None, architecture_id=case.name)

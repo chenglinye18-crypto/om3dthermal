@@ -49,7 +49,8 @@ def main() -> int:
         project_root=root)
     scenario = experiment.scenario
     matched_bw = resolve_scenario_matched_bandwidth_bits_per_second(
-        scenario, case.geometry.orthogonal)
+        scenario, case.geometry.orthogonal,
+        case.architecture.memory_service.coil)
     dense_base = load_workload_spec(
         root / "configs/workload/llama31_8b_decode_b1_s131072.yaml",
         project_root=root).decode
@@ -258,10 +259,9 @@ def _sensitivities(
             changed_spec,
             layout,
             topology,
-            feol_io_channels=case.architecture.feol_route.io_channels,
         )
         coil_rows.append({
-            "coil_data_rate_gbps_per_link": rate,
+            "data_rate_gbps_per_link": rate,
             "coil_bandwidth_bytes_per_s": closure.coil_bandwidth_bytes_per_s,
             **run(closure, 1.0),
         })
@@ -280,7 +280,6 @@ def _sensitivities(
             changed_spec,
             layout,
             topology,
-            feol_io_channels=case.architecture.feol_route.io_channels,
         )
         cycle_rows.append({
             "service_cycle_scale": scale,
@@ -300,7 +299,7 @@ def _architecture(root: Path):
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -321,7 +320,6 @@ def _architecture(root: Path):
         case.architecture.memory_service,
         layout,
         topology,
-        feol_io_channels=case.architecture.feol_route.io_channels,
     )
     return case, topology, layout, bandwidth
 

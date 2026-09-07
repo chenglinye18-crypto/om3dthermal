@@ -98,6 +98,8 @@ Llama-3.1-8B BF16 @128K，balanced 放置：
 - 三创新点主线：正交结构热路径 → 深层堆叠（热瓶颈）；M3D 大容量本地
   驻留（容量瓶颈）；FEOL MAC 卸载 memory-bound decode（接口带宽瓶颈）。
   NMP 是第三个创新点的手段，不是文章主线。
-- 带宽：场景固定 4.9 TB/s，42.4 Tb/s 能力作冗余，文字说明理想/实际差距。
+- 带宽：4.9 TB/s 是 legacy matched scenario；M3D raw capability 为
+  `min(internal, contactless) = 5.3 TB/s`，GPU 4.8 TB/s 只属于 system-level
+  downstream bottleneck，不进入 M3D memory resolver。
 - 容量叙事：同一根 DREAM 标定过的 slab，容量随 slab 数线性扩展
   （98→106），最干净的扩展声明。

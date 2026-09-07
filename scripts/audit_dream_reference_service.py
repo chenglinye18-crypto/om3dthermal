@@ -35,7 +35,7 @@ def _m3d_architecture(root: Path):
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -56,7 +56,6 @@ def _m3d_architecture(root: Path):
         case.architecture.memory_service,
         layout,
         topology,
-        feol_io_channels=case.architecture.feol_route.io_channels,
     )
     return case, latency, layout, closure
 
@@ -138,10 +137,9 @@ def main() -> int:
             "internal_bandwidth_fast_TBps": _tbps(m3d_internal_fast),
             "coil_bandwidth_TBps": _tbps(m3d_coil),
             "coil_derivation": {
-                "num_m3d_dies": closure.num_m3d_dies,
-                "coil_links_per_die": closure.coil_links_per_die,
-                "coil_data_rate_gbps_per_link": (
-                    closure.coil_data_rate_gbps_per_link),
+                "slab_count": closure.slab_count,
+                "links_per_slab": closure.links_per_slab,
+                "rate_gbps_per_link": closure.rate_gbps_per_link,
             },
             "effective_bandwidth_TBps": _tbps(m3d_effective),
             "bottleneck": m3d_bottleneck,
@@ -242,8 +240,8 @@ def _print_text_report(dream, closure, m3d_bottleneck, gate,
         f"internal bandwidth     = {_tbps(m3d_internal_avg):.2f} TB/s avg / "
         f"{_tbps(closure.internal_bandwidth_fast_bytes_per_s):.2f} TB/s fast",
         f"coil bandwidth         = {_tbps(m3d_coil):.2f} TB/s "
-        f"({closure.num_m3d_dies} dies x {closure.coil_links_per_die} links"
-        f" x {closure.coil_data_rate_gbps_per_link:.1f} Gbps)",
+        f"({closure.slab_count} slabs x {closure.links_per_slab} links"
+        f" x {closure.rate_gbps_per_link:.1f} Gbps)",
         f"effective bandwidth    = "
         f"{_tbps(min(m3d_internal_avg, m3d_coil)):.2f} TB/s",
         f"bottleneck             = {m3d_bottleneck}",

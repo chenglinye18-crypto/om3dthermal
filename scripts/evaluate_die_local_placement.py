@@ -22,7 +22,7 @@ def _architecture():
     geometry = resolve_case_geometry(case)
     power = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
     topology = calculate_m3d_subarray(case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(case.architecture.physical_access_latency,
         feol_route=feol, miv_length_per_layer_um=power.diagnostics["miv_length_per_layer_um"],
         miv_delay_per_layer_ns=power.diagnostics["miv_delay_per_layer_ns"],
@@ -31,8 +31,8 @@ def _architecture():
         miv_provenance=power.diagnostics["miv_resistance_provenance"])
     layout = calculate_physical_capacity_layout(topology, latency, slab_count=geometry.memory_region_count,
         expected_total_bits=power.diagnostics["total_stored_bits"])
-    return layout, derive_architecture_bandwidth(case.architecture.memory_service, layout, topology,
-        feol_io_channels=case.architecture.feol_route.io_channels)
+    return layout, derive_architecture_bandwidth(
+        case.architecture.memory_service, layout, topology)
 
 def run(output_dir: Path) -> dict[str, object]:
     layout, bandwidth = _architecture()

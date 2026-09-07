@@ -13,7 +13,7 @@ from om3dthermal.workload import build_m3d_workload_page_demand
 
 @pytest.fixture(scope='module')
 def inputs():
-    layout,bw=_architecture(); c=load_case_config(ROOT/'configs/cases/orthogonal_m3d_igzo.yaml'); g=resolve_case_geometry(c); power=calculate_memory_power(c,project_root=ROOT,geometry=g); top=calculate_m3d_subarray(c.architecture.m3d_subarray,g.m3d); feol=calculate_feol_route(c.architecture.feol_route,top)
+    layout,bw=_architecture(); c=load_case_config(ROOT/'configs/cases/orthogonal_m3d_igzo.yaml'); g=resolve_case_geometry(c); power=calculate_memory_power(c,project_root=ROOT,geometry=g); top=calculate_m3d_subarray(c.architecture.m3d_subarray,g.m3d); feol=calculate_feol_route(c.architecture,top)
     phy=calculate_physical_access_latency(c.architecture.physical_access_latency,feol_route=feol,miv_length_per_layer_um=power.diagnostics['miv_length_per_layer_um'],miv_delay_per_layer_ns=power.diagnostics['miv_delay_per_layer_ns'],miv_status=power.diagnostics['miv_latency_status'],miv_parameter_status=power.diagnostics['miv_resistance_parameter_status'],miv_provenance=power.diagnostics['miv_resistance_provenance'])
     w=load_workload_spec(ROOT/'configs/workload/llama31_8b_decode_b1_s131072.yaml',project_root=ROOT).decode; d=build_m3d_workload_page_demand(w,layout); gpu=load_experiment_spec(ROOT/'configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml',project_root=ROOT).scenario.effective_compute_flops_per_second
     return layout,bw,phy,w,d,gpu
@@ -33,13 +33,13 @@ def test_path_semantics_and_locality(inputs):
 
 def test_topology_local_groups_are_decoupled_from_coils(inputs):
     l,b,p,w,d,g=inputs
-    assert b.local_service_groups_per_die == l.clusters_per_slab // b.clusters_per_service == 70
+    assert b.local_service_groups_per_slab == l.clusters_per_slab // b.clusters_per_service == 70
     assert b.total_local_service_groups == 106 * 70  # rev v2
     assert b.read_payload_bytes_per_service == 32
     current=evaluate_nmp_locality_case(w,d,l,p,b,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
     # Altering external-resource metadata and its aggregate link rate cannot
     # alter local NMP service time; it only changes external boundary time.
-    altered=replace(b, coil_links_per_die=25, external_coil_links_per_die=25,
+    altered=replace(b, links_per_slab=25,
         coil_bandwidth_bytes_per_s=b.coil_bandwidth_bytes_per_s/2)
     changed=evaluate_nmp_locality_case(w,d,l,p,altered,case='NMP_LOCALITY_AWARE_PLACEMENT',nmp_aggregate_tflops=64,gpu_compute_flops_per_s=g)
     assert changed.timing.local_memory_ms == pytest.approx(current.timing.local_memory_ms)

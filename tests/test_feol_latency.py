@@ -24,15 +24,16 @@ def canonical_inputs():
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    spec = case.architecture.feol_route
+    architecture = case.architecture
+    spec = architecture.feol_route
     assert spec is not None
-    return case, geometry, topology, spec
+    return case, geometry, topology, architecture
 
 
 @pytest.fixture(scope="module")
 def canonical_route(canonical_inputs):
-    _, _, topology, spec = canonical_inputs
-    return calculate_feol_route(spec, topology)
+    _, _, topology, architecture = canonical_inputs
+    return calculate_feol_route(architecture, topology)
 
 
 def test_existing_geometry_distribution_is_unchanged(canonical_route):
@@ -145,14 +146,17 @@ def test_summary_and_pure_physical_semantics_close(canonical_route):
 
 
 def test_resistance_and_load_sensitivities_are_monotonic(canonical_inputs):
-    _, _, topology, spec = canonical_inputs
+    _, _, topology, architecture = canonical_inputs
+    spec = architecture.feol_route
     resistance_delays = []
     for resistance in (0.1, 1.0, 2.0):
         wire = spec.wire.model_copy(
             update={"resistance_ohm_per_um": resistance})
         resistance_delays.append(
             calculate_feol_route(
-                spec.model_copy(update={"wire": wire}), topology
+                architecture.model_copy(update={
+                    "feol_route": spec.model_copy(update={"wire": wire})}),
+                topology
             ).feol_max_delay_ns)
     assert resistance_delays[0] < resistance_delays[1] < resistance_delays[2]
 
@@ -161,7 +165,9 @@ def test_resistance_and_load_sensitivities_are_monotonic(canonical_inputs):
         wire = spec.wire.model_copy(update={"fixed_load_pF": load})
         load_delays.append(
             calculate_feol_route(
-                spec.model_copy(update={"wire": wire}), topology
+                architecture.model_copy(update={
+                    "feol_route": spec.model_copy(update={"wire": wire})}),
+                topology
             ).feol_max_delay_ns)
     assert load_delays[0] < load_delays[1] < load_delays[2]
 
@@ -177,21 +183,28 @@ def test_resistance_and_load_sensitivities_are_monotonic(canonical_inputs):
 )
 def test_invalid_latency_inputs_fail_loudly(
         canonical_inputs, field, value, message):
-    _, _, topology, spec = canonical_inputs
+    _, _, topology, architecture = canonical_inputs
+    spec = architecture.feol_route
     wire = spec.wire.model_copy(update={field: value})
     with pytest.raises(ValueError, match=message):
-        calculate_feol_route(spec.model_copy(update={"wire": wire}), topology)
+        calculate_feol_route(
+            architecture.model_copy(update={
+                "feol_route": spec.model_copy(update={"wire": wire})}),
+            topology)
 
 
 def test_energy_miv_topology_capacitance_and_serialization_regression(
         canonical_inputs, canonical_route):
-    case, geometry, topology, spec = canonical_inputs
+    case, geometry, topology, architecture = canonical_inputs
+    spec = architecture.feol_route
     topology_before = topology.as_dict()
     baseline_energy = canonical_route.feol_route_energy_pj_per_bit
     changed_wire = spec.wire.model_copy(
         update={"resistance_ohm_per_um": 2.0})
     changed = calculate_feol_route(
-        spec.model_copy(update={"wire": changed_wire}), topology)
+        architecture.model_copy(update={
+            "feol_route": spec.model_copy(update={"wire": changed_wire})}),
+        topology)
     assert changed.feol_route_energy_pj_per_bit == baseline_energy
     assert baseline_energy == pytest.approx(0.16705631334524151)
     assert changed.feol_route_length_per_cluster_um == (

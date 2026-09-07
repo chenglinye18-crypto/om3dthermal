@@ -43,7 +43,7 @@ def _architecture():
         raise ValueError("NMP feasibility requires M3D geometry")
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -64,7 +64,6 @@ def _architecture():
         case.architecture.memory_service,
         layout,
         topology,
-        feol_io_channels=case.architecture.feol_route.io_channels,
     )
     return case, layout, bandwidth
 
@@ -89,7 +88,8 @@ def run(output_dir: Path) -> dict[str, object]:
 
     scenario = experiment.scenario
     matched_bw_bps = resolve_scenario_matched_bandwidth_bits_per_second(
-        scenario, case.geometry.orthogonal)
+        scenario, case.geometry.orthogonal,
+        case.architecture.memory_service.coil)
 
     sweeps = []
     one_context = None
@@ -174,9 +174,9 @@ def run(output_dir: Path) -> dict[str, object]:
             "coil_bandwidth_bytes_per_s": (
                 bandwidth.coil_bandwidth_bytes_per_s),
             "coil_derivation": {
-                "m3d_dies": bandwidth.num_m3d_dies,
-                "links_per_die": bandwidth.coil_links_per_die,
-                "gbps_per_link": bandwidth.coil_data_rate_gbps_per_link,
+                "slab_count": bandwidth.slab_count,
+                "links_per_slab": bandwidth.links_per_slab,
+                "gbps_per_link": bandwidth.rate_gbps_per_link,
             },
             "internal_bandwidth_status": (
                 "NMP_RESULTS_CONDITIONAL_ON_CURRENT_INTERNAL_BW_MODEL"),

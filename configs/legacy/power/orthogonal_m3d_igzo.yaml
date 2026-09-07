@@ -114,7 +114,6 @@ architecture:
   feol_route:
     type: nearest_edge_io
     edge: y_min
-    io_channels: 50
     io_channel_distribution: uniform_centered_bins
     wire:
       capacitance_fF_per_um: 0.20
@@ -123,7 +122,6 @@ architecture:
       provenance: MODELING_CHOICE
     access_assumption: UNIFORM_CLUSTER_ACCESS
     topology_provenance: MODELING_CHOICE
-    io_channel_count_source: EXISTING_INDUCTIVE_INTERFACE_REFERENCE
   vertical:
     type: miv
     source: miv_topology
@@ -138,6 +136,25 @@ architecture:
     type: contactless
     source: constant
     energy_pj_per_bit: 0.5
+  memory_service:
+    model: HIERARCHICAL_BANDWIDTH_MODEL
+    slab_count_source: GEOMETRY_MEMORY_REGION_COUNT
+    coil:
+      links_per_slab: 50
+      data_rate_gbps_per_link: 8.0
+      classification: DERIVED_FROM_ARCHITECTURE
+      parameter_classification: MODELING_CHOICE
+      link_count_source: ARCHITECTURE_CONTACTLESS_LINK_COUNT
+    internal:
+      model: FIRST_ORDER_PARALLEL_MEMORY_SERVICE_MODEL
+      service_unit: FEOL_IO_CHANNEL_ALIGNED_CLUSTER_ACCESS_GROUP
+      parallel_units_per_slab_source: CONTACTLESS_INTERFACE_LINK_COUNT
+      parallel_slabs_source: GEOMETRY_MEMORY_REGION_COUNT
+      clusters_per_service_source: M3D_ACCESSED_CLUSTERS_PER_ACCESS
+      read_payload_source: M3D_DELIVERED_BITS_PER_ACCESS
+      service_cycle_source: FIRST_ORDER_SERVICE_CYCLE_APPROXIMATION
+      service_cycle_scale: 1.0
+      classification: MODELING_CHOICE
   logic_background_w: null
 
 workload:

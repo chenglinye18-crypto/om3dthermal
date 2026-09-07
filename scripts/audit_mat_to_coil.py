@@ -38,7 +38,7 @@ def run(case_path: Path, output_dir: Path) -> dict[str, object]:
         raise ValueError("MAT-to-coil audit requires M3D geometry")
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     audit = calculate_hierarchical_mat_to_coil(feol)
     dream = audit_dream_latency_decomposition(ROOT)
     normalized = calculate_normalized_single_path_delay(feol)

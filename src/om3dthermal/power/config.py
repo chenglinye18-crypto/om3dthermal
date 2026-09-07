@@ -229,12 +229,10 @@ class FEOLWireInput(StrictModel):
 class FEOLRouteInput(StrictModel):
     type: Literal["nearest_edge_io"]
     edge: Literal["x_min", "x_max", "y_min", "y_max"]
-    io_channels: int = Field(gt=0)
     io_channel_distribution: Literal["uniform_centered_bins"]
     wire: FEOLWireInput
     access_assumption: Literal["UNIFORM_CLUSTER_ACCESS"]
     topology_provenance: Literal["MODELING_CHOICE"]
-    io_channel_count_source: str
 
 
 class CellReplacementInput(StrictModel):
@@ -419,7 +417,7 @@ class PhysicalAccessLatencyInput(StrictModel):
 
 
 class CoilBandwidthInput(StrictModel):
-    links_per_die: int = Field(gt=0)
+    links_per_slab: int = Field(gt=0)
     data_rate_gbps_per_link: float = Field(gt=0.0)
     classification: Literal["DERIVED_FROM_ARCHITECTURE"]
     parameter_classification: Literal["MODELING_CHOICE"]
@@ -430,7 +428,8 @@ class InternalBandwidthInput(StrictModel):
     model: Literal["FIRST_ORDER_PARALLEL_MEMORY_SERVICE_MODEL"]
     service_unit: Literal[
         "FEOL_IO_CHANNEL_ALIGNED_CLUSTER_ACCESS_GROUP"]
-    parallel_units_per_slab_source: Literal["FEOL_IO_CHANNEL_COUNT"]
+    parallel_units_per_slab_source: Literal[
+        "CONTACTLESS_INTERFACE_LINK_COUNT"]
     parallel_slabs_source: Literal["GEOMETRY_MEMORY_REGION_COUNT"]
     clusters_per_service_source: Literal[
         "M3D_ACCESSED_CLUSTERS_PER_ACCESS"]
@@ -441,35 +440,11 @@ class InternalBandwidthInput(StrictModel):
     classification: Literal["MODELING_CHOICE"]
 
 
-class GPUInternalBandwidthInput(StrictModel):
-    bandwidth_bytes_per_s: float | None = Field(default=None, gt=0.0)
-    status: Literal[
-        "GPU_INTERNAL_BW_NOT_MODELED_AS_BINDING",
-        "NON_BINDING_NUMERICAL_CHOICE_NOT_HARDWARE_CAPABILITY",
-    ]
-
-    @model_validator(mode="after")
-    def status_closure(self) -> "GPUInternalBandwidthInput":
-        if (
-            self.bandwidth_bytes_per_s is None
-            and self.status != "GPU_INTERNAL_BW_NOT_MODELED_AS_BINDING"
-        ):
-            raise ValueError("unbounded GPU internal bandwidth needs None status")
-        if (
-            self.bandwidth_bytes_per_s is not None
-            and self.status != (
-                "NON_BINDING_NUMERICAL_CHOICE_NOT_HARDWARE_CAPABILITY")
-        ):
-            raise ValueError("finite GPU internal bandwidth needs numerical status")
-        return self
-
-
 class HierarchicalMemoryServiceInput(StrictModel):
     model: Literal["HIERARCHICAL_BANDWIDTH_MODEL"]
-    die_count_source: Literal["GEOMETRY_MEMORY_REGION_COUNT"]
+    slab_count_source: Literal["GEOMETRY_MEMORY_REGION_COUNT"]
     coil: CoilBandwidthInput
     internal: InternalBandwidthInput
-    gpu_internal: GPUInternalBandwidthInput
 
 
 class GeometrySourceInput(StrictModel):
@@ -501,20 +476,22 @@ class ArchitectureInput(StrictModel):
                 "MIV architecture requires architecture.m3d_subarray")
         if self.feol_route is not None and self.m3d_subarray is None:
             raise ValueError("FEOL route requires architecture.m3d_subarray")
+        if self.feol_route is not None and self.memory_service is None:
+            raise ValueError(
+                "FEOL route lane count requires architecture.memory_service")
         if self.physical_access_latency is not None:
             if self.vertical.type != "miv" or self.feol_route is None:
                 raise ValueError(
                     "physical access latency requires MIV and FEOL routes")
         if self.memory_service is not None:
             if (
-                self.physical_access_latency is None
-                or self.m3d_subarray is None
+                self.m3d_subarray is None
                 or self.feol_route is None
                 or self.interface.type != "contactless"
             ):
                 raise ValueError(
                     "hierarchical memory service requires contactless M3D "
-                    "topology and physical latency")
+                    "topology")
         return self
 
 
@@ -666,24 +643,6 @@ class CaseOrthogonalGeometryInput(StrictModel):
     slab_pitch_x_um: float = Field(gt=0.0)
     slab_plane: Literal["y-z"]
     thickness_direction: Literal["global_x"]
-    io_channels_per_slab: int | None = Field(default=None, gt=0)
-    io_channel_rate_gbps: float | None = Field(default=None, gt=0.0)
-    io_provenance: Literal["MODELING_CHOICE"] | None = None
-
-    @model_validator(mode="after")
-    def io_fields_grouped(self) -> "CaseOrthogonalGeometryInput":
-        present = (
-            self.io_channels_per_slab is not None,
-            self.io_channel_rate_gbps is not None,
-            self.io_provenance is not None,
-        )
-        if any(present) and not all(present):
-            raise ValueError(
-                "orthogonal slab IO requires io_channels_per_slab, "
-                "io_channel_rate_gbps and io_provenance together")
-        return self
-
-
 class CaseOrthogonalSiStackGeometryInput(StrictModel):
     si_substrate_um: float = Field(gt=0.0)
     beol_um: float = Field(gt=0.0)

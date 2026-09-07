@@ -940,7 +940,7 @@ def test_feol_route_config_and_centered_edge_ports():
     spec = config.architecture.feol_route
     assert spec is not None
     topology = _m3d_subarray(config)
-    route = calculate_feol_route(spec, topology)
+    route = calculate_feol_route(config.architecture, topology)
     assert route.feol_io_channel_count == 50
     assert route.feol_io_channel_pitch_um == pytest.approx(
         topology.slab_x_um / 50)
@@ -953,7 +953,7 @@ def test_feol_route_config_and_centered_edge_ports():
         right[0] - left[0] == pytest.approx(route.feol_io_channel_pitch_um)
         for left, right in zip(ports, ports[1:]))
     raw = config.model_dump()
-    raw["architecture"]["feol_route"]["io_channels"] = 0
+    raw["architecture"]["memory_service"]["coil"]["links_per_slab"] = 0
     with pytest.raises(ValueError, match="greater than 0"):
         MemoryPowerConfig.model_validate(raw)
 
@@ -961,7 +961,7 @@ def test_feol_route_config_and_centered_edge_ports():
 def test_feol_cluster_to_port_mapping_is_nearest_manhattan():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     topology = _m3d_subarray(config)
-    route = calculate_feol_route(config.architecture.feol_route, topology)
+    route = calculate_feol_route(config.architecture, topology)
     assert route.feol_route_cluster_count == topology.clusters_per_layer
     assert len(route.feol_route_nearest_port_index) == topology.clusters_per_layer
     for index, ((xc, yc), port_index, length) in enumerate(zip(
@@ -985,10 +985,13 @@ def test_feol_cluster_to_port_mapping_is_nearest_manhattan():
 def test_feol_io_count_and_slab_depth_control_physical_route():
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     topology = _m3d_subarray(config)
-    spec = config.architecture.feol_route
-    baseline = calculate_feol_route(spec, topology)
-    more_ports = spec.model_copy(update={"io_channels": 100})
-    denser = calculate_feol_route(more_ports, topology)
+    baseline = calculate_feol_route(config.architecture, topology)
+    service = config.architecture.memory_service
+    more_links = service.coil.model_copy(update={"links_per_slab": 100})
+    more_service = service.model_copy(update={"coil": more_links})
+    denser = calculate_feol_route(
+        config.architecture.model_copy(update={"memory_service": more_service}),
+        topology)
     assert denser.feol_route_average_lateral_component_um <= (
         baseline.feol_route_average_lateral_component_um)
 
@@ -996,7 +999,7 @@ def test_feol_io_count_and_slab_depth_control_physical_route():
     deeper_geometry = replace(geometry, slab_y_um=7000.0)
     deeper_topology = calculate_m3d_subarray(
         config.architecture.m3d_subarray, deeper_geometry)
-    deeper = calculate_feol_route(spec, deeper_topology)
+    deeper = calculate_feol_route(config.architecture, deeper_topology)
     assert deeper.feol_route_average_length_um > baseline.feol_route_average_length_um
 
 
@@ -1012,9 +1015,12 @@ def test_feol_wire_energy_scaling(wire_update, expected_factor):
     config = load_power_config(POWER_CONFIGS / "orthogonal_m3d_igzo.yaml")
     topology = _m3d_subarray(config)
     spec = config.architecture.feol_route
-    baseline = calculate_feol_route(spec, topology)
+    baseline = calculate_feol_route(config.architecture, topology)
     wire = spec.wire.model_copy(update=wire_update)
-    modified = calculate_feol_route(spec.model_copy(update={"wire": wire}), topology)
+    modified = calculate_feol_route(
+        config.architecture.model_copy(update={
+            "feol_route": spec.model_copy(update={"wire": wire})}),
+        topology)
     assert modified.feol_route_energy_pj_per_bit == pytest.approx(
         expected_factor * baseline.feol_route_energy_pj_per_bit)
 

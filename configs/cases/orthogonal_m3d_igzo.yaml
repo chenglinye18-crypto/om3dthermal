@@ -10,9 +10,6 @@ geometry:
     slab_pitch_x_um: 300.0
     slab_plane: y-z
     thickness_direction: global_x
-    io_channels_per_slab: 50
-    io_channel_rate_gbps: 8.0
-    io_provenance: MODELING_CHOICE
   m3d_stack:
     si_substrate_um: 292.546
     feol_um: 0.150
@@ -108,7 +105,6 @@ architecture:
   feol_route:
     type: nearest_edge_io
     edge: y_min
-    io_channels: 50
     io_channel_distribution: uniform_centered_bins
     wire:
       capacitance_fF_per_um: 0.20
@@ -136,7 +132,6 @@ architecture:
         source_note: independent FEOL endpoint load placeholder; not measured
     access_assumption: UNIFORM_CLUSTER_ACCESS
     topology_provenance: MODELING_CHOICE
-    io_channel_count_source: EXISTING_INDUCTIVE_INTERFACE_REFERENCE
   vertical:
     type: miv
     source: miv_topology
@@ -189,9 +184,9 @@ architecture:
       latency.
   memory_service:
     model: HIERARCHICAL_BANDWIDTH_MODEL
-    die_count_source: GEOMETRY_MEMORY_REGION_COUNT
+    slab_count_source: GEOMETRY_MEMORY_REGION_COUNT
     coil:
-      links_per_die: 50
+      links_per_slab: 50
       data_rate_gbps_per_link: 8.0
       classification: DERIVED_FROM_ARCHITECTURE
       parameter_classification: MODELING_CHOICE
@@ -199,16 +194,13 @@ architecture:
     internal:
       model: FIRST_ORDER_PARALLEL_MEMORY_SERVICE_MODEL
       service_unit: FEOL_IO_CHANNEL_ALIGNED_CLUSTER_ACCESS_GROUP
-      parallel_units_per_slab_source: FEOL_IO_CHANNEL_COUNT
+      parallel_units_per_slab_source: CONTACTLESS_INTERFACE_LINK_COUNT
       parallel_slabs_source: GEOMETRY_MEMORY_REGION_COUNT
       clusters_per_service_source: M3D_ACCESSED_CLUSTERS_PER_ACCESS
       read_payload_source: M3D_DELIVERED_BITS_PER_ACCESS
       service_cycle_source: FIRST_ORDER_SERVICE_CYCLE_APPROXIMATION
       service_cycle_scale: 1.0
       classification: MODELING_CHOICE
-    gpu_internal:
-      bandwidth_bytes_per_s: null
-      status: GPU_INTERNAL_BW_NOT_MODELED_AS_BINDING
   logic_background_w: null
 
 workload:

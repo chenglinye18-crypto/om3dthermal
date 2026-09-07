@@ -40,7 +40,7 @@ def _frozen_case_inputs(requests: int):
     geometry = resolve_case_geometry(case)
     memory = calculate_memory_power(case, project_root=ROOT, geometry=geometry)
     topology = calculate_m3d_subarray(case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     physical = calculate_physical_access_latency(
         case.architecture.physical_access_latency, feol_route=feol,
         miv_length_per_layer_um=memory.diagnostics["miv_length_per_layer_um"],
@@ -75,7 +75,7 @@ def _frozen_case_inputs(requests: int):
         gpu_compute_flops_per_s=gpu_flops,
         external_bandwidth_cap_bytes_per_s=cap_bps)
     bandwidth_per_die = (
-        bandwidth.local_service_groups_per_die * bandwidth.read_payload_bytes_per_service
+        bandwidth.local_service_groups_per_slab * bandwidth.read_payload_bytes_per_service
         / (bandwidth.service_cycle_scale * canonical.placement.local_access_latency_ns * 1e-9))
     locality = build_locality_only_placement(
         workload, demand, layout, bandwidth_per_die_bytes_per_s=bandwidth_per_die,

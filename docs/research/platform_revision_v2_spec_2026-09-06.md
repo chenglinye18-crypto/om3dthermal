@@ -105,8 +105,28 @@ Memory energy 保持独立建模；GPU power 全部由实际带宽派生。
 
 ## 5. 写作素材（已定决策）
 
-- 带宽：场景固定 4.9 TB/s；M3D slab-IO 能力 5.3 TB/s（106×50×8）作设计冗余，
-  文字说明理想 vs 实际差距与 GPU 侧接口限制
+### M3D bandwidth hierarchy
+
+M3D raw memory capability 只包含 internal service 与 contactless interface：
+
+```text
+BW_internal = slab_count * service_lanes_per_slab * 32 B / service_cycle
+BW_contactless = slab_count * links_per_slab * rate_per_link / 8
+BW_M3D = min(BW_internal, BW_contactless)
+```
+
+`service_lanes_per_slab` 直接派生为 `links_per_slab`，8 个 M3D bitcell
+layers 共用这些 lanes，不再乘 8。Nominal `106 * 50 * 8 Gb/s = 5.3
+TB/s`，且 `BW_internal > 5.3 TB/s`，因此 raw M3D bottleneck 是
+contactless interface。底层代码中的 `coil` 即 inductive/contactless link
+layer。
+
+4.9 TB/s 是 legacy matched scenario bandwidth，不是 M3D physical
+capability。GPU 4.8 TB/s 仅在 system-level 作为 downstream bottleneck，
+不进入 raw M3D bandwidth resolver。
+
+- 带宽：场景固定 4.9 TB/s；M3D raw capability 5.3 TB/s 作设计冗余；
+  GPU 侧限制只在 system-level 讨论
 - host 链路：PCIe 主结果 + C2C 敏感性（450 GB/s 仍 ~11× 低于 HBM，结论稳健）
 - 容量叙事：slab 设计冻结，容量随 slab 数线性扩展（98→106），
   "同一根 DREAM 标定过的 slab"是最干净的扩展声明

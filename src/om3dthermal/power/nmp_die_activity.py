@@ -56,7 +56,7 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         bandwidth:ArchitectureBandwidthClosure,*,local_access_latency_ns:float,external_boundary_time_ms:float,
         ownership:tuple[tuple[int,...],...]|None=None)->NMPDieActivitySummary:
     hw=canonical_nmp_hardware(layout.slab_count)
-    bw_die=(bandwidth.local_service_groups_per_die*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*local_access_latency_ns*1e-9))
+    bw_die=(bandwidth.local_service_groups_per_slab*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*local_access_latency_ns*1e-9))
     units,default_spans=build_locality_aware_unit_ownership(workload,layout); spans=default_spans if ownership is None else ownership; n=layout.slab_count
     if len(spans)!=len(units): raise ValueError("unit ownership count mismatch")
     weights=[0.0]*n; kvreads=[0.0]*n; kvwrites=[0.0]*n; flops=[0.0]*n

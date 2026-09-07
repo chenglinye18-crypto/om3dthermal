@@ -41,7 +41,8 @@ def main() -> int:
     )
     scenario = experiment.scenario
     matched_bw = resolve_scenario_matched_bandwidth_bits_per_second(
-        scenario, case.geometry.orthogonal)
+        scenario, case.geometry.orthogonal,
+        case.architecture.memory_service.coil)
     mixtral = load_moe_workload_spec(
         root / "configs/workload/mixtral_8x7b_v01_decode_b1_s32768.yaml",
         project_root=root,
@@ -124,7 +125,7 @@ def _physical_layout(root: Path):
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,

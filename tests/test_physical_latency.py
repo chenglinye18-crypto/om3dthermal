@@ -31,7 +31,7 @@ def canonical_chain():
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     spec = case.architecture.physical_access_latency
     assert spec is not None
     physical = calculate_physical_access_latency(
@@ -123,7 +123,9 @@ def test_map_is_independent_of_cluster_access_assumption(canonical_chain):
     case, _, power, topology, feol, baseline = canonical_chain
     changed_spec = case.architecture.feol_route.model_copy(
         update={"access_assumption": "SYNTHETIC_NON_WORKLOAD_ASSUMPTION"})
-    changed_feol = calculate_feol_route(changed_spec, topology)
+    changed_feol = calculate_feol_route(
+        case.architecture.model_copy(update={"feol_route": changed_spec}),
+        topology)
     spec = case.architecture.physical_access_latency
     changed = calculate_physical_access_latency(
         spec,

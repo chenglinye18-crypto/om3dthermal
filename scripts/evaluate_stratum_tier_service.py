@@ -42,7 +42,7 @@ def _architecture():
         raise ValueError("tier-service evaluation requires M3D geometry")
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -60,8 +60,7 @@ def _architecture():
         expected_total_bits=power.diagnostics["total_stored_bits"],
     )
     bandwidth = derive_architecture_bandwidth(
-        case.architecture.memory_service, layout, topology,
-        feol_io_channels=case.architecture.feol_route.io_channels)
+        case.architecture.memory_service, layout, topology)
     return case, layout, bandwidth
 
 
@@ -79,7 +78,8 @@ def run(output_dir: Path) -> dict[str, object]:
     )
     scenario = experiment.scenario
     matched_bw = resolve_scenario_matched_bandwidth_bits_per_second(
-        scenario, case.geometry.orthogonal)
+        scenario, case.geometry.orthogonal,
+        case.architecture.memory_service.coil)
     base = load_workload_spec(
         ROOT / "configs/workload/llama31_8b_decode_b1_s131072.yaml",
         project_root=ROOT,

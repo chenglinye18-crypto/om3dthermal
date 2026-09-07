@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 import inspect
 from pathlib import Path
 
@@ -33,6 +32,7 @@ from om3dthermal.workload import (
     load_fiddler_published_profile,
 )
 import om3dthermal.evaluator.llm_decode_performance as performance_module
+import om3dthermal.power.memory_bandwidth as bandwidth_module
 
 
 ROOT = Path(__file__).parents[1]
@@ -48,7 +48,7 @@ def canonical():
     assert geometry.m3d is not None
     topology = calculate_m3d_subarray(
         case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture.feol_route, topology)
+    feol = calculate_feol_route(case.architecture, topology)
     latency = calculate_physical_access_latency(
         case.architecture.physical_access_latency,
         feol_route=feol,
@@ -67,9 +67,7 @@ def canonical():
     )
     spec = case.architecture.memory_service
     assert spec is not None
-    closure = derive_architecture_bandwidth(
-        spec, layout, topology,
-        feol_io_channels=case.architecture.feol_route.io_channels)
+    closure = derive_architecture_bandwidth(spec, layout, topology)
     workload = load_workload_spec(WORKLOAD, project_root=ROOT).decode
     return case, geometry, topology, layout, closure, workload
 
@@ -80,9 +78,9 @@ def test_architecture_organization_and_die_count_reuse(canonical) -> None:
     assert topology.subarrays_per_cluster == 8 * 8 == 64
     assert topology.clusters_per_layer == 280
     assert layout.layers_per_cluster == 8
-    assert closure.num_m3d_dies == layout.slab_count == (
+    assert closure.slab_count == layout.slab_count == (
         geometry.memory_region_count) == 106  # rev v2: 106 slabs
-    assert closure.die_count_source == "GEOMETRY_MEMORY_REGION_COUNT"
+    assert closure.slab_count_source == "GEOMETRY_MEMORY_REGION_COUNT"
 
 
 def test_coil_bandwidth_unit_closure(canonical) -> None:
@@ -98,9 +96,42 @@ def test_coil_bandwidth_unit_closure(canonical) -> None:
     assert closure.coil_bandwidth_bytes_per_s / 1e12 == 5.3
 
 
+def test_contactless_inputs_are_single_source_and_drive_feol_lanes(
+    canonical,
+) -> None:
+    case, _, _, layout, closure, _ = canonical
+    coil = case.architecture.memory_service.coil
+
+    assert coil.links_per_slab == 50
+    assert coil.data_rate_gbps_per_link == 8.0
+    orthogonal_fields = type(case.geometry.orthogonal).model_fields
+    feol_fields = type(case.architecture.feol_route).model_fields
+    assert "io_" + "channels_per_slab" not in orthogonal_fields
+    assert "io_" + "channel_rate_gbps" not in orthogonal_fields
+    assert "io_channels" not in feol_fields
+    assert closure.parallel_service_units_per_slab == coil.links_per_slab
+    assert closure.total_parallel_service_units == (
+        layout.slab_count * coil.links_per_slab)
+    assert layout.layers_per_cluster == 8
+    assert closure.total_parallel_service_units == 106 * 50
+
+
+def test_m3d_bandwidth_api_has_no_gpu_candidate() -> None:
+    source = inspect.getsource(bandwidth_module)
+    fields = bandwidth_module.ArchitectureBandwidthClosure.__dataclass_fields__
+
+    assert "GPU_" + "INTERNAL" not in source
+    assert "gpu_" + "internal_bandwidth_bytes_per_s" not in fields
+    assert set(inspect.signature(resolve_effective_bandwidth).parameters) == {
+        "closure",
+        "physical_access_latency_ns",
+        "internal_parallelism_scale",
+    }
+
+
 @pytest.mark.parametrize(
     ("field", "value", "factor"),
-    (("links_per_die", 25, 0.5),
+    (("links_per_slab", 25, 0.5),
      ("data_rate_gbps_per_link", 16.0, 2.0)),
 )
 def test_coil_parameters_scale_derived_bandwidth(
@@ -110,9 +141,7 @@ def test_coil_parameters_scale_derived_bandwidth(
     spec = case.architecture.memory_service
     changed_coil = spec.coil.model_copy(update={field: value})
     changed_spec = spec.model_copy(update={"coil": changed_coil})
-    changed = derive_architecture_bandwidth(
-        changed_spec, layout, topology,
-        feol_io_channels=case.architecture.feol_route.io_channels)
+    changed = derive_architecture_bandwidth(changed_spec, layout, topology)
     assert changed.coil_bandwidth_bytes_per_s == pytest.approx(
         factor * nominal.coil_bandwidth_bytes_per_s)
 
@@ -128,6 +157,8 @@ def test_internal_bandwidth_is_spatial_and_prefix_monotonic(canonical) -> None:
         closure.internal_bandwidth_average_bytes_per_s)
     assert closure.internal_bandwidth_average_bytes_per_s >= (
         closure.internal_bandwidth_slow_bytes_per_s) > 0
+    assert closure.internal_bandwidth_slow_bytes_per_s > (
+        closure.coil_bandwidth_bytes_per_s)
     prefix = tuple(
         point.internal_bandwidth_bytes_per_s
         for point in closure.prefix_bandwidth)
@@ -152,7 +183,6 @@ def test_internal_parallelism_scaling_and_effective_min(canonical) -> None:
         nominal.coil_bandwidth_bytes_per_s,
     )
     assert nominal.bottleneck == "COIL_INTERFACE"
-    assert nominal.gpu_internal_bandwidth_bytes_per_s is None
 
 
 def test_service_cycle_scale_is_explicit_and_inverse_bandwidth(canonical) -> None:
@@ -165,28 +195,11 @@ def test_service_cycle_scale_is_explicit_and_inverse_bandwidth(canonical) -> Non
         changed_spec,
         layout,
         topology,
-        feol_io_channels=case.architecture.feol_route.io_channels,
     )
     assert changed.average_service_cycle_ns == pytest.approx(
         2.0 * nominal.average_service_cycle_ns)
     assert changed.internal_bandwidth_average_bytes_per_s == pytest.approx(
         0.5 * nominal.internal_bandwidth_average_bytes_per_s)
-
-
-def test_bottleneck_identity_includes_optional_gpu(canonical) -> None:
-    _, _, _, _, closure, _ = canonical
-    gpu_limited = replace(
-        closure,
-        gpu_internal_bandwidth_bytes_per_s=1e12,
-        gpu_internal_status=(
-            "NON_BINDING_NUMERICAL_CHOICE_NOT_HARDWARE_CAPABILITY"),
-    )
-    result = resolve_effective_bandwidth(
-        gpu_limited,
-        closure.average_service_cycle_ns / closure.service_cycle_scale,
-    )
-    assert result.effective_bandwidth_bytes_per_s == 1e12
-    assert result.bottleneck == "GPU_INTERNAL"
 
 
 def test_hierarchical_streaming_is_deterministic_and_not_page_serial(canonical) -> None:
