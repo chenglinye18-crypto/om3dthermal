@@ -202,18 +202,21 @@ def build_dense_decode_handoffs(units, ownership, die_count):
         v,vowners=by[layer,"V",None]; o,oowners=by[layer,"O",None]
         gate,gateowners=by[layer,"FFN_GATE",None]; up,upowners=by[layer,"FFN_UP",None]
         down,downowners=by[layer,"FFN_DOWN",None]
-        for unit,owners in ((q,qowners),(k,kowners),(v,vowners)):
-            add("RMSNORM_PRE_ATTENTION",unit.operator_type,"GPU_TO_NMP",
-                unit.activation_input_bytes*len(owners),layer,None,
-                "normalized hidden broadcast to row-parallel projection",
-                _per_die_broadcast(owners,unit.activation_input_bytes,die_count))
-        for unit,owners in ((q,qowners),(k,kowners),(v,vowners)):
-            add(unit.operator_type,"ROPE" if unit.operator_type in ("Q","K") else "KV_VECTOR_REPACK",
-                "NMP_TO_GPU",unit.partial_output_bytes,layer,None,
-                "partition gather for GPU RoPE" if unit.operator_type in ("Q","K")
-                else "conservative GPU-mediated whole-head KV locality repack; not RoPE",
-                _per_die_partition(unit,owners,unit.partial_output_bytes,die_count))
         for request in range(batch):
+            for unit,owners in ((q,qowners),(k,kowners),(v,vowners)):
+                activation_bytes=unit.activation_input_bytes/batch
+                add("RMSNORM_PRE_ATTENTION",unit.operator_type,"GPU_TO_NMP",
+                    activation_bytes*len(owners),layer,request,
+                    "normalized hidden broadcast to row-parallel projection",
+                    _per_die_broadcast(owners,activation_bytes,die_count))
+            for unit,owners in ((q,qowners),(k,kowners),(v,vowners)):
+                output_bytes=unit.partial_output_bytes/batch
+                add(unit.operator_type,
+                    "ROPE" if unit.operator_type in ("Q","K") else "KV_VECTOR_REPACK",
+                    "NMP_TO_GPU",output_bytes,layer,request,
+                    "partition gather for GPU RoPE" if unit.operator_type in ("Q","K")
+                    else "conservative GPU-mediated whole-head KV locality repack; not RoPE",
+                    _per_die_partition(unit,owners,output_bytes,die_count))
             qk,qkowners=by[layer,"ATTENTION_QK",request]
             av,avowners=by[layer,"ATTENTION_AV",request]
             qbytes=q.partial_output_bytes/batch; kbytes=k.partial_output_bytes/batch
@@ -238,33 +241,43 @@ def build_dense_decode_handoffs(units, ownership, die_count):
             add("ATTENTION_AV","AV_REDUCTION","NMP_TO_GPU",partial,layer,request,
                 "one FP32 hidden partial per AV owner",
                 _per_die_broadcast(avowners,av.partial_output_bytes,die_count))
-        add("AV_REDUCTION","O","GPU_TO_NMP",o.activation_input_bytes*len(oowners),layer,None,
-            "reduced FP16 attention output broadcast to O owners",
-            _per_die_broadcast(oowners,o.activation_input_bytes,die_count))
-        add("O","RESIDUAL_ADD_ATTENTION","NMP_TO_GPU",o.partial_output_bytes,layer,None,
-            "row-partitioned O output gather",
-            _per_die_partition(o,oowners,o.partial_output_bytes,die_count))
-        for unit,owners in ((gate,gateowners),(up,upowners)):
-            add("RMSNORM_PRE_FFN",unit.operator_type,"GPU_TO_NMP",
-                unit.activation_input_bytes*len(owners),layer,None,
-                "normalized hidden broadcast to FFN projection",
-                _per_die_broadcast(owners,unit.activation_input_bytes,die_count))
-            add(unit.operator_type,"SWIGLU","NMP_TO_GPU",unit.partial_output_bytes,layer,None,
-                "row-partitioned FFN activation gather",
-                _per_die_partition(unit,owners,unit.partial_output_bytes,die_count))
-        add("SWIGLU","FFN_DOWN","GPU_TO_NMP",down.activation_input_bytes*len(downowners),
-            layer,None,"gated activation broadcast to down projection",
-            _per_die_broadcast(downowners,down.activation_input_bytes,die_count))
-        add("FFN_DOWN","RESIDUAL_ADD_FFN","NMP_TO_GPU",down.partial_output_bytes,layer,None,
-            "row-partitioned FFN output gather",
-            _per_die_partition(down,downowners,down.partial_output_bytes,die_count))
+        for request in range(batch):
+            o_input=o.activation_input_bytes/batch
+            o_output=o.partial_output_bytes/batch
+            add("AV_REDUCTION","O","GPU_TO_NMP",o_input*len(oowners),layer,request,
+                "reduced FP16 attention output broadcast to O owners",
+                _per_die_broadcast(oowners,o_input,die_count))
+            add("O","RESIDUAL_ADD_ATTENTION","NMP_TO_GPU",o_output,layer,request,
+                "row-partitioned O output gather",
+                _per_die_partition(o,oowners,o_output,die_count))
+            for unit,owners in ((gate,gateowners),(up,upowners)):
+                activation_bytes=unit.activation_input_bytes/batch
+                output_bytes=unit.partial_output_bytes/batch
+                add("RMSNORM_PRE_FFN",unit.operator_type,"GPU_TO_NMP",
+                    activation_bytes*len(owners),layer,request,
+                    "normalized hidden broadcast to FFN projection",
+                    _per_die_broadcast(owners,activation_bytes,die_count))
+                add(unit.operator_type,"SWIGLU","NMP_TO_GPU",output_bytes,layer,request,
+                    "row-partitioned FFN activation gather",
+                    _per_die_partition(unit,owners,output_bytes,die_count))
+            down_input=down.activation_input_bytes/batch
+            down_output=down.partial_output_bytes/batch
+            add("SWIGLU","FFN_DOWN","GPU_TO_NMP",down_input*len(downowners),
+                layer,request,"gated activation broadcast to down projection",
+                _per_die_broadcast(downowners,down_input,die_count))
+            add("FFN_DOWN","RESIDUAL_ADD_FFN","NMP_TO_GPU",down_output,layer,request,
+                "row-partitioned FFN output gather",
+                _per_die_partition(down,downowners,down_output,die_count))
     lm,lmowners=by[layers,"LM_HEAD",None]
-    add("FINAL_RMSNORM","LM_HEAD","GPU_TO_NMP",lm.activation_input_bytes*len(lmowners),
-        layers,None,"final normalized hidden broadcast to LM head owners",
-        _per_die_broadcast(lmowners,lm.activation_input_bytes,die_count))
-    add("LM_HEAD","SAMPLING","NMP_TO_GPU",lm.partial_output_bytes,layers,None,
-        "row-partitioned logits gather",
-        _per_die_partition(lm,lmowners,lm.partial_output_bytes,die_count))
+    for request in range(batch):
+        lm_input=lm.activation_input_bytes/batch
+        lm_output=lm.partial_output_bytes/batch
+        add("FINAL_RMSNORM","LM_HEAD","GPU_TO_NMP",lm_input*len(lmowners),
+            layers,request,"final normalized hidden broadcast to LM head owners",
+            _per_die_broadcast(lmowners,lm_input,die_count))
+        add("LM_HEAD","SAMPLING","NMP_TO_GPU",lm_output,layers,request,
+            "row-partitioned logits gather",
+            _per_die_partition(lm,lmowners,lm_output,die_count))
     return tuple(handoffs)
 
 

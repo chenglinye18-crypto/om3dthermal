@@ -35,6 +35,10 @@ from om3dthermal.workload import (
 )
 
 from .gpu import AnalyticalRooflineGPUModel
+from .nmp_decode import (
+    NMP_BATCH_GENERALIZATION_STATUS,
+    evaluate_nmp_decode_batch,
+)
 from .residency import ServingCapacitySource, evaluate_capacity_residency
 
 
@@ -44,7 +48,6 @@ SystemId = Literal[
     "IOM3D_FEOL_NMP",
 ]
 CONVENTIONAL_HBM_WRITE_ENERGY_STATUS = "UNRESOLVED"
-NMP_BATCH_GENERALIZATION_STATUS = "NOT_YET_RESOLVED"
 
 
 class SystemConfiguration(BaseModel):
@@ -239,6 +242,8 @@ class MixedPhaseE2EResult(BaseModel):
     prefill_host_pcie_J: float | None = None
     prefill_total_J: float | None = None
     decode_gpu_dynamic_J: float | None = None
+    decode_nmp_mac_dynamic_J: float = 0.0
+    decode_residual_interface_J: float = 0.0
     decode_gpu_static_J: float | None = None
     decode_memory_read_dynamic_J: float | None = None
     decode_memory_write_dynamic_J: float | None = None
@@ -252,6 +257,11 @@ class MixedPhaseE2EResult(BaseModel):
     mixed_service_tokens_per_J: float | None = None
 
     required_capacity_GB: float | None = None
+    physical_page_rounded_capacity_GB: float | None = None
+    capacity_margin_GB: float | None = None
+    capacity_utilization: float | None = None
+    max_die_capacity_utilization: float | None = None
+    capacity_violations: int | None = None
     local_capacity_GB: float | None = None
     resident_requests: int | None = None
     spilled_requests: int | None = None
@@ -288,7 +298,8 @@ class MixedPhaseE2EResult(BaseModel):
                 self.prefill_host_ddr_J, self.prefill_host_pcie_J,
             )
             decode_components = (
-                self.decode_gpu_dynamic_J, self.decode_gpu_static_J,
+                self.decode_gpu_dynamic_J, self.decode_nmp_mac_dynamic_J,
+                self.decode_residual_interface_J, self.decode_gpu_static_J,
                 self.decode_memory_dynamic_J, self.decode_refresh_J,
                 self.decode_host_ddr_J, self.decode_host_pcie_J,
             )
@@ -494,6 +505,142 @@ def evaluate_conventional_hbm_mixed_phase(
     )
 
 
+def evaluate_iom3d_feol_nmp_mixed_phase(
+    *, project_root: str | Path, model: DenseLLMModelSpec,
+    case: MixedPhaseServingCase,
+) -> MixedPhaseE2EResult:
+    """Evaluate GPU Prefill plus one aggregate FEOL-NMP Decode step."""
+    if model.model_id != case.model_id:
+        raise ValueError("model and mixed case model_id must match")
+    root = Path(project_root)
+    platform = load_platform_spec_file(
+        root / "configs/platform/gpu_package_h200_reference.yaml")
+    gpu_compute = platform.gpu_compute_power
+    gpu_prefill = platform.gpu_prefill_compute
+    gpu_decode = platform.gpu_decode_power
+    if gpu_compute is None or gpu_prefill is None or gpu_decode is None:
+        raise ValueError("canonical H200 GPU Prefill data is incomplete")
+
+    prefill_input = model.prefill_input(
+        batch_size=case.prefill_requests, prompt_length=case.context_length)
+    prefill_metrics = evaluate_llm_prefill(prefill_input)
+    calibration = resolve_gpu_prefill_compute_energy_calibration(
+        gpu_compute, gpu_prefill)
+    bandwidth = resolve_gpu_bandwidth_service(
+        transfer_ceiling_bytes_per_s=gpu_decode.peak_memory_bandwidth_bytes_per_s,
+        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
+        utilization_status=platform.gpu_bandwidth_service.utilization_status,
+        utilization_provenance=platform.gpu_bandwidth_service.provenance,
+    )
+    roofline = evaluate_gpu_prefill_roofline(
+        prefill_metrics,
+        peak_compute_flops_per_s=gpu_compute.peak_compute_BF16_dense_flops_per_s,
+        large_gemm_effective_flops_per_s=(
+            gpu_prefill.large_gemm_effective_tflops * 1e12),
+        causal_attention_effective_flops_per_s=(
+            gpu_prefill.causal_attention_effective_tflops * 1e12),
+        sustained_memory_bandwidth_bytes_per_s=(
+            bandwidth.sustained_bandwidth_bytes_per_s),
+        static_power_W=gpu_compute.static_power_W,
+        peak_reference_dynamic_J_per_FLOP_min=(
+            calibration.peak_reference_dynamic_J_per_FLOP_min),
+        peak_reference_dynamic_J_per_FLOP_max=(
+            calibration.peak_reference_dynamic_J_per_FLOP_max),
+        nominal_gemm_dynamic_J_per_FLOP_min=(
+            calibration.nominal_gemm_dynamic_J_per_FLOP_min),
+        nominal_gemm_dynamic_J_per_FLOP_max=(
+            calibration.nominal_gemm_dynamic_J_per_FLOP_max),
+        nominal_attention_dynamic_J_per_FLOP_min=(
+            calibration.nominal_attention_dynamic_J_per_FLOP_min),
+        nominal_attention_dynamic_J_per_FLOP_max=(
+            calibration.nominal_attention_dynamic_J_per_FLOP_max),
+        compute_bound_total_power_W_min=(
+            calibration.compute_bound_total_power_W_min),
+        compute_bound_total_power_W_max=(
+            calibration.compute_bound_total_power_W_max),
+    )
+
+    decode_input = model.decode_input(
+        batch_size=case.decode_requests, context_length=case.context_length)
+    decode = evaluate_nmp_decode_batch(
+        decode_input, project_root=root,
+        active_capacity_requests=case.batch_size)
+    capacity_fields = dict(
+        required_capacity_GB=decode.logical_required_capacity_GB,
+        physical_page_rounded_capacity_GB=(
+            decode.physical_page_rounded_capacity_GB),
+        local_capacity_GB=decode.available_capacity_GB,
+        capacity_margin_GB=decode.capacity_margin_GB,
+        capacity_utilization=decode.capacity_utilization,
+        max_die_capacity_utilization=decode.max_die_capacity_utilization,
+        capacity_violations=decode.capacity_violations,
+    )
+    common = dict(
+        system_id="IOM3D_FEOL_NMP", comparison_role="PROPOSED",
+        model_id=model.model_id, context_length=case.context_length,
+        batch_size=case.batch_size, prefill_requests=case.prefill_requests,
+        decode_requests=case.decode_requests,
+        nmp_batch_generalization_status=decode.batch_model_status,
+        **capacity_fields,
+    )
+    if decode.evaluation_status == "CAPACITY_INFEASIBLE":
+        return MixedPhaseE2EResult(
+            **common, evaluation_status="CAPACITY_INFEASIBLE",
+            energy_status="NOT_EVALUATED_CAPACITY_INFEASIBLE",
+            capacity_status="CAPACITY_INFEASIBLE",
+            resident_requests=0, spilled_requests=case.batch_size,
+            resident_fraction=0.0)
+
+    prefill_ms = roofline.nominal_prefill_latency_s * 1e3
+    decode_ms = float(decode.decode_step_time_ms)
+    all_metrics = evaluate_llm_decode(model.decode_input(
+        batch_size=case.batch_size, context_length=case.context_length))
+    return MixedPhaseE2EResult(
+        **common, evaluation_status="EVALUATED",
+        energy_status="PREFILL_GPU_DYNAMIC_RANGE_NO_SINGLE_NOMINAL",
+        TTFT_ms=prefill_ms, TPOT_ms=decode_ms,
+        prefill_service_time_ms=prefill_ms,
+        decode_service_time_ms=decode_ms,
+        mixed_epoch_time_ms=prefill_ms + decode_ms,
+        decode_tokens_per_s=decode.aggregate_decode_tokens_per_s,
+        prefill_gpu_dynamic_J=None,
+        prefill_gpu_dynamic_J_min=roofline.total_dynamic_energy_J_min,
+        prefill_gpu_dynamic_J_max=roofline.total_dynamic_energy_J_max,
+        prefill_gpu_static_J=(
+            gpu_compute.static_power_W * roofline.nominal_prefill_latency_s),
+        prefill_memory_read_dynamic_J=None,
+        prefill_memory_write_dynamic_J=None,
+        prefill_memory_dynamic_J=None, prefill_refresh_J=None,
+        prefill_host_ddr_J=0.0, prefill_host_pcie_J=0.0,
+        prefill_total_J=None,
+        decode_gpu_dynamic_J=decode.gpu_dynamic_J_per_step,
+        decode_nmp_mac_dynamic_J=float(decode.mac_dynamic_J_per_step),
+        decode_residual_interface_J=float(decode.residual_interface_J_per_step),
+        decode_gpu_static_J=decode.gpu_static_J_per_step,
+        decode_memory_read_dynamic_J=None,
+        decode_memory_write_dynamic_J=None,
+        decode_memory_dynamic_J=decode.memory_dynamic_J_per_step,
+        decode_refresh_J=decode.refresh_J_per_step,
+        decode_host_ddr_J=0.0, decode_host_pcie_J=0.0,
+        decode_total_J=decode.total_J_per_step,
+        decode_tokens_per_J=decode.tokens_per_J,
+        mixed_total_energy_J=None, mixed_service_tokens_per_J=None,
+        resident_requests=case.batch_size, spilled_requests=0,
+        resident_fraction=1.0,
+        resident_decode_requests=case.decode_requests,
+        spilled_decode_requests=0,
+        resident_prefill_requests=case.prefill_requests,
+        spilled_prefill_requests=0,
+        local_KV_GB=(
+            case.batch_size * all_metrics.kv_bytes_per_request / 1e9),
+        host_KV_GB=0.0, host_read_GB=0.0, host_write_GB=0.0,
+        capacity_status="FULLY_LOCAL",
+        residency_policy="ALL_ACTIVE_REQUESTS_PHYSICALLY_PAGE_ROUNDED",
+        residency_policy_status="CANONICAL_M3D_PHYSICAL_CAPACITY_GATE",
+        prefill_spill_semantics="NOT_APPLICABLE_FULLY_LOCAL",
+    )
+
+
 def evaluate_mixed_phase_e2e(
     *, project_root: str | Path, model: DenseLLMModelSpec,
     case: MixedPhaseServingCase, system_id: SystemId,
@@ -502,20 +649,17 @@ def evaluate_mixed_phase_e2e(
     if system_id == "CONVENTIONAL_HBM_GPU":
         return evaluate_conventional_hbm_mixed_phase(
             project_root=project_root, model=model, case=case)
+    if system_id == "IOM3D_FEOL_NMP":
+        return evaluate_iom3d_feol_nmp_mixed_phase(
+            project_root=project_root, model=model, case=case)
     definition = SYSTEM_CONFIGURATIONS[system_id]
-    nmp_status = (
-        NMP_BATCH_GENERALIZATION_STATUS if system_id == "IOM3D_FEOL_NMP"
-        and case.decode_requests > 1 else "NOT_APPLICABLE")
-    status = (
-        "NMP_BATCH_GENERALIZATION_STATUS_NOT_YET_RESOLVED"
-        if nmp_status == "NOT_YET_RESOLVED"
-        else "ARCHITECTURE_BACKEND_NOT_RUN_IN_THIS_CONSOLIDATION_SMOKE")
     return MixedPhaseE2EResult(
         system_id=system_id, comparison_role=definition.comparison_role,
         model_id=model.model_id, context_length=case.context_length,
         batch_size=case.batch_size, prefill_requests=case.prefill_requests,
-        decode_requests=case.decode_requests, evaluation_status=status,
-        energy_status="NOT_EVALUATED", nmp_batch_generalization_status=nmp_status,
+        decode_requests=case.decode_requests,
+        evaluation_status="ARCHITECTURE_BACKEND_NOT_RUN_IN_THIS_CONSOLIDATION_SMOKE",
+        energy_status="NOT_EVALUATED", nmp_batch_generalization_status="NOT_APPLICABLE",
     )
 
 

@@ -74,6 +74,12 @@ def test_manifest_validates_only_the_frozen_3_by_4_by_3_shape():
     assert all(
         point["prefill_requests"] + point["decode_requests"] == point["batch_size"]
         for point in manifest.mixed_points)
+    assert manifest.mixed_points == (
+        {"batch_size": 4, "prefill_requests": 1, "decode_requests": 3},
+        {"batch_size": 4, "prefill_requests": 2, "decode_requests": 2},
+        {"batch_size": 28, "prefill_requests": 1, "decode_requests": 27},
+        {"batch_size": 28, "prefill_requests": 14, "decode_requests": 14},
+    )
 
 
 def test_mixed_case_rejects_nonclosing_batch():
@@ -214,7 +220,12 @@ def test_complete_result_schema_enforces_phase_and_mixed_energy_closure():
         MixedPhaseE2EResult(**{**common, "mixed_total_energy_J": 28.0})
 
 
-def test_system_roles_and_nmp_batch_boundary(registry):
+@pytest.mark.parametrize("batch,prefill,decode", [
+    (4, 1, 3), (4, 2, 2), (28, 1, 27), (28, 14, 14),
+])
+def test_system_roles_and_resolved_nmp_batch_path(
+    registry, batch, prefill, decode,
+):
     assert SYSTEM_CONFIGURATIONS["CONVENTIONAL_HBM_GPU"].comparison_role == "BASELINE"
     memory_only = SYSTEM_CONFIGURATIONS["ORTHOGONAL_M3D_IGZO_MEMORY_ONLY"]
     assert memory_only.comparison_role == "ABLATION"
@@ -223,9 +234,18 @@ def test_system_roles_and_nmp_batch_boundary(registry):
     assert proposed.decode_executor == "FEOL_NMP_GPU_HYBRID"
     case = MixedPhaseServingCase(
         model_id="llama31_8b", context_length=131072,
-        batch_size=4, prefill_requests=1, decode_requests=3)
+        batch_size=batch, prefill_requests=prefill, decode_requests=decode)
     result = evaluate_mixed_phase_e2e(
         project_root=ROOT, model=registry["llama31_8b"], case=case,
         system_id="IOM3D_FEOL_NMP")
-    assert result.nmp_batch_generalization_status == "NOT_YET_RESOLVED"
+    assert result.nmp_batch_generalization_status == (
+        "RESOLVED_ANALYTICAL_BATCH_MODEL")
+    assert result.evaluation_status == "EVALUATED"
+    assert result.capacity_status == "FULLY_LOCAL"
+    assert result.capacity_violations == 0
+    assert result.resident_requests == batch
+    assert result.decode_tokens_per_s > 0.0
+    assert result.decode_total_J > 0.0
+    assert result.mixed_epoch_time_ms == pytest.approx(
+        result.prefill_service_time_ms + result.decode_service_time_ms)
     assert result.thermal is None

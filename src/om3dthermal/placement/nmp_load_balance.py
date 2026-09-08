@@ -102,13 +102,23 @@ def build_performance_balanced_placement(workload:LLMDecodeInput,demand:M3DWorkl
         if paired:
             chosen=kv_pair_owners[pair_key]
         else:
-            fractions=shard_fractions(load,span); feasible=[]
-            for die in sorted(range(n),key=lambda d:(resident[d],d)):
-                fraction=fractions[len(feasible)]
-                if resident[die]+load.resident_bytes*fraction<=cap:
-                    feasible.append(die)
-                    if len(feasible)==span: break
-            if len(feasible)<span: raise ValueError("PERFORMANCE_BALANCED_CAPACITY_FAIL")
+            feasible=[]
+            candidate_spans = (
+                range(span, n + 1)
+                if load.unit.shard_mode == "RESIDENT_ONLY" else (span,))
+            for candidate_span in candidate_spans:
+                fractions=shard_fractions(load,candidate_span); feasible=[]
+                for die in sorted(range(n),key=lambda d:(resident[d],d)):
+                    fraction=fractions[len(feasible)]
+                    if resident[die]+load.resident_bytes*fraction<=cap:
+                        feasible.append(die)
+                        if len(feasible)==candidate_span: break
+                if len(feasible)==candidate_span:
+                    span=candidate_span
+                    break
+            if len(feasible)<span:
+                raise ValueError(
+                    f"PERFORMANCE_BALANCED_CAPACITY_FAIL:{load.unit.unit_id}")
             chosen=tuple(feasible)
         if load.unit.operator_type=="ATTENTION_QK": kv_pair_owners[pair_key]=chosen
         shards=_assign(load,chosen)

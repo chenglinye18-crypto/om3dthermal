@@ -17,7 +17,22 @@ from om3dthermal.power.nmp_die_activity import canonical_nmp_hardware, evaluate_
 from om3dthermal.power.nmp_die_power import build_nmp_die_power_map
 from om3dthermal.workload import build_m3d_workload_page_demand
 
-def run(output_dir: Path):
+def run(output_dir: Path, batch_size: int = 1):
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    if batch_size > 1:
+        from om3dthermal.serving import evaluate_nmp_decode_batch
+        base=load_workload_spec(
+            ROOT/"configs/workload/llama31_8b_decode_b1_s131072.yaml",
+            project_root=ROOT).decode
+        workload=base.model_copy(update={"batch_size":batch_size})
+        result=evaluate_nmp_decode_batch(workload,project_root=ROOT)
+        payload={"summary":result.model_dump(mode="json"),
+                 "workload":workload.model_dump(mode="json")}
+        output_dir.mkdir(parents=True,exist_ok=True)
+        (output_dir/"nmp_locality_placement.json").write_text(
+            json.dumps(payload,indent=2),encoding="utf-8")
+        return payload
     layout, bandwidth=_architecture(); case=load_case_config(ROOT/"configs/cases/orthogonal_m3d_igzo.yaml"); geo=resolve_case_geometry(case); power=calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps,project_root=ROOT,geometry=geo)
     topology=calculate_m3d_subarray(case.architecture.m3d_subarray,geo.m3d); feol=calculate_feol_route(case.architecture,topology)
     physical=calculate_physical_access_latency(case.architecture.physical_access_latency,feol_route=feol,miv_length_per_layer_um=power.diagnostics['miv_length_per_layer_um'],miv_delay_per_layer_ns=power.diagnostics['miv_delay_per_layer_ns'],miv_status=power.diagnostics['miv_latency_status'],miv_parameter_status=power.diagnostics['miv_resistance_parameter_status'],miv_provenance=power.diagnostics['miv_resistance_provenance'])
@@ -27,7 +42,7 @@ def run(output_dir: Path):
     from om3dthermal.platform import load_platform_spec_file
     platform=load_platform_spec_file(ROOT/"configs/platform/gpu_package_h200_reference.yaml")
     gpu_power=platform.gpu_decode_power
-    w=base; d=build_m3d_workload_page_demand(w,layout)
+    w=base.model_copy(update={"batch_size":batch_size}); d=build_m3d_workload_page_demand(w,layout)
     baseline=evaluate_nmp_locality_case(w,d,layout,physical,bandwidth,
         case="NON_NMP_GPU",gpu_compute_flops_per_s=gpu)
     hardware=canonical_nmp_hardware(layout.slab_count)
@@ -155,7 +170,9 @@ def run(output_dir: Path):
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--output-dir",type=Path,default=ROOT/"runs/nmp_attention_nominal")
-    print(json.dumps(run(p.parse_args().output_dir)["summary"],indent=2))
+    p.add_argument("--batch-size",type=int,default=1)
+    args=p.parse_args()
+    print(json.dumps(run(args.output_dir,args.batch_size)["summary"],indent=2))
 
 if __name__ == "__main__":
     main()
