@@ -88,6 +88,33 @@ from .growing_kv import (
     M3DGrowingKVCapacityResult,
     evaluate_m3d_growing_kv_capacity,
 )
+from .workspace import (
+    WorkspaceExecutionConfig,
+    WorkspacePeak,
+    WorkspaceStage,
+    evaluate_decode_workspace,
+    evaluate_prefill_workspace,
+)
+from .kv_allocation import (
+    KVPhysicalAllocator,
+    KVSlotRange,
+    assert_no_live_overlap,
+)
+from .persistent_horizon import (
+    PersistentHorizonComparison,
+    PersistentMixedServiceCase,
+    PersistentMixedServiceResult,
+    ServingE2EClosureSpec,
+    compare_persistent_horizons,
+    evaluate_persistent_mixed_service_horizon,
+    load_serving_e2e_closure_spec,
+)
+from .host_kv_overflow import (
+    ConventionalOverflowPolicy,
+    ConventionalOverflowResult,
+    HostKVDecodeStep,
+    evaluate_conventional_overflow_policy,
+)
 
 __all__ = [
     "AnalyticalRooflineGPUModel",
@@ -158,4 +185,23 @@ __all__ = [
     "evaluate_conventional_prefill_first_state_window",
     "M3DGrowingKVCapacityResult",
     "evaluate_m3d_growing_kv_capacity",
+    "WorkspaceExecutionConfig",
+    "WorkspacePeak",
+    "WorkspaceStage",
+    "evaluate_decode_workspace",
+    "evaluate_prefill_workspace",
+    "KVPhysicalAllocator",
+    "KVSlotRange",
+    "assert_no_live_overlap",
+    "PersistentHorizonComparison",
+    "PersistentMixedServiceCase",
+    "PersistentMixedServiceResult",
+    "ServingE2EClosureSpec",
+    "compare_persistent_horizons",
+    "evaluate_persistent_mixed_service_horizon",
+    "load_serving_e2e_closure_spec",
+    "ConventionalOverflowPolicy",
+    "ConventionalOverflowResult",
+    "HostKVDecodeStep",
+    "evaluate_conventional_overflow_policy",
 ]

@@ -1,0 +1,26 @@
+schema_version: 1
+experiment_id: serving_e2e_closure
+model_registry_dir: configs/workload/models
+models: [llama31_8b, qwen25_7b, llama2_7b]
+context_lengths: [32768, 131072]
+mixed_points:
+  - {batch_size: 4, prefill_requests: 1, decode_requests: 3}
+  - {batch_size: 4, prefill_requests: 2, decode_requests: 2}
+  - {batch_size: 28, prefill_requests: 1, decode_requests: 27}
+  - {batch_size: 28, prefill_requests: 14, decode_requests: 14}
+generation_horizons: [128, 256, 512, 1024, 2048]
+systems:
+  - CONVENTIONAL_HBM_GPU
+  - ORTHOGONAL_M3D_IGZO_MEMORY_ONLY
+  - IOM3D_FEOL_NMP
+schedule_policy: NO_OVERLAP__PREFILL_FIRST
+workspace:
+  prefill_chunk_tokens: 2048
+  attention_tile_tokens: 128
+  activation_bytes: 2
+  attention_accumulator_bytes: 4
+  provenance_status: MODELING_CHOICE_UNIFORM_CHUNKED_FUSED_ATTENTION
+  provenance: >-
+    A single auditable execution choice used by every system. The 2048-token
+    chunk and 128-token attention tile are fixed independently of capacity;
+    they are not selected per model, batch, or feasibility result.

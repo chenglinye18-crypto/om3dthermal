@@ -226,6 +226,7 @@ def evaluate_nmp_decode_batch(
     workload: LLMDecodeInput, *, project_root: str | Path,
     active_capacity_requests: int | None = None,
     resident_context_length: int | None = None,
+    persistent_resident_placement: object | None = None,
 ) -> NMPDecodeBatchResult:
     """Run one aggregate placement/activity/power solve; never loops over B1."""
     root = Path(project_root).resolve()
@@ -235,7 +236,8 @@ def evaluate_nmp_decode_batch(
                         else resident_context_length)
     if active < workload.batch_size:
         raise ValueError("active capacity requests cannot be below Decode batch size")
-    if resident_context < workload.context_length:
+    if (persistent_resident_placement is None
+            and resident_context < workload.context_length):
         raise ValueError("resident context cannot be below execution context")
     capacity_workload = workload.model_copy(update={
         "batch_size": active,"context_length": resident_context})
@@ -254,7 +256,7 @@ def evaluate_nmp_decode_batch(
         capacity_margin_GB=(available - rounded) / 1e9,
         capacity_utilization=rounded / available,
     )
-    if rounded > available:
+    if rounded > available and persistent_resident_placement is None:
         return NMPDecodeBatchResult(
             **capacity_common, capacity_status="CAPACITY_INFEASIBLE",
             evaluation_status="CAPACITY_INFEASIBLE")
@@ -271,10 +273,12 @@ def evaluate_nmp_decode_batch(
            * local_access_latency_ns * 1e-9))
     capacity_demand = build_m3d_workload_page_demand(
         capacity_workload, architecture.layout)
-    capacity_placement = build_performance_balanced_placement(
-        capacity_workload, capacity_demand, architecture.layout,
-        bandwidth_per_die_bytes_per_s=bandwidth_per_die,
-        compute_per_die_flops_per_s=hardware.peak_flops_per_die)
+    capacity_placement = persistent_resident_placement
+    if capacity_placement is None:
+        capacity_placement = build_performance_balanced_placement(
+            capacity_workload, capacity_demand, architecture.layout,
+            bandwidth_per_die_bytes_per_s=bandwidth_per_die,
+            compute_per_die_flops_per_s=hardware.peak_flops_per_die)
     if capacity_placement.capacity_violations:
         raise RuntimeError("page-feasible workload produced die capacity violations")
 
