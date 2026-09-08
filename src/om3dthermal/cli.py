@@ -623,7 +623,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "prefill":
         from .experiment import load_platform_spec, load_prefill_workload_spec
-        from .platform import resolve_gpu_bandwidth_service
+        from .platform import (
+            resolve_gpu_bandwidth_service,
+            resolve_gpu_prefill_compute_energy_calibration,
+        )
         from .workload import evaluate_gpu_prefill_roofline, evaluate_llm_prefill
 
         project_root = Path.cwd()
@@ -645,6 +648,8 @@ def main(argv: list[str] | None = None) -> int:
         metrics = evaluate_llm_prefill(workload_spec.prefill)
         compute = platform.gpu_compute_power
         prefill_compute = platform.gpu_prefill_compute
+        energy_calibration = resolve_gpu_prefill_compute_energy_calibration(
+            compute, prefill_compute)
         roofline = evaluate_gpu_prefill_roofline(
             metrics,
             peak_compute_flops_per_s=(
@@ -656,16 +661,30 @@ def main(argv: list[str] | None = None) -> int:
             sustained_memory_bandwidth_bytes_per_s=(
                 bandwidth.sustained_bandwidth_bytes_per_s),
             static_power_W=compute.static_power_W,
-            e_compute_dynamic_J_per_FLOP_min=(
-                compute.e_compute_dynamic_J_per_FLOP_min),
-            e_compute_dynamic_J_per_FLOP_max=(
-                compute.e_compute_dynamic_J_per_FLOP_max))
+            peak_reference_dynamic_J_per_FLOP_min=(
+                energy_calibration.peak_reference_dynamic_J_per_FLOP_min),
+            peak_reference_dynamic_J_per_FLOP_max=(
+                energy_calibration.peak_reference_dynamic_J_per_FLOP_max),
+            nominal_gemm_dynamic_J_per_FLOP_min=(
+                energy_calibration.nominal_gemm_dynamic_J_per_FLOP_min),
+            nominal_gemm_dynamic_J_per_FLOP_max=(
+                energy_calibration.nominal_gemm_dynamic_J_per_FLOP_max),
+            nominal_attention_dynamic_J_per_FLOP_min=(
+                energy_calibration.nominal_attention_dynamic_J_per_FLOP_min),
+            nominal_attention_dynamic_J_per_FLOP_max=(
+                energy_calibration.nominal_attention_dynamic_J_per_FLOP_max),
+            compute_bound_total_power_W_min=(
+                energy_calibration.compute_bound_total_power_W_min),
+            compute_bound_total_power_W_max=(
+                energy_calibration.compute_bound_total_power_W_max))
         print(json.dumps({
             "workload_id": workload_spec.workload_id,
             "input": workload_spec.prefill.model_dump(mode="json"),
             "metrics": metrics.model_dump(mode="json"),
             "gpu_prefill_compute_capability": (
                 prefill_compute.model_dump(mode="json")),
+            "gpu_prefill_energy_calibration": (
+                energy_calibration.model_dump(mode="json")),
             "gpu_roofline": roofline.model_dump(mode="json"),
         }, indent=2))
     elif args.command == "nmp-attention":

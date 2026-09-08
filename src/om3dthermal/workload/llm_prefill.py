@@ -221,8 +221,20 @@ class GPUPrefillRooflineMetrics(BaseModel):
         "REFERENCE_CALIBRATED"
     ] = "REFERENCE_CALIBRATED"
     static_power_W: float
-    dynamic_compute_energy_J_min: float
-    dynamic_compute_energy_J_max: float
+    peak_reference_dynamic_pJ_per_FLOP_min: float
+    peak_reference_dynamic_pJ_per_FLOP_max: float
+    nominal_gemm_dynamic_pJ_per_FLOP_min: float
+    nominal_gemm_dynamic_pJ_per_FLOP_max: float
+    nominal_attention_dynamic_pJ_per_FLOP_min: float
+    nominal_attention_dynamic_pJ_per_FLOP_max: float
+    peak_reference_dynamic_energy_J_min: float
+    peak_reference_dynamic_energy_J_max: float
+    linear_dynamic_energy_J_min: float
+    linear_dynamic_energy_J_max: float
+    attention_dynamic_energy_J_min: float
+    attention_dynamic_energy_J_max: float
+    total_dynamic_energy_J_min: float
+    total_dynamic_energy_J_max: float
     static_energy_J_at_peak_roofline_lower_bound: float
     static_energy_status: Literal[
         "STATIC_ENERGY_AT_PEAK_ROOFLINE_LOWER_BOUND"
@@ -235,12 +247,21 @@ class GPUPrefillRooflineMetrics(BaseModel):
     peak_bound_compute_plus_static_energy_J_max: float
     nominal_compute_plus_static_energy_J_min: float
     nominal_compute_plus_static_energy_J_max: float
+    implied_total_power_W_min: float
+    implied_total_power_W_max: float
+    power_closure_status: Literal[
+        "PASS", "FAIL", "NOT_APPLICABLE_MEMORY_BOUND"
+    ]
+    nominal_energy_status: Literal[
+        "REFERENCE_CALIBRATED_COMPUTE_BOUND_POWER_CLOSED",
+        "REFERENCE_CALIBRATED_COMPUTE_BOUND_POWER_NOT_CLOSED",
+    ]
     prefill_memory_dynamic_energy_completeness: Literal[
         "UNRESOLVED_NOT_INCLUDED"
     ] = "UNRESOLVED_NOT_INCLUDED"
     energy_model_status: Literal[
-        "COMPUTE_DYNAMIC_RANGE_PLUS_STATIC__MEMORY_INTERFACE_DYNAMIC_UNRESOLVED"
-    ] = "COMPUTE_DYNAMIC_RANGE_PLUS_STATIC__MEMORY_INTERFACE_DYNAMIC_UNRESOLVED"
+        "REFERENCE_CALIBRATED_POWER_CLOSED__MEMORY_INTERFACE_DYNAMIC_UNRESOLVED"
+    ] = "REFERENCE_CALIBRATED_POWER_CLOSED__MEMORY_INTERFACE_DYNAMIC_UNRESOLVED"
 
 
 def _active_matrix_weight_bytes(inp: LLMPrefillInput) -> float:
@@ -364,20 +385,41 @@ def evaluate_gpu_prefill_roofline(
     large_gemm_effective_flops_per_s: float,
     causal_attention_effective_flops_per_s: float,
     sustained_memory_bandwidth_bytes_per_s: float, static_power_W: float,
-    e_compute_dynamic_J_per_FLOP_min: float,
-    e_compute_dynamic_J_per_FLOP_max: float,
+    peak_reference_dynamic_J_per_FLOP_min: float,
+    peak_reference_dynamic_J_per_FLOP_max: float,
+    nominal_gemm_dynamic_J_per_FLOP_min: float,
+    nominal_gemm_dynamic_J_per_FLOP_max: float,
+    nominal_attention_dynamic_J_per_FLOP_min: float,
+    nominal_attention_dynamic_J_per_FLOP_max: float,
+    compute_bound_total_power_W_min: float,
+    compute_bound_total_power_W_max: float,
 ) -> GPUPrefillRooflineMetrics:
     """Apply a dense-BF16 GPU roofline and compute-energy range."""
     values = (
         peak_compute_flops_per_s, large_gemm_effective_flops_per_s,
         causal_attention_effective_flops_per_s,
         sustained_memory_bandwidth_bytes_per_s, static_power_W,
-        e_compute_dynamic_J_per_FLOP_min,
-        e_compute_dynamic_J_per_FLOP_max)
+        peak_reference_dynamic_J_per_FLOP_min,
+        peak_reference_dynamic_J_per_FLOP_max,
+        nominal_gemm_dynamic_J_per_FLOP_min,
+        nominal_gemm_dynamic_J_per_FLOP_max,
+        nominal_attention_dynamic_J_per_FLOP_min,
+        nominal_attention_dynamic_J_per_FLOP_max,
+        compute_bound_total_power_W_min,
+        compute_bound_total_power_W_max)
     if any(value <= 0 for value in values):
         raise ValueError("GPU roofline rates, power, and energy coefficients must be positive")
-    if e_compute_dynamic_J_per_FLOP_max < e_compute_dynamic_J_per_FLOP_min:
-        raise ValueError("compute dynamic energy maximum must not be below minimum")
+    ranges = (
+        (peak_reference_dynamic_J_per_FLOP_min,
+         peak_reference_dynamic_J_per_FLOP_max),
+        (nominal_gemm_dynamic_J_per_FLOP_min,
+         nominal_gemm_dynamic_J_per_FLOP_max),
+        (nominal_attention_dynamic_J_per_FLOP_min,
+         nominal_attention_dynamic_J_per_FLOP_max),
+        (compute_bound_total_power_W_min, compute_bound_total_power_W_max),
+    )
+    if any(maximum < minimum for minimum, maximum in ranges):
+        raise ValueError("Prefill energy and power maxima must not be below minima")
     if max(
         large_gemm_effective_flops_per_s,
         causal_attention_effective_flops_per_s,
@@ -395,8 +437,32 @@ def evaluate_gpu_prefill_roofline(
     nominal_prefill_s = max(nominal_compute_s, memory_s)
     peak_static_energy = static_power_W * peak_roofline_s
     nominal_static_energy = static_power_W * nominal_prefill_s
-    dynamic_min = metrics.total_flops * e_compute_dynamic_J_per_FLOP_min
-    dynamic_max = metrics.total_flops * e_compute_dynamic_J_per_FLOP_max
+    linear_flops = metrics.linear_flops + metrics.lm_head_flops
+    peak_dynamic_min = (
+        metrics.total_flops * peak_reference_dynamic_J_per_FLOP_min)
+    peak_dynamic_max = (
+        metrics.total_flops * peak_reference_dynamic_J_per_FLOP_max)
+    linear_dynamic_min = (
+        linear_flops * nominal_gemm_dynamic_J_per_FLOP_min)
+    linear_dynamic_max = (
+        linear_flops * nominal_gemm_dynamic_J_per_FLOP_max)
+    attention_dynamic_min = (
+        metrics.attention_flops
+        * nominal_attention_dynamic_J_per_FLOP_min)
+    attention_dynamic_max = (
+        metrics.attention_flops
+        * nominal_attention_dynamic_J_per_FLOP_max)
+    total_dynamic_min = linear_dynamic_min + attention_dynamic_min
+    total_dynamic_max = linear_dynamic_max + attention_dynamic_max
+    nominal_energy_min = total_dynamic_min + nominal_static_energy
+    nominal_energy_max = total_dynamic_max + nominal_static_energy
+    implied_power_min = nominal_energy_min / nominal_prefill_s
+    implied_power_max = nominal_energy_max / nominal_prefill_s
+    closure_pass = (
+        math.isclose(implied_power_min, compute_bound_total_power_W_min,
+                     rel_tol=1e-12, abs_tol=1e-9)
+        and math.isclose(implied_power_max, compute_bound_total_power_W_max,
+                         rel_tol=1e-12, abs_tol=1e-9))
     return GPUPrefillRooflineMetrics(
         peak_compute_flops_per_s=peak_compute_flops_per_s,
         large_gemm_effective_flops_per_s=large_gemm_effective_flops_per_s,
@@ -420,15 +486,41 @@ def evaluate_gpu_prefill_roofline(
         nominal_bottleneck=(
             "COMPUTE" if nominal_compute_s >= memory_s else "MEMORY"),
         static_power_W=static_power_W,
-        dynamic_compute_energy_J_min=dynamic_min,
-        dynamic_compute_energy_J_max=dynamic_max,
+        peak_reference_dynamic_pJ_per_FLOP_min=(
+            peak_reference_dynamic_J_per_FLOP_min * 1e12),
+        peak_reference_dynamic_pJ_per_FLOP_max=(
+            peak_reference_dynamic_J_per_FLOP_max * 1e12),
+        nominal_gemm_dynamic_pJ_per_FLOP_min=(
+            nominal_gemm_dynamic_J_per_FLOP_min * 1e12),
+        nominal_gemm_dynamic_pJ_per_FLOP_max=(
+            nominal_gemm_dynamic_J_per_FLOP_max * 1e12),
+        nominal_attention_dynamic_pJ_per_FLOP_min=(
+            nominal_attention_dynamic_J_per_FLOP_min * 1e12),
+        nominal_attention_dynamic_pJ_per_FLOP_max=(
+            nominal_attention_dynamic_J_per_FLOP_max * 1e12),
+        peak_reference_dynamic_energy_J_min=peak_dynamic_min,
+        peak_reference_dynamic_energy_J_max=peak_dynamic_max,
+        linear_dynamic_energy_J_min=linear_dynamic_min,
+        linear_dynamic_energy_J_max=linear_dynamic_max,
+        attention_dynamic_energy_J_min=attention_dynamic_min,
+        attention_dynamic_energy_J_max=attention_dynamic_max,
+        total_dynamic_energy_J_min=total_dynamic_min,
+        total_dynamic_energy_J_max=total_dynamic_max,
         static_energy_J_at_peak_roofline_lower_bound=peak_static_energy,
         nominal_static_energy_J=nominal_static_energy,
         peak_bound_compute_plus_static_energy_J_min=(
-            dynamic_min + peak_static_energy),
+            peak_dynamic_min + peak_static_energy),
         peak_bound_compute_plus_static_energy_J_max=(
-            dynamic_max + peak_static_energy),
-        nominal_compute_plus_static_energy_J_min=(
-            dynamic_min + nominal_static_energy),
-        nominal_compute_plus_static_energy_J_max=(
-            dynamic_max + nominal_static_energy))
+            peak_dynamic_max + peak_static_energy),
+        nominal_compute_plus_static_energy_J_min=nominal_energy_min,
+        nominal_compute_plus_static_energy_J_max=nominal_energy_max,
+        implied_total_power_W_min=implied_power_min,
+        implied_total_power_W_max=implied_power_max,
+        power_closure_status=(
+            "PASS" if closure_pass
+            else "NOT_APPLICABLE_MEMORY_BOUND"
+            if nominal_compute_s < memory_s else "FAIL"),
+        nominal_energy_status=(
+            "REFERENCE_CALIBRATED_COMPUTE_BOUND_POWER_CLOSED"
+            if closure_pass else
+            "REFERENCE_CALIBRATED_COMPUTE_BOUND_POWER_NOT_CLOSED"))

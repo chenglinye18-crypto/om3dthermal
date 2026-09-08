@@ -104,13 +104,13 @@ gpu_compute_power:
   static_power_status: MEASURED_REFERENCE_H200_SXM_IDLE_FLOOR
   peak_compute_status: VENDOR_SPEC_H200_BF16_DENSE
   compute_power_range_status: DERIVED_FROM_MEASURED_REFERENCE
-  coefficient_status: DYNAMIC_ONLY_DERIVED_AFTER_SUBTRACTING_STATIC_POWER
+  coefficient_status: VENDOR_PEAK_DERIVED_DYNAMIC_ENERGY_REFERENCE
   provenance:
     - record_id: h200_compute_power_range_v0
       classification: SOFTWARE_DERIVED
       source: docs/research/gpu_platform_table_2026-09-06.csv
       source_location: H200 SXM compute-bound power range and BF16 dense peak
-      status: DYNAMIC_COEFFICIENT_RANGE_AFTER_STATIC_SUBTRACTION
+      status: VENDOR_PEAK_DERIVED_DYNAMIC_ENERGY_REFERENCE
       transformation: >-
         F_peak_vendor = 989.5e12 FLOP/s; e_dynamic_min = (525 - 74) /
         F_peak_vendor; e_dynamic_max = (700 - 74) / F_peak_vendor. No nominal

@@ -26,7 +26,7 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from om3dthermal.provenance import ProvenanceRecord
 
@@ -217,7 +217,7 @@ class AffineGPUComputePowerSpec(BaseModel):
         "DERIVED_FROM_MEASURED_REFERENCE"
     ]
     coefficient_status: Literal[
-        "DYNAMIC_ONLY_DERIVED_AFTER_SUBTRACTING_STATIC_POWER"
+        "VENDOR_PEAK_DERIVED_DYNAMIC_ENERGY_REFERENCE"
     ]
     provenance: tuple[ProvenanceRecord, ...]
 
@@ -312,3 +312,97 @@ class ReferenceCalibratedGPUPrefillComputeSpec(BaseModel):
         if any(record.status in forbidden_statuses for record in self.provenance):
             raise ValueError("GPU Prefill calibration provenance overclaims its source")
         return self
+
+
+class GPUPrefillComputeEnergyCalibration(BaseModel):
+    """Platform-derived peak-reference and nominal Prefill coefficients."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    vendor_peak_tflops: float = Field(gt=0.0)
+    large_gemm_effective_tflops: float = Field(gt=0.0)
+    causal_attention_effective_tflops: float = Field(gt=0.0)
+    static_power_W: float = Field(gt=0.0)
+    compute_bound_total_power_W_min: float = Field(gt=0.0)
+    compute_bound_total_power_W_max: float = Field(gt=0.0)
+    compute_bound_dynamic_power_W_min: float = Field(gt=0.0)
+    compute_bound_dynamic_power_W_max: float = Field(gt=0.0)
+    peak_reference_dynamic_J_per_FLOP_min: float = Field(gt=0.0)
+    peak_reference_dynamic_J_per_FLOP_max: float = Field(gt=0.0)
+    nominal_gemm_dynamic_J_per_FLOP_min: float = Field(gt=0.0)
+    nominal_gemm_dynamic_J_per_FLOP_max: float = Field(gt=0.0)
+    nominal_attention_dynamic_J_per_FLOP_min: float = Field(gt=0.0)
+    nominal_attention_dynamic_J_per_FLOP_max: float = Field(gt=0.0)
+    peak_reference_coefficient_status: Literal[
+        "VENDOR_PEAK_DERIVED_DYNAMIC_ENERGY_REFERENCE"
+    ] = "VENDOR_PEAK_DERIVED_DYNAMIC_ENERGY_REFERENCE"
+    nominal_coefficient_status: Literal[
+        "REFERENCE_CALIBRATED_EFFECTIVE_THROUGHPUT_DERIVED_DYNAMIC_ENERGY"
+    ] = "REFERENCE_CALIBRATED_EFFECTIVE_THROUGHPUT_DERIVED_DYNAMIC_ENERGY"
+    derivation: Literal[
+        "DYNAMIC_POWER_EQUALS_TOTAL_MINUS_STATIC__ENERGY_PER_FLOP_EQUALS_DYNAMIC_POWER_DIVIDED_BY_EFFECTIVE_THROUGHPUT"
+    ] = (
+        "DYNAMIC_POWER_EQUALS_TOTAL_MINUS_STATIC__ENERGY_PER_FLOP_EQUALS_"
+        "DYNAMIC_POWER_DIVIDED_BY_EFFECTIVE_THROUGHPUT")
+
+    @computed_field(return_type=float)
+    @property
+    def peak_reference_dynamic_pJ_per_FLOP_min(self) -> float:
+        return self.peak_reference_dynamic_J_per_FLOP_min * 1e12
+
+    @computed_field(return_type=float)
+    @property
+    def peak_reference_dynamic_pJ_per_FLOP_max(self) -> float:
+        return self.peak_reference_dynamic_J_per_FLOP_max * 1e12
+
+    @computed_field(return_type=float)
+    @property
+    def nominal_gemm_dynamic_pJ_per_FLOP_min(self) -> float:
+        return self.nominal_gemm_dynamic_J_per_FLOP_min * 1e12
+
+    @computed_field(return_type=float)
+    @property
+    def nominal_gemm_dynamic_pJ_per_FLOP_max(self) -> float:
+        return self.nominal_gemm_dynamic_J_per_FLOP_max * 1e12
+
+    @computed_field(return_type=float)
+    @property
+    def nominal_attention_dynamic_pJ_per_FLOP_min(self) -> float:
+        return self.nominal_attention_dynamic_J_per_FLOP_min * 1e12
+
+    @computed_field(return_type=float)
+    @property
+    def nominal_attention_dynamic_pJ_per_FLOP_max(self) -> float:
+        return self.nominal_attention_dynamic_J_per_FLOP_max * 1e12
+
+
+def resolve_gpu_prefill_compute_energy_calibration(
+    compute: AffineGPUComputePowerSpec,
+    prefill: ReferenceCalibratedGPUPrefillComputeSpec,
+) -> GPUPrefillComputeEnergyCalibration:
+    """Derive family-specific nominal pJ/FLOP from canonical power anchors."""
+    dynamic_min = compute.compute_bound_power_W_min - compute.static_power_W
+    dynamic_max = compute.compute_bound_power_W_max - compute.static_power_W
+    gemm_flops = prefill.large_gemm_effective_tflops * 1e12
+    attention_flops = prefill.causal_attention_effective_tflops * 1e12
+    return GPUPrefillComputeEnergyCalibration(
+        vendor_peak_tflops=(
+            compute.peak_compute_BF16_dense_flops_per_s / 1e12),
+        large_gemm_effective_tflops=prefill.large_gemm_effective_tflops,
+        causal_attention_effective_tflops=(
+            prefill.causal_attention_effective_tflops),
+        static_power_W=compute.static_power_W,
+        compute_bound_total_power_W_min=compute.compute_bound_power_W_min,
+        compute_bound_total_power_W_max=compute.compute_bound_power_W_max,
+        compute_bound_dynamic_power_W_min=dynamic_min,
+        compute_bound_dynamic_power_W_max=dynamic_max,
+        peak_reference_dynamic_J_per_FLOP_min=(
+            compute.e_compute_dynamic_J_per_FLOP_min),
+        peak_reference_dynamic_J_per_FLOP_max=(
+            compute.e_compute_dynamic_J_per_FLOP_max),
+        nominal_gemm_dynamic_J_per_FLOP_min=dynamic_min / gemm_flops,
+        nominal_gemm_dynamic_J_per_FLOP_max=dynamic_max / gemm_flops,
+        nominal_attention_dynamic_J_per_FLOP_min=(
+            dynamic_min / attention_flops),
+        nominal_attention_dynamic_J_per_FLOP_max=(
+            dynamic_max / attention_flops))

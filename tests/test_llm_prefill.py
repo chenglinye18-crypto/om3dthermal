@@ -8,7 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from om3dthermal.experiment import load_platform_spec, load_prefill_workload_spec
-from om3dthermal.platform import resolve_gpu_bandwidth_service
+from om3dthermal.platform import (
+    resolve_gpu_bandwidth_service,
+    resolve_gpu_prefill_compute_energy_calibration,
+)
 from om3dthermal.workload import (
     LLMDecodeInput,
     LLMPrefillInput,
@@ -43,6 +46,8 @@ def _canonical_roofline(metrics):
         utilization_provenance=platform.gpu_bandwidth_service.provenance)
     compute = platform.gpu_compute_power
     prefill_compute = platform.gpu_prefill_compute
+    energy = resolve_gpu_prefill_compute_energy_calibration(
+        compute, prefill_compute)
     return evaluate_gpu_prefill_roofline(
         metrics,
         peak_compute_flops_per_s=compute.peak_compute_BF16_dense_flops_per_s,
@@ -53,10 +58,20 @@ def _canonical_roofline(metrics):
         sustained_memory_bandwidth_bytes_per_s=(
             bandwidth.sustained_bandwidth_bytes_per_s),
         static_power_W=compute.static_power_W,
-        e_compute_dynamic_J_per_FLOP_min=(
-            compute.e_compute_dynamic_J_per_FLOP_min),
-        e_compute_dynamic_J_per_FLOP_max=(
-            compute.e_compute_dynamic_J_per_FLOP_max))
+        peak_reference_dynamic_J_per_FLOP_min=(
+            energy.peak_reference_dynamic_J_per_FLOP_min),
+        peak_reference_dynamic_J_per_FLOP_max=(
+            energy.peak_reference_dynamic_J_per_FLOP_max),
+        nominal_gemm_dynamic_J_per_FLOP_min=(
+            energy.nominal_gemm_dynamic_J_per_FLOP_min),
+        nominal_gemm_dynamic_J_per_FLOP_max=(
+            energy.nominal_gemm_dynamic_J_per_FLOP_max),
+        nominal_attention_dynamic_J_per_FLOP_min=(
+            energy.nominal_attention_dynamic_J_per_FLOP_min),
+        nominal_attention_dynamic_J_per_FLOP_max=(
+            energy.nominal_attention_dynamic_J_per_FLOP_max),
+        compute_bound_total_power_W_min=energy.compute_bound_total_power_W_min,
+        compute_bound_total_power_W_max=energy.compute_bound_total_power_W_max)
 
 
 def test_platform_owns_reference_calibrated_prefill_capability() -> None:
@@ -190,6 +205,10 @@ def test_nominal_roofline_and_compute_energy_use_canonical_platform() -> None:
     assert platform.gpu_compute_power is not None
     assert platform.gpu_prefill_compute is not None
     compute = platform.gpu_compute_power
+    energy = resolve_gpu_prefill_compute_energy_calibration(
+        compute, platform.gpu_prefill_compute)
+    assert compute.coefficient_status == (
+        "VENDOR_PEAK_DERIVED_DYNAMIC_ENERGY_REFERENCE")
     assert roofline.peak_compute_flops_per_s == 989.5e12
     assert roofline.peak_compute_capability_status == (
         "VENDOR_REPORTED_BF16_DENSE_PEAK")
@@ -218,10 +237,35 @@ def test_nominal_roofline_and_compute_energy_use_canonical_platform() -> None:
     assert roofline.nominal_prefill_latency_status == (
         "REFERENCE_CALIBRATED_EFFECTIVE_GPU_MODEL")
     assert roofline.prefill_effective_model == "REFERENCE_CALIBRATED"
-    assert roofline.dynamic_compute_energy_J_min == pytest.approx(
-        metrics.total_flops * compute.e_compute_dynamic_J_per_FLOP_min)
-    assert roofline.dynamic_compute_energy_J_max == pytest.approx(
-        metrics.total_flops * compute.e_compute_dynamic_J_per_FLOP_max)
+    assert roofline.peak_reference_dynamic_pJ_per_FLOP_min == pytest.approx(
+        compute.e_compute_dynamic_J_per_FLOP_min * 1e12)
+    assert roofline.peak_reference_dynamic_pJ_per_FLOP_max == pytest.approx(
+        compute.e_compute_dynamic_J_per_FLOP_max * 1e12)
+    assert roofline.nominal_gemm_dynamic_pJ_per_FLOP_min == pytest.approx(
+        (525.0 - 74.0) / 700e12 * 1e12)
+    assert roofline.nominal_gemm_dynamic_pJ_per_FLOP_max == pytest.approx(
+        (700.0 - 74.0) / 700e12 * 1e12)
+    assert roofline.nominal_attention_dynamic_pJ_per_FLOP_min == pytest.approx(
+        energy.nominal_attention_dynamic_J_per_FLOP_min * 1e12)
+    assert roofline.nominal_attention_dynamic_pJ_per_FLOP_max == pytest.approx(
+        energy.nominal_attention_dynamic_J_per_FLOP_max * 1e12)
+    linear_flops = metrics.linear_flops + metrics.lm_head_flops
+    assert roofline.linear_dynamic_energy_J_min == pytest.approx(
+        linear_flops * energy.nominal_gemm_dynamic_J_per_FLOP_min)
+    assert roofline.linear_dynamic_energy_J_max == pytest.approx(
+        linear_flops * energy.nominal_gemm_dynamic_J_per_FLOP_max)
+    assert roofline.attention_dynamic_energy_J_min == pytest.approx(
+        metrics.attention_flops
+        * energy.nominal_attention_dynamic_J_per_FLOP_min)
+    assert roofline.attention_dynamic_energy_J_max == pytest.approx(
+        metrics.attention_flops
+        * energy.nominal_attention_dynamic_J_per_FLOP_max)
+    assert roofline.total_dynamic_energy_J_min == pytest.approx(
+        roofline.linear_dynamic_energy_J_min
+        + roofline.attention_dynamic_energy_J_min)
+    assert roofline.total_dynamic_energy_J_max == pytest.approx(
+        roofline.linear_dynamic_energy_J_max
+        + roofline.attention_dynamic_energy_J_max)
     assert roofline.static_energy_J_at_peak_roofline_lower_bound == pytest.approx(
         compute.static_power_W * roofline.peak_roofline_lower_bound_s)
     assert roofline.nominal_static_energy_J == pytest.approx(
@@ -230,22 +274,34 @@ def test_nominal_roofline_and_compute_energy_use_canonical_platform() -> None:
         "STATIC_ENERGY_AT_PEAK_ROOFLINE_LOWER_BOUND")
     assert roofline.prefill_memory_dynamic_energy_completeness == (
         "UNRESOLVED_NOT_INCLUDED")
+    assert roofline.implied_total_power_W_min == pytest.approx(525.0)
+    assert roofline.implied_total_power_W_max == pytest.approx(700.0)
+    assert roofline.nominal_compute_plus_static_energy_J_min == pytest.approx(
+        525.0 * roofline.nominal_prefill_latency_s)
+    assert roofline.nominal_compute_plus_static_energy_J_max == pytest.approx(
+        700.0 * roofline.nominal_prefill_latency_s)
+    assert roofline.power_closure_status == "PASS"
+    assert roofline.nominal_energy_status == (
+        "REFERENCE_CALIBRATED_COMPUTE_BOUND_POWER_CLOSED")
 
 
-def test_dynamic_compute_energy_is_independent_of_effective_throughput() -> None:
-    metrics = evaluate_llm_prefill(_input(prompt_length=131_072))
-    canonical = _canonical_roofline(metrics)
-    slower = evaluate_gpu_prefill_roofline(
-        metrics, peak_compute_flops_per_s=989.5e12,
-        large_gemm_effective_flops_per_s=600e12,
-        causal_attention_effective_flops_per_s=650e12,
-        sustained_memory_bandwidth_bytes_per_s=2.4e12,
-        static_power_W=74.0,
-        e_compute_dynamic_J_per_FLOP_min=4.557857503789793e-13,
-        e_compute_dynamic_J_per_FLOP_max=6.326427488630622e-13)
-    assert slower.nominal_prefill_latency_s > canonical.nominal_prefill_latency_s
-    assert slower.dynamic_compute_energy_J_min == canonical.dynamic_compute_energy_J_min
-    assert slower.dynamic_compute_energy_J_max == canonical.dynamic_compute_energy_J_max
+def test_platform_derives_each_family_coefficient_without_equal_rate_assumption() -> None:
+    platform = load_platform_spec(PLATFORM_PATH, project_root=ROOT)
+    assert platform.gpu_compute_power is not None
+    assert platform.gpu_prefill_compute is not None
+    unequal = platform.gpu_prefill_compute.model_copy(update={
+        "large_gemm_effective_tflops": 600.0,
+        "causal_attention_effective_tflops": 650.0})
+    energy = resolve_gpu_prefill_compute_energy_calibration(
+        platform.gpu_compute_power, unequal)
+    assert energy.nominal_gemm_dynamic_J_per_FLOP_min == pytest.approx(
+        (525.0 - 74.0) / 600e12)
+    assert energy.nominal_gemm_dynamic_J_per_FLOP_max == pytest.approx(
+        (700.0 - 74.0) / 600e12)
+    assert energy.nominal_attention_dynamic_J_per_FLOP_min == pytest.approx(
+        (525.0 - 74.0) / 650e12)
+    assert energy.nominal_attention_dynamic_J_per_FLOP_max == pytest.approx(
+        (700.0 - 74.0) / 650e12)
 
 
 def test_nominal_prefill_sanity_ranges_and_transition() -> None:

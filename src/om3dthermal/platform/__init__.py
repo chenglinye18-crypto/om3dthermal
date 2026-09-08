@@ -5,10 +5,12 @@ from .gpu_power import (
     AffineGPUDecodePowerSpec,
     GPUComputePowerOperatingPoint,
     GPUDecodePowerOperatingPoint,
+    GPUPrefillComputeEnergyCalibration,
     EffectiveThroughputReferenceRangeTFLOPS,
     ReferenceCalibratedGPUPrefillComputeSpec,
     resolve_gpu_compute_power,
     resolve_gpu_decode_power,
+    resolve_gpu_prefill_compute_energy_calibration,
 )
 from .host_offload_power import (
     HostOffloadPowerOperatingPoint,
@@ -33,6 +35,7 @@ __all__ = [
     "AffineGPUDecodePowerSpec",
     "GPUComputePowerOperatingPoint",
     "GPUDecodePowerOperatingPoint",
+    "GPUPrefillComputeEnergyCalibration",
     "EffectiveThroughputReferenceRangeTFLOPS",
     "ReferenceCalibratedGPUPrefillComputeSpec",
     "GPUBandwidthServiceOperatingPoint",
@@ -44,6 +47,7 @@ __all__ = [
     "TransferBottleneck",
     "load_platform_spec_file",
     "resolve_gpu_compute_power",
+    "resolve_gpu_prefill_compute_energy_calibration",
     "resolve_gpu_bandwidth_service",
     "resolve_gpu_decode_power",
     "resolve_host_offload_power",
