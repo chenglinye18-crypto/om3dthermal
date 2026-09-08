@@ -1,8 +1,23 @@
 schema_version: 1
 model_id: llama2_7b
-model_spec_status: UNRESOLVED_PENDING_SOURCE
+model_spec_status: RESOLVED
 context_status: ARCHITECTURE_SCALING_CASE_BEYOND_NATIVE_CONTEXT
+n_param: 7000000000
+n_layers: 32
+n_heads_q: 32
+n_heads_kv: 32
+d_model: 4096
+d_ff: 11008
+vocab_size: 32000
+weight_bits: 16
+kv_bits: 16
 provenance:
-  - classification: UNRESOLVED
-    source: NOT_PRESENT_IN_CURRENT_REPOSITORY
-    status: UNRESOLVED_PENDING_SOURCE
+  - classification: MODEL_CARD_REPORTED
+    source: https://github.com/meta-llama/llama/blob/main/MODEL_CARD.md
+    status: OFFICIAL_META_LLAMA2_7B_AND_NATIVE_4K_CONTEXT
+  - classification: MODEL_CONFIG_REPORTED
+    source: https://huggingface.co/NousResearch/Llama-2-7b-hf/blob/main/config.json
+    status: HUGGINGFACE_FORMAT_META_LLAMA2_CONFIG_DIMENSIONS
+  - classification: MODELING_CHOICE
+    source: configs/workload/models/llama31_8b.yaml
+    status: FP16_WEIGHT_AND_KV_ACCOUNTING_AND_128K_SCALING_CASE

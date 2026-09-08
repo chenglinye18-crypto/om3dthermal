@@ -7,6 +7,7 @@ capacity, host-offload, and GPU primitives remain in their existing modules.
 from __future__ import annotations
 
 import math
+import statistics
 from pathlib import Path
 from typing import Literal
 
@@ -18,6 +19,7 @@ from om3dthermal.platform import (
     HostOffloadSpec,
     load_platform_spec_file,
     resolve_gpu_bandwidth_service,
+    resolve_local_memory_gpu_transfer,
     resolve_gpu_decode_power,
     resolve_gpu_prefill_compute_energy_calibration,
     resolve_host_offload_power,
@@ -27,17 +29,23 @@ from om3dthermal.power import (
     resolve_case_geometry,
     resolve_system_power,
 )
+from om3dthermal.power.memory_bandwidth import resolve_internal_service_bandwidth
+from om3dthermal.power.nmp_die_activity import NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS
+from om3dthermal.power.nmp_die_power import resolve_orthogonal_m3d_write_energy_pj_per_bit
 from om3dthermal.workload import (
     DenseLLMModelSpec,
     evaluate_gpu_prefill_roofline,
     evaluate_llm_decode,
     evaluate_llm_prefill,
+    build_m3d_only_workload_objects,
 )
 
 from .gpu import AnalyticalRooflineGPUModel
 from .nmp_decode import (
     NMP_BATCH_GENERALIZATION_STATUS,
     evaluate_nmp_decode_batch,
+    resolve_m3d_architecture_backend,
+    rounded_capacity_bytes,
 )
 from .residency import ServingCapacitySource, evaluate_capacity_residency
 
@@ -505,6 +513,148 @@ def evaluate_conventional_hbm_mixed_phase(
     )
 
 
+def evaluate_orthogonal_m3d_igzo_memory_only_mixed_phase(
+    *, project_root: str | Path, model: DenseLLMModelSpec,
+    case: MixedPhaseServingCase,
+) -> MixedPhaseE2EResult:
+    """Evaluate all-local Orthogonal M3D memory with GPU-only execution."""
+    if model.model_id != case.model_id:
+        raise ValueError("model and mixed case model_id must match")
+    root = Path(project_root).resolve()
+    architecture = resolve_m3d_architecture_backend(root)
+    platform = load_platform_spec_file(
+        root / "configs/platform/gpu_package_h200_reference.yaml")
+    gpu_compute = platform.gpu_compute_power
+    gpu_prefill = platform.gpu_prefill_compute
+    gpu_decode_spec = platform.gpu_decode_power
+    if gpu_compute is None or gpu_prefill is None or gpu_decode_spec is None:
+        raise ValueError("canonical H200 GPU Prefill/Decode data is incomplete")
+
+    capacity_input = model.decode_input(
+        batch_size=case.batch_size, context_length=case.context_length)
+    capacity_metrics = evaluate_llm_decode(capacity_input)
+    rounded = rounded_capacity_bytes(
+        build_m3d_only_workload_objects(capacity_input),
+        architecture.layout.slot_capacity_bytes)
+    available = architecture.layout.total_capacity_bytes
+    capacity = dict(
+        required_capacity_GB=capacity_metrics.required_capacity_bytes / 1e9,
+        physical_page_rounded_capacity_GB=rounded / 1e9,
+        local_capacity_GB=available / 1e9,
+        capacity_margin_GB=(available - rounded) / 1e9,
+        capacity_utilization=rounded / available,
+    )
+    common = dict(
+        system_id="ORTHOGONAL_M3D_IGZO_MEMORY_ONLY", comparison_role="ABLATION",
+        model_id=model.model_id, context_length=case.context_length,
+        batch_size=case.batch_size, prefill_requests=case.prefill_requests,
+        decode_requests=case.decode_requests,
+        nmp_batch_generalization_status="NOT_APPLICABLE", **capacity)
+    if rounded > available:
+        return MixedPhaseE2EResult(
+            **common, evaluation_status="CAPACITY_INFEASIBLE",
+            energy_status="NOT_EVALUATED_CAPACITY_INFEASIBLE",
+            capacity_status="CAPACITY_INFEASIBLE", capacity_violations=None,
+            resident_requests=0, spilled_requests=case.batch_size,
+            resident_fraction=0.0, hbm_write_energy_status="NOT_APPLICABLE")
+
+    prefill_metrics = evaluate_llm_prefill(model.prefill_input(
+        batch_size=case.prefill_requests, prompt_length=case.context_length))
+    calibration = resolve_gpu_prefill_compute_energy_calibration(
+        gpu_compute, gpu_prefill)
+    gpu_service = resolve_gpu_bandwidth_service(
+        transfer_ceiling_bytes_per_s=gpu_decode_spec.peak_memory_bandwidth_bytes_per_s,
+        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
+        utilization_status=platform.gpu_bandwidth_service.utilization_status,
+        utilization_provenance=platform.gpu_bandwidth_service.provenance)
+    roofline = evaluate_gpu_prefill_roofline(
+        prefill_metrics,
+        peak_compute_flops_per_s=gpu_compute.peak_compute_BF16_dense_flops_per_s,
+        large_gemm_effective_flops_per_s=gpu_prefill.large_gemm_effective_tflops * 1e12,
+        causal_attention_effective_flops_per_s=gpu_prefill.causal_attention_effective_tflops * 1e12,
+        sustained_memory_bandwidth_bytes_per_s=gpu_service.sustained_bandwidth_bytes_per_s,
+        static_power_W=gpu_compute.static_power_W,
+        peak_reference_dynamic_J_per_FLOP_min=calibration.peak_reference_dynamic_J_per_FLOP_min,
+        peak_reference_dynamic_J_per_FLOP_max=calibration.peak_reference_dynamic_J_per_FLOP_max,
+        nominal_gemm_dynamic_J_per_FLOP_min=calibration.nominal_gemm_dynamic_J_per_FLOP_min,
+        nominal_gemm_dynamic_J_per_FLOP_max=calibration.nominal_gemm_dynamic_J_per_FLOP_max,
+        nominal_attention_dynamic_J_per_FLOP_min=calibration.nominal_attention_dynamic_J_per_FLOP_min,
+        nominal_attention_dynamic_J_per_FLOP_max=calibration.nominal_attention_dynamic_J_per_FLOP_max,
+        compute_bound_total_power_W_min=calibration.compute_bound_total_power_W_min,
+        compute_bound_total_power_W_max=calibration.compute_bound_total_power_W_max)
+
+    decode_input = model.decode_input(
+        batch_size=case.decode_requests, context_length=case.context_length)
+    decode_metrics = evaluate_llm_decode(decode_input)
+    local_latency_ns = statistics.fmean(
+        item.mat_latency_ns + item.miv_latency_ns + NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS
+        for item in architecture.physical_latency.locations)
+    internal_bw = resolve_internal_service_bandwidth(
+        architecture.bandwidth, local_latency_ns)
+    boundary = resolve_local_memory_gpu_transfer(
+        bandwidth_demand_bytes_per_s=internal_bw,
+        memory_capability_bytes_per_s=architecture.bandwidth.coil_bandwidth_bytes_per_s,
+        gpu_peak_bandwidth_bytes_per_s=gpu_decode_spec.peak_memory_bandwidth_bytes_per_s)
+    boundary_service = resolve_gpu_bandwidth_service(
+        transfer_ceiling_bytes_per_s=boundary.bandwidth_actual_bytes_per_s,
+        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
+        utilization_status=platform.gpu_bandwidth_service.utilization_status,
+        utilization_provenance=platform.gpu_bandwidth_service.provenance)
+    effective_bw = min(internal_bw, boundary_service.sustained_bandwidth_bytes_per_s)
+    decode = AnalyticalRooflineGPUModel(
+        matched_payload_bandwidth_bits_per_second=8.0 * effective_bw,
+        effective_compute_flops_per_second=gpu_compute.peak_compute_BF16_dense_flops_per_s,
+    ).evaluate(decode_input, batch_size=case.decode_requests)
+    prefill_s = roofline.nominal_prefill_latency_s
+    decode_s = decode.decode_step_time_ms * 1e-3
+    aggregate_read = case.decode_requests * decode_metrics.read_bytes_per_token
+    aggregate_write = case.decode_requests * decode_metrics.write_bytes_per_token
+    read_J = 8.0 * aggregate_read * architecture.memory.E_access_total_pj_bit * 1e-12
+    write_pj_bit = resolve_orthogonal_m3d_write_energy_pj_per_bit(
+        architecture.case, architecture.memory)
+    write_J = 8.0 * aggregate_write * write_pj_bit * 1e-12
+    memory_J = read_J + write_J
+    gpu_J = 8.0 * (aggregate_read + aggregate_write) * gpu_decode_spec.e_decode_J_per_bit
+    refresh_J = float(architecture.memory.P_refresh_W or 0.0) * decode_s
+    static_J = gpu_decode_spec.static_power_W * decode_s
+    decode_total = memory_J + gpu_J + refresh_J + static_J
+    max_die = math.ceil(rounded / architecture.layout.slot_capacity_bytes
+                        / architecture.layout.slab_count) * architecture.layout.slot_capacity_bytes
+    max_die /= architecture.layout.capacity_per_slab_bytes
+    prefill_ms = prefill_s * 1e3
+    decode_ms = decode_s * 1e3
+    return MixedPhaseE2EResult(
+        **common, evaluation_status="EVALUATED",
+        energy_status="PREFILL_GPU_DYNAMIC_RANGE_NO_SINGLE_NOMINAL",
+        TTFT_ms=prefill_ms, TPOT_ms=decode_ms,
+        prefill_service_time_ms=prefill_ms, decode_service_time_ms=decode_ms,
+        mixed_epoch_time_ms=prefill_ms + decode_ms,
+        decode_tokens_per_s=case.decode_requests / decode_s,
+        prefill_gpu_dynamic_J_min=roofline.total_dynamic_energy_J_min,
+        prefill_gpu_dynamic_J_max=roofline.total_dynamic_energy_J_max,
+        prefill_gpu_static_J=gpu_compute.static_power_W * prefill_s,
+        prefill_host_ddr_J=0.0, prefill_host_pcie_J=0.0,
+        decode_gpu_dynamic_J=gpu_J, decode_gpu_static_J=static_J,
+        decode_memory_read_dynamic_J=read_J,
+        decode_memory_write_dynamic_J=write_J,
+        decode_memory_dynamic_J=memory_J, decode_refresh_J=refresh_J,
+        decode_host_ddr_J=0.0, decode_host_pcie_J=0.0,
+        decode_total_J=decode_total,
+        decode_tokens_per_J=case.decode_requests / decode_total,
+        max_die_capacity_utilization=max_die, capacity_violations=0,
+        resident_requests=case.batch_size, spilled_requests=0,
+        resident_fraction=1.0, resident_decode_requests=case.decode_requests,
+        spilled_decode_requests=0, resident_prefill_requests=case.prefill_requests,
+        spilled_prefill_requests=0,
+        local_KV_GB=case.batch_size * capacity_metrics.kv_bytes_per_request / 1e9,
+        host_KV_GB=0.0, host_read_GB=0.0, host_write_GB=0.0,
+        capacity_status="FULLY_LOCAL",
+        residency_policy="ALL_ACTIVE_REQUESTS_PHYSICALLY_PAGE_ROUNDED",
+        residency_policy_status="CANONICAL_M3D_PHYSICAL_CAPACITY_GATE",
+        prefill_spill_semantics="NOT_APPLICABLE_FULLY_LOCAL",
+        hbm_write_energy_status="NOT_APPLICABLE")
+
+
 def evaluate_iom3d_feol_nmp_mixed_phase(
     *, project_root: str | Path, model: DenseLLMModelSpec,
     case: MixedPhaseServingCase,
@@ -520,7 +670,6 @@ def evaluate_iom3d_feol_nmp_mixed_phase(
     gpu_decode = platform.gpu_decode_power
     if gpu_compute is None or gpu_prefill is None or gpu_decode is None:
         raise ValueError("canonical H200 GPU Prefill data is incomplete")
-
     prefill_input = model.prefill_input(
         batch_size=case.prefill_requests, prompt_length=case.context_length)
     prefill_metrics = evaluate_llm_prefill(prefill_input)
@@ -652,15 +801,8 @@ def evaluate_mixed_phase_e2e(
     if system_id == "IOM3D_FEOL_NMP":
         return evaluate_iom3d_feol_nmp_mixed_phase(
             project_root=project_root, model=model, case=case)
-    definition = SYSTEM_CONFIGURATIONS[system_id]
-    return MixedPhaseE2EResult(
-        system_id=system_id, comparison_role=definition.comparison_role,
-        model_id=model.model_id, context_length=case.context_length,
-        batch_size=case.batch_size, prefill_requests=case.prefill_requests,
-        decode_requests=case.decode_requests,
-        evaluation_status="ARCHITECTURE_BACKEND_NOT_RUN_IN_THIS_CONSOLIDATION_SMOKE",
-        energy_status="NOT_EVALUATED", nmp_batch_generalization_status="NOT_APPLICABLE",
-    )
+    return evaluate_orthogonal_m3d_igzo_memory_only_mixed_phase(
+        project_root=project_root, model=model, case=case)
 
 
 class MixedPhaseComparison(BaseModel):
@@ -671,6 +813,7 @@ class MixedPhaseComparison(BaseModel):
     energy_efficiency_gain_vs_baseline: float | None
     TPOT_improvement: float | None
     TTFT_improvement: float | None
+    decode_throughput_speedup_vs_baseline: float | None
     spill_reduction: int | None
 
 
@@ -702,8 +845,11 @@ def compare_mixed_phase_results(
                 baseline.mixed_total_energy_J, design.mixed_total_energy_J),
             TPOT_improvement=ratio(baseline.TPOT_ms, design.TPOT_ms),
             TTFT_improvement=ratio(baseline.TTFT_ms, design.TTFT_ms),
+            decode_throughput_speedup_vs_baseline=ratio(
+                design.decode_tokens_per_s, baseline.decode_tokens_per_s),
             spill_reduction=(
-                None if baseline.spilled_requests is None
+                None if design.evaluation_status == "CAPACITY_INFEASIBLE"
+                or baseline.spilled_requests is None
                 or design.spilled_requests is None
                 else baseline.spilled_requests - design.spilled_requests),
         ))

@@ -1,8 +1,23 @@
 schema_version: 1
 model_id: qwen25_7b
-model_spec_status: UNRESOLVED_PENDING_SOURCE
-context_status: ANALYTICAL_128K_SERVING_CONTEXT_PENDING_MODEL_DIMENSIONS
+model_spec_status: RESOLVED
+context_status: ANALYTICAL_128K_SERVING_CONTEXT
+n_param: 7610000000
+n_layers: 28
+n_heads_q: 28
+n_heads_kv: 4
+d_model: 3584
+d_ff: 18944
+vocab_size: 152064
+weight_bits: 16
+kv_bits: 16
 provenance:
-  - classification: UNRESOLVED
-    source: NOT_PRESENT_IN_CURRENT_REPOSITORY
-    status: UNRESOLVED_PENDING_SOURCE
+  - classification: MODEL_CARD_REPORTED
+    source: https://huggingface.co/Qwen/Qwen2.5-7B/blob/main/config.json
+    status: OFFICIAL_QWEN_CONFIG_DIMENSIONS
+  - classification: MODEL_CARD_REPORTED
+    source: https://qwenlm.github.io/blog/qwen2.5-llm/
+    status: OFFICIAL_QWEN_PARAMETER_COUNT_AND_128K_CONTEXT
+  - classification: MODELING_CHOICE
+    source: configs/workload/models/llama31_8b.yaml
+    status: FP16_WEIGHT_AND_KV_ACCOUNTING

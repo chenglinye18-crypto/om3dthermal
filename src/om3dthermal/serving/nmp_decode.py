@@ -163,7 +163,7 @@ class NMPDecodeBatchResult(BaseModel):
 
 
 @dataclass(frozen=True)
-class _NMPArchitecture:
+class M3DArchitectureBackend:
     case: object
     geometry: object
     memory: object
@@ -176,7 +176,8 @@ class _NMPArchitecture:
 
 
 @lru_cache(maxsize=2)
-def _resolve_architecture(project_root: Path) -> _NMPArchitecture:
+def resolve_m3d_architecture_backend(project_root: str | Path) -> M3DArchitectureBackend:
+    project_root = Path(project_root).resolve()
     from om3dthermal.experiment import load_experiment_spec
 
     case = load_case_config(project_root / "configs/cases/orthogonal_m3d_igzo.yaml")
@@ -202,12 +203,12 @@ def _resolve_architecture(project_root: Path) -> _NMPArchitecture:
     experiment = load_experiment_spec(
         project_root / "configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",
         project_root=project_root)
-    return _NMPArchitecture(
+    return M3DArchitectureBackend(
         case, geometry, memory, topology, feol, physical_latency, layout,
         bandwidth, experiment.scenario.effective_compute_flops_per_second)
 
 
-def _rounded_capacity_bytes(objects: tuple[ResidentDataObject, ...], page_bytes: int) -> int:
+def rounded_capacity_bytes(objects: tuple[ResidentDataObject, ...], page_bytes: int) -> int:
     return sum(
         ((item.size_bytes + page_bytes - 1) // page_bytes) * page_bytes
         for item in objects)
@@ -219,14 +220,14 @@ def evaluate_nmp_decode_batch(
 ) -> NMPDecodeBatchResult:
     """Run one aggregate placement/activity/power solve; never loops over B1."""
     root = Path(project_root).resolve()
-    architecture = _resolve_architecture(root)
+    architecture = resolve_m3d_architecture_backend(root)
     active = workload.batch_size if active_capacity_requests is None else active_capacity_requests
     if active < workload.batch_size:
         raise ValueError("active capacity requests cannot be below Decode batch size")
     capacity_workload = workload.model_copy(update={"batch_size": active})
     capacity_metrics = evaluate_llm_decode(capacity_workload)
     capacity_objects = build_m3d_only_workload_objects(capacity_workload)
-    rounded = _rounded_capacity_bytes(
+    rounded = rounded_capacity_bytes(
         capacity_objects, architecture.layout.slot_capacity_bytes)
     available = architecture.layout.total_capacity_bytes
     capacity_common = dict(

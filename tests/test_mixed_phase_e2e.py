@@ -55,15 +55,17 @@ def spill_result(registry):
         project_root=ROOT, model=registry["llama31_8b"], case=case)
 
 
-def test_model_registry_is_single_source_and_unresolved_models_are_not_guessed(registry):
+def test_model_registry_is_single_source_and_all_matrix_models_resolve(registry):
     resolved = registry["llama31_8b"]
     assert resolved.decode_input(batch_size=1, context_length=131072).n_param == 8_000_000_000
     assert resolved.prefill_input(batch_size=1, prompt_length=131072).d_ff == 14336
-    assert registry["qwen25_7b"].model_spec_status == "UNRESOLVED_PENDING_SOURCE"
+    assert registry["qwen25_7b"].model_spec_status == "RESOLVED"
+    assert registry["qwen25_7b"].decode_input(
+        batch_size=1, context_length=131072).n_heads_kv == 4
     assert registry["llama2_7b"].context_status == (
         "ARCHITECTURE_SCALING_CASE_BEYOND_NATIVE_CONTEXT")
-    with pytest.raises(ValueError, match="unresolved pending source"):
-        registry["qwen25_7b"].decode_input(batch_size=1, context_length=131072)
+    assert registry["llama2_7b"].decode_input(
+        batch_size=1, context_length=131072).n_heads_kv == 32
 
 
 def test_manifest_validates_only_the_frozen_3_by_4_by_3_shape():
@@ -249,3 +251,49 @@ def test_system_roles_and_resolved_nmp_batch_path(
     assert result.mixed_epoch_time_ms == pytest.approx(
         result.prefill_service_time_ms + result.decode_service_time_ms)
     assert result.thermal is None
+
+
+def test_memory_only_backend_is_evaluated_and_gpu_only(registry):
+    case = MixedPhaseServingCase(
+        model_id="llama31_8b", context_length=131072,
+        batch_size=4, prefill_requests=1, decode_requests=3)
+    result = evaluate_mixed_phase_e2e(
+        project_root=ROOT, model=registry["llama31_8b"], case=case,
+        system_id="ORTHOGONAL_M3D_IGZO_MEMORY_ONLY")
+    assert result.evaluation_status == "EVALUATED"
+    assert result.capacity_status == "FULLY_LOCAL"
+    assert result.capacity_violations == 0
+    assert result.decode_nmp_mac_dynamic_J == 0.0
+    assert result.decode_residual_interface_J == 0.0
+    assert result.decode_total_J > 0.0
+    assert result.nmp_batch_generalization_status == "NOT_APPLICABLE"
+    assert result.thermal is None
+
+
+def test_memory_only_capacity_failure_is_structured(registry):
+    case = MixedPhaseServingCase(
+        model_id="llama2_7b", context_length=131072,
+        batch_size=28, prefill_requests=1, decode_requests=27)
+    result = evaluate_mixed_phase_e2e(
+        project_root=ROOT, model=registry["llama2_7b"], case=case,
+        system_id="ORTHOGONAL_M3D_IGZO_MEMORY_ONLY")
+    assert result.evaluation_status == "CAPACITY_INFEASIBLE"
+    assert result.capacity_status == "CAPACITY_INFEASIBLE"
+    assert result.mixed_epoch_time_ms is None
+
+
+def test_capacity_infeasible_design_has_no_comparative_claim(registry):
+    from om3dthermal.serving import compare_mixed_phase_results
+
+    case = MixedPhaseServingCase(
+        model_id="llama2_7b", context_length=131072,
+        batch_size=28, prefill_requests=1, decode_requests=27)
+    baseline = evaluate_mixed_phase_e2e(
+        project_root=ROOT, model=registry["llama2_7b"], case=case,
+        system_id="CONVENTIONAL_HBM_GPU")
+    design = evaluate_mixed_phase_e2e(
+        project_root=ROOT, model=registry["llama2_7b"], case=case,
+        system_id="ORTHOGONAL_M3D_IGZO_MEMORY_ONLY")
+    comparison = compare_mixed_phase_results(baseline, (design,))[0]
+    assert comparison.e2e_speedup_vs_baseline is None
+    assert comparison.spill_reduction is None
