@@ -94,7 +94,7 @@ per-die NMP 功率图相应下降。热结论方向不变，需重跑确认。
 | 4.1 | `placement/nmp_locality_e2e.py::build_dense_decode_placement_units` | ATTENTION_KV 不再是 NMP 计算 unit：KV 字节保留 placement（驻留 M3D），其 FLOPs 划入 GPU 侧 |
 | 4.2 | NMP 时序模型 | 增加 GPU attention compute time 与 KV coil 流量项；MAC 只计权重 GEMV |
 | 4.3 | E8 GPU 能耗（offload 路径） | u_off = (KV + 激活字节)/(BW_peak × T_token)，接入 spec §5 |
-| 4.4 | `evaluator/canonical_e2e.py` | gain 口径更新：offload 收益 = 权重流量移除（1.93× @ B=1）而非全流量 |
+| 4.4 | retired thermal-coupled canonical aggregator | Historical offload audit; final serving aggregation now lives in `serving/mixed_phase_e2e.py`. |
 | 4.5 | 测试 | 更新 canonical NMP 测试期望值（traffic reduction、gain、MAC 算力门限）；新增"算子归属"语义测试 |
 | 4.6 | 文档 | NMP 相关 claim 统一为"权重流 GEMV offload"；`nmp_feasibility` 的 MINIMUM_USEFUL_NMP_TFLOPS 口径同步 |
 

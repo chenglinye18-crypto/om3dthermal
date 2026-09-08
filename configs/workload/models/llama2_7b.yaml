@@ -1,0 +1,8 @@
+schema_version: 1
+model_id: llama2_7b
+model_spec_status: UNRESOLVED_PENDING_SOURCE
+context_status: ARCHITECTURE_SCALING_CASE_BEYOND_NATIVE_CONTEXT
+provenance:
+  - classification: UNRESOLVED
+    source: NOT_PRESENT_IN_CURRENT_REPOSITORY
+    status: UNRESOLVED_PENDING_SOURCE

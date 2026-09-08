@@ -22,6 +22,11 @@ from om3dthermal.workload.llm_prefill import (
     evaluate_gpu_prefill_roofline,
     evaluate_llm_prefill,
 )
+from om3dthermal.workload.model_registry import (
+    DenseLLMModelSpec,
+    load_dense_model_registry,
+    load_dense_model_spec,
+)
 from om3dthermal.workload.m3d_page_demand import (
     M3DOnlyCapacityError,
     M3DWorkloadPageDemand,
@@ -70,6 +75,7 @@ __all__ = [
     "LLMDecodeMetrics",
     "LLMPrefillInput",
     "LLMPrefillMetrics",
+    "DenseLLMModelSpec",
     "GPUPrefillRooflineMetrics",
     "KVDecodeAccounting",
     "M3DOnlyCapacityError",
@@ -97,6 +103,8 @@ __all__ = [
     "evaluate_llm_decode",
     "evaluate_llm_prefill",
     "evaluate_gpu_prefill_roofline",
+    "load_dense_model_registry",
+    "load_dense_model_spec",
     "evaluate_moe_decode",
     "calculate_kv_decode_accounting",
     "build_m3d_only_workload_objects",

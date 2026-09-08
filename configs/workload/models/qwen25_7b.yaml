@@ -1,0 +1,8 @@
+schema_version: 1
+model_id: qwen25_7b
+model_spec_status: UNRESOLVED_PENDING_SOURCE
+context_status: ANALYTICAL_128K_SERVING_CONTEXT_PENDING_MODEL_DIMENSIONS
+provenance:
+  - classification: UNRESOLVED
+    source: NOT_PRESENT_IN_CURRENT_REPOSITORY
+    status: UNRESOLVED_PENDING_SOURCE

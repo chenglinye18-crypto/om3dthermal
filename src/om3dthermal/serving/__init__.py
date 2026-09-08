@@ -29,6 +29,22 @@ from .resident_adapter import (
     build_resident_objects_from_serving_residency,
     build_resident_pages_from_serving_residency,
 )
+from .mixed_phase_e2e import (
+    CONVENTIONAL_HBM_WRITE_ENERGY_STATUS,
+    NMP_BATCH_GENERALIZATION_STATUS,
+    SYSTEM_CONFIGURATIONS,
+    ConventionalHBMBackend,
+    FinalDenseE2EMatrixSpec,
+    MixedPhaseComparison,
+    MixedPhaseE2EResult,
+    MixedPhaseServingCase,
+    SystemConfiguration,
+    compare_mixed_phase_results,
+    evaluate_conventional_hbm_mixed_phase,
+    evaluate_mixed_phase_e2e,
+    load_final_dense_e2e_matrix,
+    resolve_conventional_hbm_backend,
+)
 
 __all__ = [
     "AnalyticalRooflineGPUModel",
@@ -52,4 +68,18 @@ __all__ = [
     "evaluate_capacity_aware_serving",
     "evaluate_capacity_residency",
     "search_serving_operating_point",
+    "SYSTEM_CONFIGURATIONS",
+    "CONVENTIONAL_HBM_WRITE_ENERGY_STATUS",
+    "NMP_BATCH_GENERALIZATION_STATUS",
+    "ConventionalHBMBackend",
+    "FinalDenseE2EMatrixSpec",
+    "MixedPhaseComparison",
+    "MixedPhaseE2EResult",
+    "MixedPhaseServingCase",
+    "SystemConfiguration",
+    "compare_mixed_phase_results",
+    "evaluate_conventional_hbm_mixed_phase",
+    "evaluate_mixed_phase_e2e",
+    "load_final_dense_e2e_matrix",
+    "resolve_conventional_hbm_backend",
 ]

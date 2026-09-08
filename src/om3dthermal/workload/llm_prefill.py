@@ -102,6 +102,12 @@ class LLMPrefillMetrics(BaseModel):
     output_projection_memory_bytes: float
     ffn_activation_bytes: float
     final_logits_bytes: float
+    ffn_read_bytes: float
+    ffn_write_bytes: float
+    final_logits_read_bytes: float
+    final_logits_write_bytes: float
+    prefill_read_bytes: float
+    prefill_write_bytes: float
     activation_memory_bytes: float
     linear_memory_bytes: float
     total_memory_bytes: float
@@ -173,6 +179,15 @@ class LLMPrefillMetrics(BaseModel):
              self.active_weight_read_bytes + self.activation_memory_bytes
              + self.kv_write_bytes,
              "total physical memory traffic"),
+            (self.ffn_activation_bytes,
+             self.ffn_read_bytes + self.ffn_write_bytes,
+             "FFN read/write traffic"),
+            (self.final_logits_bytes,
+             self.final_logits_read_bytes + self.final_logits_write_bytes,
+             "final logits read/write traffic"),
+            (self.total_memory_bytes,
+             self.prefill_read_bytes + self.prefill_write_bytes,
+             "Prefill physical read/write traffic"),
         )
         for actual, expected, name in closures:
             if not math.isclose(actual, expected, rel_tol=1e-12, abs_tol=1e-6):
@@ -330,6 +345,13 @@ def evaluate_llm_prefill(inp: LLMPrefillInput) -> LLMPrefillMetrics:
     output_projection = o_projection_input_read + o_projection_output_write
     ffn_activation = L * B * S * (3 * D + 6 * Dff) * ACTIVATION_BYTES
     final_logits = B * (D + V) * ACTIVATION_BYTES
+    # Preserve the existing first-order tensor ledger while making direction
+    # explicit.  The FFN term is the same fused SwiGLU traffic already counted
+    # above: input/intermediate reads plus intermediate/output writes.
+    ffn_read = L * B * S * (2 * D + 4 * Dff) * ACTIVATION_BYTES
+    ffn_write = L * B * S * (D + 2 * Dff) * ACTIVATION_BYTES
+    final_logits_read = B * D * ACTIVATION_BYTES
+    final_logits_write = B * V * ACTIVATION_BYTES
     activation_traffic = (
         embedding_input + qkv_activation + attention_memory
         + output_projection
@@ -338,6 +360,13 @@ def evaluate_llm_prefill(inp: LLMPrefillInput) -> LLMPrefillMetrics:
         active_weights + embedding_input + qkv_activation
         + final_kv + output_projection + ffn_activation + final_logits)
     total_memory = active_weights + final_kv + activation_traffic
+    prefill_read = (
+        active_weights + embedding_input + qkv_input_read
+        + attention_q_read + attention_k_read + attention_v_read
+        + o_projection_input_read + ffn_read + final_logits_read)
+    prefill_write = (
+        q_projection_output + final_kv + attention_output_write
+        + o_projection_output_write + ffn_write + final_logits_write)
 
     return LLMPrefillMetrics(
         causal_token_pairs=causal_pairs, prefill_input_tokens=B * S,
@@ -373,6 +402,12 @@ def evaluate_llm_prefill(inp: LLMPrefillInput) -> LLMPrefillMetrics:
         output_projection_memory_bytes=output_projection,
         ffn_activation_bytes=ffn_activation,
         final_logits_bytes=final_logits,
+        ffn_read_bytes=ffn_read,
+        ffn_write_bytes=ffn_write,
+        final_logits_read_bytes=final_logits_read,
+        final_logits_write_bytes=final_logits_write,
+        prefill_read_bytes=prefill_read,
+        prefill_write_bytes=prefill_write,
         activation_memory_bytes=activation_traffic,
         linear_memory_bytes=linear_memory,
         total_memory_bytes=total_memory,

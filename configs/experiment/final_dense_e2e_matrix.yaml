@@ -1,0 +1,15 @@
+schema_version: 1
+experiment_id: final_dense_e2e_matrix
+model_registry_dir: configs/workload/models
+models: [llama31_8b, qwen25_7b, llama2_7b]
+context_length: 131072
+mixed_points:
+  - {batch_size: 4, prefill_requests: 1, decode_requests: 3}
+  - {batch_size: 4, prefill_requests: 2, decode_requests: 2}
+  - {batch_size: 32, prefill_requests: 1, decode_requests: 31}
+  - {batch_size: 32, prefill_requests: 16, decode_requests: 16}
+systems:
+  - CONVENTIONAL_HBM_GPU
+  - ORTHOGONAL_M3D_IGZO_MEMORY_ONLY
+  - IOM3D_FEOL_NMP
+phase_overlap_policy: NO_OVERLAP
