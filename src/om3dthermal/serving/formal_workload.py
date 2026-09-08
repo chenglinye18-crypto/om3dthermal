@@ -215,6 +215,7 @@ def evaluate_formal_inference_workload(
     completions: list[float] = []
     tpots: list[float] = []
     prefill_total = decode_compute = queue_total = 0.0
+    decode_active = 0.0
     raw_host = critical_host = 0.0
     historical = append_host = migration = 0
     peak_host_resident = 0
@@ -280,6 +281,7 @@ def evaluate_formal_inference_workload(
             peak_runtime = max(
                 initial_runtime,
                 weight+wave_size*(kv_s+G*kv_token)+actual_decode_ws)
+            decode_active = decode_compute
     elif policy == "HOST_KV_OFFLOAD":
         prefill_s, prefill_metrics_all = prefill(B)
         prefill_read_bytes += prefill_metrics_all.prefill_read_bytes
@@ -317,6 +319,7 @@ def evaluate_formal_inference_workload(
         ttfts = [prefill_s+prefill_host+first_elapsed]*B
         completions = [makespan]*B
         tpots = [elapsed_decode/G]*B
+        decode_active = elapsed_decode
         known["gpu_decode_dynamic_J"] = 8.0*traffic[2]*gpu.e_decode_J_per_bit
         known["hbm_read_dynamic_J"] = 8.0*traffic[0]*hbm.read_energy_pJ_per_bit*1e-12
         host_bits = 8.0*(historical+append_host+migration)
@@ -384,6 +387,7 @@ def evaluate_formal_inference_workload(
             ttfts = [prefill_s+first_step]*B
             completions = [makespan]*B
             tpots = [decode_compute/G]*B
+            decode_active = decode_compute
 
     if status == "CAPACITY_INFEASIBLE":
         makespan = None
@@ -414,13 +418,13 @@ def evaluate_formal_inference_workload(
         peak_host_resident_bytes=peak_host_resident,
         first_capacity_violation_step=first_capacity_violation_step,
         prefill_time_s=(prefill_total if status == "EVALUATED" else None),
-        decode_active_time_s=(decode_compute if status == "EVALUATED" else None),
+        decode_active_time_s=(decode_active if status == "EVALUATED" else None),
         queue_time_s=(queue_total/B if status == "EVALUATED" else None),
         host_transfer_time_s=(raw_host if status == "EVALUATED" else None),
         host_critical_path_time_s=(critical_host if status == "EVALUATED" else None),
         batch_makespan_s=makespan,
         e2e_output_tokens_per_s=(None if makespan is None else B*G/makespan),
-        decode_tokens_per_s=(None if decode_compute == 0 else B*G/decode_compute),
+        decode_tokens_per_s=(None if decode_active == 0 else B*G/decode_active),
         mean_ttft_s=(None if not ttfts else sum(ttfts)/B),
         p95_ttft_s=(None if not ttfts else _percentile(ttfts, .95)),
         max_ttft_s=(None if not ttfts else max(ttfts)),

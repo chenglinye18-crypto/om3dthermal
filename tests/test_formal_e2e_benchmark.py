@@ -94,6 +94,10 @@ def test_host_offload_reads_recurring_historical_kv(setup):
     assert result.historical_host_read_bytes > 0
     assert result.historical_host_read_bytes > result.migration_bytes
     assert result.peak_host_resident_bytes >= result.migration_bytes
+    assert result.decode_tokens_per_s == pytest.approx(
+        result.batch_size*result.generation_tokens/result.decode_active_time_s)
+    assert result.decode_active_time_s == pytest.approx(
+        result.mean_tpot_s*result.generation_tokens)
 
 
 def test_safe_batch_uses_growing_kv_and_m3d_overflow_is_explicit(setup):
