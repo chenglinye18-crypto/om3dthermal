@@ -252,3 +252,63 @@ class AffineGPUComputePowerSpec(BaseModel):
             raise ValueError(
                 "GPU compute power spec requires provenance records")
         return self
+
+
+class EffectiveThroughputReferenceRangeTFLOPS(BaseModel):
+    """Reference envelope retained for provenance, not an active sweep."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    min: float = Field(gt=0.0)
+    max: float = Field(gt=0.0)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "EffectiveThroughputReferenceRangeTFLOPS":
+        if self.max < self.min:
+            raise ValueError("effective throughput range max must not be below min")
+        return self
+
+
+class ReferenceCalibratedGPUPrefillComputeSpec(BaseModel):
+    """Two-family H200 Prefill effective-throughput calibration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model: Literal[
+        "REFERENCE_CALIBRATED_TWO_FAMILY_EFFECTIVE_THROUGHPUT"
+    ]
+    peak_compute_reference_status: Literal[
+        "VENDOR_REPORTED_BF16_DENSE_PEAK"
+    ]
+    large_gemm_effective_tflops: float = Field(gt=0.0)
+    causal_attention_effective_tflops: float = Field(gt=0.0)
+    large_gemm_reference_range_tflops: EffectiveThroughputReferenceRangeTFLOPS
+    causal_attention_reference_range_tflops: EffectiveThroughputReferenceRangeTFLOPS
+    large_gemm_effective_status: Literal[
+        "REFERENCE_CALIBRATED_EFFECTIVE_THROUGHPUT"
+    ]
+    causal_attention_effective_status: Literal[
+        "REFERENCE_CALIBRATED_EFFECTIVE_THROUGHPUT"
+    ]
+    provenance: tuple[ProvenanceRecord, ...]
+
+    @model_validator(mode="after")
+    def _calibration_closure(self) -> "ReferenceCalibratedGPUPrefillComputeSpec":
+        for name, nominal, reference in (
+            ("large_gemm", self.large_gemm_effective_tflops,
+             self.large_gemm_reference_range_tflops),
+            ("causal_attention", self.causal_attention_effective_tflops,
+             self.causal_attention_reference_range_tflops),
+        ):
+            if not reference.min <= nominal <= reference.max:
+                raise ValueError(
+                    f"{name} effective throughput must lie within its reference range")
+        if not self.provenance:
+            raise ValueError("GPU Prefill compute calibration requires provenance")
+        forbidden_statuses = {
+            "MEASURED_H200_PREFILL", "VENDOR_REPORTED",
+            "PAPER_REPORTED_H200_PREFILL",
+        }
+        if any(record.status in forbidden_statuses for record in self.provenance):
+            raise ValueError("GPU Prefill calibration provenance overclaims its source")
+        return self

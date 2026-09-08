@@ -630,9 +630,11 @@ def main(argv: list[str] | None = None) -> int:
         workload_spec = load_prefill_workload_spec(
             args.config, project_root=project_root)
         platform = load_platform_spec(args.platform, project_root=project_root)
-        if platform.gpu_decode_power is None or platform.gpu_compute_power is None:
+        if (platform.gpu_decode_power is None
+                or platform.gpu_compute_power is None
+                or platform.gpu_prefill_compute is None):
             raise ValueError(
-                "prefill roofline requires GPU bandwidth and compute platform data")
+                "prefill requires GPU bandwidth, peak, power, and calibrated capability data")
         bandwidth = resolve_gpu_bandwidth_service(
             transfer_ceiling_bytes_per_s=(
                 platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s),
@@ -642,10 +644,15 @@ def main(argv: list[str] | None = None) -> int:
             utilization_provenance=platform.gpu_bandwidth_service.provenance)
         metrics = evaluate_llm_prefill(workload_spec.prefill)
         compute = platform.gpu_compute_power
+        prefill_compute = platform.gpu_prefill_compute
         roofline = evaluate_gpu_prefill_roofline(
             metrics,
             peak_compute_flops_per_s=(
                 compute.peak_compute_BF16_dense_flops_per_s),
+            large_gemm_effective_flops_per_s=(
+                prefill_compute.large_gemm_effective_tflops * 1e12),
+            causal_attention_effective_flops_per_s=(
+                prefill_compute.causal_attention_effective_tflops * 1e12),
             sustained_memory_bandwidth_bytes_per_s=(
                 bandwidth.sustained_bandwidth_bytes_per_s),
             static_power_W=compute.static_power_W,
@@ -657,6 +664,8 @@ def main(argv: list[str] | None = None) -> int:
             "workload_id": workload_spec.workload_id,
             "input": workload_spec.prefill.model_dump(mode="json"),
             "metrics": metrics.model_dump(mode="json"),
+            "gpu_prefill_compute_capability": (
+                prefill_compute.model_dump(mode="json")),
             "gpu_roofline": roofline.model_dump(mode="json"),
         }, indent=2))
     elif args.command == "nmp-attention":

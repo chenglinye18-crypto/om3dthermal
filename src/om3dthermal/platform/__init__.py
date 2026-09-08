@@ -5,6 +5,8 @@ from .gpu_power import (
     AffineGPUDecodePowerSpec,
     GPUComputePowerOperatingPoint,
     GPUDecodePowerOperatingPoint,
+    EffectiveThroughputReferenceRangeTFLOPS,
+    ReferenceCalibratedGPUPrefillComputeSpec,
     resolve_gpu_compute_power,
     resolve_gpu_decode_power,
 )
@@ -31,6 +33,8 @@ __all__ = [
     "AffineGPUDecodePowerSpec",
     "GPUComputePowerOperatingPoint",
     "GPUDecodePowerOperatingPoint",
+    "EffectiveThroughputReferenceRangeTFLOPS",
+    "ReferenceCalibratedGPUPrefillComputeSpec",
     "GPUBandwidthServiceOperatingPoint",
     "GPUBandwidthServiceSpec",
     "HostOffloadSpec",

@@ -115,6 +115,30 @@ gpu_compute_power:
         F_peak_vendor = 989.5e12 FLOP/s; e_dynamic_min = (525 - 74) /
         F_peak_vendor; e_dynamic_max = (700 - 74) / F_peak_vendor. No nominal
         coefficient is selected.
+gpu_prefill_compute:
+  model: REFERENCE_CALIBRATED_TWO_FAMILY_EFFECTIVE_THROUGHPUT
+  peak_compute_reference_status: VENDOR_REPORTED_BF16_DENSE_PEAK
+  large_gemm_effective_tflops: 700.0
+  causal_attention_effective_tflops: 700.0
+  large_gemm_reference_range_tflops:
+    min: 600.0
+    max: 750.0
+  causal_attention_reference_range_tflops:
+    min: 650.0
+    max: 750.0
+  large_gemm_effective_status: REFERENCE_CALIBRATED_EFFECTIVE_THROUGHPUT
+  causal_attention_effective_status: REFERENCE_CALIBRATED_EFFECTIVE_THROUGHPUT
+  provenance:
+    - record_id: h200_prefill_two_family_reference_calibration_v0
+      classification: MATCHED_REFERENCE
+      source: task-specified H200 BF16 reference calibration envelope
+      source_location: large GEMM 600-750 TFLOP/s; causal attention 650-750 TFLOP/s
+      status: REFERENCE_CALIBRATED_EFFECTIVE_THROUGHPUT
+      transformation: nominal capability fixed directly at 700 TFLOP/s for each kernel family
+      notes: >-
+        This is neither a local H200 Prefill measurement nor a vendor-reported
+        Prefill throughput. The ranges are retained only as provenance for a
+        future sensitivity study; this configuration selects 700/700 TFLOP/s.
 host_offload:
   status: RESOLVED
   host_memory_bandwidth_GBps: 460.8

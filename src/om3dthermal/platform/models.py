@@ -11,7 +11,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from om3dthermal.provenance import ProvenanceRecord
 
-from .gpu_power import AffineGPUComputePowerSpec, AffineGPUDecodePowerSpec
+from .gpu_power import (
+    AffineGPUComputePowerSpec,
+    AffineGPUDecodePowerSpec,
+    ReferenceCalibratedGPUPrefillComputeSpec,
+)
 
 
 class GPUBandwidthServiceSpec(BaseModel):
@@ -119,6 +123,7 @@ class PlatformSpec(BaseModel):
     gpu_bandwidth_service: GPUBandwidthServiceSpec
     gpu_decode_power: "AffineGPUDecodePowerSpec | None" = None
     gpu_compute_power: "AffineGPUComputePowerSpec | None" = None
+    gpu_prefill_compute: "ReferenceCalibratedGPUPrefillComputeSpec | None" = None
     provenance: tuple[ProvenanceRecord, ...] = ()
 
     @model_validator(mode="after")
@@ -129,6 +134,19 @@ class PlatformSpec(BaseModel):
                 != self.gpu_compute_power.static_power_W):
             raise ValueError(
                 "GPU decode and compute power models must share static power")
+        if self.gpu_prefill_compute is not None:
+            if self.gpu_compute_power is None:
+                raise ValueError(
+                    "GPU Prefill calibration requires GPU compute peak data")
+            peak_tflops = (
+                self.gpu_compute_power.peak_compute_BF16_dense_flops_per_s
+                / 1e12)
+            if max(
+                self.gpu_prefill_compute.large_gemm_effective_tflops,
+                self.gpu_prefill_compute.causal_attention_effective_tflops,
+            ) > peak_tflops:
+                raise ValueError(
+                    "GPU Prefill effective throughput cannot exceed vendor peak")
         return self
 
 
