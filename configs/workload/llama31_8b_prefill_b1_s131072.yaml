@@ -1,0 +1,25 @@
+schema_version: 1
+workload_id: LLaMA-3.1-8B-class-prefill-B1-S131072-v0
+workload_type: llm_dense_prefill
+prefill:
+  n_param: 8000000000
+  n_layers: 32
+  n_heads_q: 32
+  n_heads_kv: 8
+  d_model: 4096
+  d_ff: 14336
+  vocab_size: 128256
+  batch_size: 1
+  prompt_length: 131072
+  weight_bits: 16
+  kv_bits: 16
+provenance:
+  - record_id: llama31_8b_dense_prefill_v0
+    classification: MODELING_CHOICE
+    source: dense causal prefill analytical specification
+    status: INDEPENDENT_PREFILL_WORKLOAD
+  - record_id: fused_tiled_prefill_attention_traffic_v0
+    classification: MODELING_CHOICE
+    source: first-order tensor traffic ledger
+    status: PREFILL_ATTENTION_FUSED_TILED_NO_DECODE_STYLE_FULL_KV_REREAD
+    transformation: final KV written once; no S-by-S score matrix DRAM materialization

@@ -15,6 +15,13 @@ from om3dthermal.workload.llm_decode import (
     calculate_kv_decode_accounting,
     evaluate_llm_decode,
 )
+from om3dthermal.workload.llm_prefill import (
+    GPUPrefillRooflineMetrics,
+    LLMPrefillInput,
+    LLMPrefillMetrics,
+    evaluate_gpu_prefill_roofline,
+    evaluate_llm_prefill,
+)
 from om3dthermal.workload.m3d_page_demand import (
     M3DOnlyCapacityError,
     M3DWorkloadPageDemand,
@@ -50,13 +57,20 @@ from om3dthermal.workload.moe_published_page_demand import (
     build_published_moe_page_demand,
     expert_only_page_demand_view,
 )
-from om3dthermal.workload.spec import MoEWorkloadSpec, WorkloadSpec
+from om3dthermal.workload.spec import (
+    MoEWorkloadSpec,
+    PrefillWorkloadSpec,
+    WorkloadSpec,
+)
 
 __all__ = [
     "ArchitectureCapacityFeasibility",
     "CapacityFeasibilityMetrics",
     "LLMDecodeInput",
     "LLMDecodeMetrics",
+    "LLMPrefillInput",
+    "LLMPrefillMetrics",
+    "GPUPrefillRooflineMetrics",
     "KVDecodeAccounting",
     "M3DOnlyCapacityError",
     "M3DWorkloadPageDemand",
@@ -66,6 +80,7 @@ __all__ = [
     "MoEDecodeInput",
     "MoEDecodeMetrics",
     "MoEWorkloadSpec",
+    "PrefillWorkloadSpec",
     "M3DMoECapacityError",
     "M3DMoECapacityResult",
     "M3DMoEPhysicalPackingError",
@@ -80,6 +95,8 @@ __all__ = [
     "evaluate_architecture_capacity_feasibility",
     "evaluate_capacity_feasibility",
     "evaluate_llm_decode",
+    "evaluate_llm_prefill",
+    "evaluate_gpu_prefill_roofline",
     "evaluate_moe_decode",
     "calculate_kv_decode_accounting",
     "build_m3d_only_workload_objects",

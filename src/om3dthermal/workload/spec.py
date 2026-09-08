@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from om3dthermal.provenance import ProvenanceRecord
 
 from .llm_decode import LLMDecodeInput
+from .llm_prefill import LLMPrefillInput
 from .moe_decode import MoEDecodeInput
 
 
@@ -31,4 +32,16 @@ class MoEWorkloadSpec(BaseModel):
     workload_id: str = Field(min_length=1)
     workload_type: Literal["moe_autoregressive_decode"]
     decode: MoEDecodeInput
+    provenance: tuple[ProvenanceRecord, ...] = ()
+
+
+class PrefillWorkloadSpec(BaseModel):
+    """Named dense prefill workload, independent of decode composition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    workload_id: str = Field(min_length=1)
+    workload_type: Literal["llm_dense_prefill"]
+    prefill: LLMPrefillInput
     provenance: tuple[ProvenanceRecord, ...] = ()

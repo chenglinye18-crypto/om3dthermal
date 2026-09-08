@@ -612,8 +612,54 @@ def main(argv: list[str] | None = None) -> int:
     nmp_parser = subparsers.add_parser(
         "nmp-attention", help="run the nominal B=1 dense NMP attention E2E audit")
     nmp_parser.add_argument("--output-dir", type=Path, default=Path("runs/nmp_attention_nominal"))
+    prefill_parser = subparsers.add_parser(
+        "prefill", help="evaluate the independent dense prefill GPU roofline")
+    prefill_parser.add_argument(
+        "--config", type=Path,
+        default=Path("configs/workload/llama31_8b_prefill_b1_s131072.yaml"))
+    prefill_parser.add_argument(
+        "--platform", type=Path,
+        default=Path("configs/platform/gpu_package_h200_reference.yaml"))
     args = parser.parse_args(argv)
-    if args.command == "nmp-attention":
+    if args.command == "prefill":
+        from .experiment import load_platform_spec, load_prefill_workload_spec
+        from .platform import resolve_gpu_bandwidth_service
+        from .workload import evaluate_gpu_prefill_roofline, evaluate_llm_prefill
+
+        project_root = Path.cwd()
+        workload_spec = load_prefill_workload_spec(
+            args.config, project_root=project_root)
+        platform = load_platform_spec(args.platform, project_root=project_root)
+        if platform.gpu_decode_power is None or platform.gpu_compute_power is None:
+            raise ValueError(
+                "prefill roofline requires GPU bandwidth and compute platform data")
+        bandwidth = resolve_gpu_bandwidth_service(
+            transfer_ceiling_bytes_per_s=(
+                platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s),
+            gpu_bandwidth_utilization=(
+                platform.gpu_bandwidth_service.nominal_utilization),
+            utilization_status=platform.gpu_bandwidth_service.utilization_status,
+            utilization_provenance=platform.gpu_bandwidth_service.provenance)
+        metrics = evaluate_llm_prefill(workload_spec.prefill)
+        compute = platform.gpu_compute_power
+        roofline = evaluate_gpu_prefill_roofline(
+            metrics,
+            peak_compute_flops_per_s=(
+                compute.peak_compute_BF16_dense_flops_per_s),
+            sustained_memory_bandwidth_bytes_per_s=(
+                bandwidth.sustained_bandwidth_bytes_per_s),
+            static_power_W=compute.static_power_W,
+            e_compute_dynamic_J_per_FLOP_min=(
+                compute.e_compute_dynamic_J_per_FLOP_min),
+            e_compute_dynamic_J_per_FLOP_max=(
+                compute.e_compute_dynamic_J_per_FLOP_max))
+        print(json.dumps({
+            "workload_id": workload_spec.workload_id,
+            "input": workload_spec.prefill.model_dump(mode="json"),
+            "metrics": metrics.model_dump(mode="json"),
+            "gpu_roofline": roofline.model_dump(mode="json"),
+        }, indent=2))
+    elif args.command == "nmp-attention":
         from scripts.evaluate_nmp_locality_placement import run
         print(json.dumps(run(args.output_dir)["summary"], indent=2))
     elif args.command == "build":
