@@ -1,0 +1,23 @@
+schema_version: 1
+experiment_id: formal_long_context_inference_e2e
+model_registry_dir: configs/workload/models
+models: [llama31_8b, qwen25_7b, llama2_7b]
+primary: {prompt_tokens: 131072, generation_tokens: 512, batch_sizes: [1, 4, 8, 16]}
+sensitivities:
+  - {name: context_32k, prompt_tokens: 32768, generation_tokens: 512, batch_size: 8}
+  - {name: generation_256, prompt_tokens: 131072, generation_tokens: 256, batch_size: 8}
+systems:
+  - {system: CONVENTIONAL_HBM_GPU, policy: RESIDENT_ONLY_QUEUE_TO_FIT}
+  - {system: CONVENTIONAL_HBM_GPU, policy: HOST_KV_OFFLOAD}
+  - {system: ORTHOGONAL_M3D_IGZO_MEMORY_ONLY, policy: FULLY_LOCAL}
+  - {system: IOM3D_FEOL_NMP, policy: FULLY_LOCAL}
+arrival_policy: ALL_REQUESTS_AT_T0
+workspace:
+  prefill_chunk_tokens: 2048
+  attention_tile_tokens: 128
+  activation_bytes: 2
+  attention_accumulator_bytes: 4
+  provenance_status: MODELING_CHOICE_UNIFORM_CHUNKED_FUSED_ATTENTION
+  provenance: >-
+    Uniform 2048-token Prefill chunks and 128-token fused-attention tiles,
+    fixed independently of model, batch size, and capacity result.

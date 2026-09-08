@@ -115,6 +115,13 @@ from .host_kv_overflow import (
     HostKVDecodeStep,
     evaluate_conventional_overflow_policy,
 )
+from .formal_workload import (
+    FormalE2EResult,
+    FormalInferenceWorkload,
+    FormalPolicy,
+    evaluate_formal_inference_workload,
+    formal_capacity_limits,
+)
 
 __all__ = [
     "AnalyticalRooflineGPUModel",
@@ -204,4 +211,9 @@ __all__ = [
     "ConventionalOverflowResult",
     "HostKVDecodeStep",
     "evaluate_conventional_overflow_policy",
+    "FormalE2EResult",
+    "FormalInferenceWorkload",
+    "FormalPolicy",
+    "evaluate_formal_inference_workload",
+    "formal_capacity_limits",
 ]
