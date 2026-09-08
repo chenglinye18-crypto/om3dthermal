@@ -11,7 +11,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from om3dthermal.placement.nmp_locality_e2e import NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS
 from om3dthermal.placement.nmp_load_balance import (
     build_performance_balanced_placement,
 )
@@ -25,6 +24,7 @@ from om3dthermal.power import (
 from om3dthermal.power.feol_route import calculate_feol_route
 from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
 from om3dthermal.power.nmp_die_activity import (
+    NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS,
     canonical_nmp_hardware,
     evaluate_nmp_die_activity,
 )
@@ -41,10 +41,23 @@ from om3dthermal.workload import (
 NMP_BATCH_GENERALIZATION_STATUS = "RESOLVED_ANALYTICAL_BATCH_MODEL"
 
 
+@dataclass(frozen=True)
+class NMPDecodeExecutionTrace:
+    """Detailed carriers produced by the one canonical Decode execution."""
+
+    architecture: object
+    workload: LLMDecodeInput
+    demand: object
+    placement: object
+    activity: object
+    power_map: object
+
+
 class NMPDecodeBatchResult(BaseModel):
     """One synchronized batch Decode step or a physical-capacity failure."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     batch_size: int = Field(gt=0)
     active_capacity_requests: int = Field(gt=0)
@@ -76,6 +89,11 @@ class NMPDecodeBatchResult(BaseModel):
     partial_bytes_per_step: float | None = None
     local_memory_bytes_per_step: float | None = None
     boundary_bytes_per_step: float | None = None
+    weight_bulk_external_bytes_per_step: Literal[0] | None = None
+    kv_bulk_external_bytes_per_step: Literal[0] | None = None
+    direct_die_to_die_bytes_per_step: Literal[0] | None = None
+    local_bandwidth_per_die_bytes_per_s: float | None = None
+    boundary_bandwidth_bytes_per_s: float | None = None
 
     decode_step_time_ms: float | None = None
     aggregate_decode_tokens_per_s: float | None = None
@@ -91,6 +109,8 @@ class NMPDecodeBatchResult(BaseModel):
     total_J_per_step: float | None = None
     J_per_token: float | None = None
     tokens_per_J: float | None = None
+    execution_trace: NMPDecodeExecutionTrace | None = Field(
+        default=None, exclude=True, repr=False)
 
     @model_validator(mode="after")
     def _evaluated_closure(self) -> "NMPDecodeBatchResult":
@@ -319,6 +339,13 @@ def evaluate_nmp_decode_batch(
         local_memory_bytes_per_step=sum(
             item.total_local_memory_bytes for item in activity.activities),
         boundary_bytes_per_step=activity.residual_boundary_bytes,
+        weight_bulk_external_bytes_per_step=0,
+        kv_bulk_external_bytes_per_step=0,
+        direct_die_to_die_bytes_per_step=0,
+        local_bandwidth_per_die_bytes_per_s=(
+            activity.local_bandwidth_per_die_bytes_per_s),
+        boundary_bandwidth_bytes_per_s=(
+            activity.transfer["bandwidth_actual_bytes_per_s"]),
         decode_step_time_ms=activity.decode_step_interval_ms,
         aggregate_decode_tokens_per_s=workload.batch_size / interval_s,
         per_sequence_TPOT_ms=activity.decode_step_interval_ms,
@@ -331,4 +358,7 @@ def evaluate_nmp_decode_batch(
         gpu_static_J_per_step=static_J, refresh_J_per_step=refresh_J,
         total_J_per_step=total_J, J_per_token=total_J / workload.batch_size,
         tokens_per_J=workload.batch_size / total_J,
+        execution_trace=NMPDecodeExecutionTrace(
+            architecture=architecture, workload=workload, demand=demand,
+            placement=placement, activity=activity, power_map=power),
     )

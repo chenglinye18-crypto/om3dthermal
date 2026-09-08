@@ -72,6 +72,17 @@ def test_shared_weights_and_request_private_scaling(results):
         assert row.weight_batch_reuse_status == "PASS"
 
 
+def test_resident_and_active_weight_and_locality_boundaries_are_distinct(results):
+    row = results[1]
+    assert row.logical_required_capacity_GB * 1e9 > row.weight_read_bytes_per_step
+    assert row.matrix_weight_read_bytes_per_step == 15_009_316_864
+    assert row.weight_bulk_external_bytes_per_step == 0
+    assert row.kv_bulk_external_bytes_per_step == 0
+    assert row.direct_die_to_die_bytes_per_step == 0
+    assert row.boundary_bandwidth_bytes_per_s == 2.4e12
+    assert row.local_bandwidth_per_die_bytes_per_s > 2.4e12 / 106
+
+
 def test_aggregate_timing_static_and_energy_closure(results):
     b1 = results[1]
     for batch in (1, 2, 3, 14, 27, 28):

@@ -130,10 +130,14 @@ def test_canonical_workloads_fit_and_fast_pack_beats_random(
 
 @pytest.mark.parametrize(
     ("requests", "expected"),
-    # Rev v2 re-frozen: 106 slabs redistribute pages across slot classes.
-    ((1, 10.070685403196899),
-     (8, 10.379300101550944),
-     (16, 11.12039689287323)),
+    # REBASE_REASON =
+    # ACTIVE_OPERATOR_WEIGHT_TRAFFIC_REPLACED_FULL_WEIGHT_FOOTPRINT_TRAFFIC
+    # PHYSICAL_LATENCY_MODEL_CHANGED = NO
+    # FASTEST_SLOT_SELECTION_POLICY_CHANGED = NO
+    # PAGE_DEMAND_WEIGHTING_SEMANTICS_CHANGED = YES
+    ((1, 10.070407952302427),
+     (8, 10.37557673136668),
+     (16, 11.11421552606883)),
 )
 def test_fast_pack_canonical_latency_regression(canonical, requests, expected) -> None:
     layout, workload = canonical

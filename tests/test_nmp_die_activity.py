@@ -1,17 +1,47 @@
-"""Analytical dense attention E2E closure; no architecture/throughput sweep."""
-import math
+"""Canonical per-die NMP activity and power closure."""
+from pathlib import Path
+from dataclasses import replace
+
 import pytest
-from scripts.evaluate_nmp_locality_placement import run
+
+from om3dthermal.experiment import load_workload_spec
+from om3dthermal.serving import evaluate_nmp_decode_batch
+from om3dthermal.power.nmp_die_activity import evaluate_nmp_die_activity
+from om3dthermal.workload.dense_decode_ledger import (
+    attention_boundary_by_layer,
+    boundary_bytes_per_die,
+    build_dense_decode_handoffs,
+    build_dense_decode_placement_units,
+    build_dense_decode_small_ops,
+)
+from om3dthermal.workload import evaluate_llm_decode
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(scope="module")
-def payload(tmp_path_factory):
-    return run(tmp_path_factory.mktemp("nmp_attention"))
+def payload():
+    workload = load_workload_spec(
+        ROOT / "configs/workload/llama31_8b_decode_b1_s131072.yaml",
+        project_root=ROOT,
+    ).decode
+    result = evaluate_nmp_decode_batch(workload, project_root=ROOT)
+    trace = result.execution_trace
+    assert trace is not None
+    return {
+        "activity": trace.activity.as_dict(),
+        "placement": trace.placement.as_dict(),
+        "power_map": trace.power_map.as_dict(),
+        "summary": result.model_dump(mode="json"),
+        "workload": workload.model_dump(mode="json"),
+        "trace": trace,
+    }
 
 
 def test_nominal_attention_boundary_and_softmax(payload):
     a=payload["activity"]; s=payload["summary"]
-    assert s["qk_flops_per_token"] == s["av_flops_per_token"] == 2*32*131072*128*32
+    assert s["qk_flops_per_step"] == s["av_flops_per_step"] == 2*32*131072*128*32
     assert a["score_bytes"] == a["probability_bytes"] == 32*131072*2*32
     placement=payload["placement"]
     expected_partial=0
@@ -34,6 +64,10 @@ def test_nominal_attention_boundary_and_softmax(payload):
 
 def test_operator_and_die_closure(payload):
     a=payload["activity"]; p=payload["placement"]
+    assert a["local_route_delay_ns"] == 1.0
+    assert a["local_route_provenance"] == (
+        "MODELING_CHOICE_FIXED_LOCAL_NMP_ROUTE_DELAY__NOT_PHYSICALLY_"
+        "EXTRACTED__NOT_OPTIMIZED__NOT_POSITION_DEPENDENT")
     units=p["unit_loads"]
     assert sum(x["unit"]["weight_bytes"] for x in units) == 16e9
     assert sum(x["weight_read_bytes"] for x in units) == 15_009_325_056
@@ -135,11 +169,10 @@ def test_power_boundaries_and_static_once(payload):
     assert p["aggregate_total_W"] == pytest.approx(sum(p[k] for k in ("aggregate_memory_read_dynamic_W","aggregate_memory_write_dynamic_W","aggregate_mac_dynamic_W","aggregate_refresh_W","aggregate_residual_external_W")))
     assert payload["summary"]["J_per_token"] == pytest.approx(p["aggregate_total_W"]*seconds+a["softmax_dynamic_energy_j"]+a["gpu_remaining_dynamic_energy_j"]+74*seconds)
     assert p["power_component_double_count_gate"] == "PASS"
-    assert math.isfinite(payload["summary"]["energy_efficiency_gain"])
 
 
 def test_small_op_dimensions_and_energy(payload):
-    a=payload["activity"]; s=payload["summary"]
+    a=payload["activity"]
     rows=a["small_ops"]
     def total(operator): return sum(x["gpu_local_total_bytes"] for x in rows if x["operator"]==operator)
     assert total("RMSNORM")+total("FINAL_RMSNORM")==1_597_440
@@ -153,16 +186,13 @@ def test_small_op_dimensions_and_energy(payload):
     assert a["gpu_remaining_time_ms"]==pytest.approx(a["gpu_remaining_local_bytes"]/2.4e12*1e3)
     assert a["gpu_remaining_dynamic_energy_j"]==pytest.approx(8*a["gpu_remaining_local_bytes"]*15.29e-12)
     assert a["embedding_local_read_bytes"]==8192
-    common=a["gpu_remaining_local_bytes"]-total("AV_REDUCTION")
-    assert s["baseline_gpu_remaining_local_MB_per_token"]==pytest.approx(common/1e6)
-    assert s["baseline_gpu_remaining_ms_per_token"]==pytest.approx(common/2.4e12*1e3)
-    assert s["baseline_gpu_remaining_dynamic_J_per_token"]==pytest.approx(8*common*15.29e-12)
 
 
 def test_explicit_handoffs_are_unique_and_rope_is_closed(payload):
     handoffs=payload["activity"]["handoffs"]
     keys=[(x["producer"],x["consumer"],x["layer_id"],x["request_id"]) for x in handoffs]
     assert len(keys)==len(set(keys))
+    assert all(x["request_id"] is not None for x in handoffs)
     layer0=[x for x in handoffs if x["layer_id"]==0]
     assert sum(x["bytes"] for x in layer0 if x["producer"]=="Q" and x["consumer"]=="ROPE")==8192
     assert sum(x["bytes"] for x in layer0 if x["producer"]=="K" and x["consumer"]=="ROPE")==2048
@@ -180,3 +210,104 @@ def test_explicit_handoffs_are_unique_and_rope_is_closed(payload):
     sampling=next(x for x in payload["activity"]["small_ops"] if x["operator"]=="SAMPLING")
     assert sampling["gpu_local_read_bytes"]==logits[0]["bytes"]
     assert sampling["gpu_local_total_bytes"]==logits[0]["bytes"]+4
+
+
+def test_local_service_is_independent_of_external_gpu_bandwidth(payload):
+    trace = payload["trace"]
+    activity = trace.activity
+    reduced = replace(
+        trace.architecture.bandwidth, coil_bandwidth_bytes_per_s=1.2e12)
+    changed = evaluate_nmp_die_activity(
+        trace.workload, trace.demand, trace.architecture.layout, reduced,
+        local_access_latency_ns=activity.local_access_latency_ns,
+        bandwidth_demand_bytes_per_s=1.2e12,
+        ownership=trace.placement.ownership,
+    )
+    assert changed.local_bandwidth_per_die_bytes_per_s == pytest.approx(
+        activity.local_bandwidth_per_die_bytes_per_s)
+    assert changed.global_nmp_stage_time_ms == pytest.approx(
+        activity.global_nmp_stage_time_ms)
+    assert changed.boundary_time_ms == pytest.approx(2 * activity.boundary_time_ms)
+
+
+def test_external_boundary_uses_canonical_transfer_resolver(payload, monkeypatch):
+    import om3dthermal.power.nmp_die_activity as module
+    from om3dthermal.platform import resolve_local_memory_gpu_transfer
+
+    calls = []
+
+    def record(**kwargs):
+        calls.append(kwargs)
+        return resolve_local_memory_gpu_transfer(**kwargs)
+
+    monkeypatch.setattr(module, "resolve_local_memory_gpu_transfer", record)
+    trace = payload["trace"]
+    changed = evaluate_nmp_die_activity(
+        trace.workload, trace.demand, trace.architecture.layout,
+        trace.architecture.bandwidth,
+        local_access_latency_ns=trace.activity.local_access_latency_ns,
+        bandwidth_demand_bytes_per_s=1e12,
+        ownership=trace.placement.ownership,
+    )
+    assert calls and calls[0]["bandwidth_demand_bytes_per_s"] == 1e12
+    assert changed.transfer["bandwidth_actual_bytes_per_s"] == 1e12
+    assert changed.boundary_time_ms == pytest.approx(
+        changed.residual_boundary_bytes / 1e12 * 1e3)
+
+
+def test_av_partial_is_resolved_per_layer_request(payload):
+    trace = payload["trace"]
+    workload = trace.workload.model_copy(
+        update={"batch_size": 2, "context_length": 17})
+    units = build_dense_decode_placement_units(workload)
+    ownership = tuple(
+        (0, 1) if unit.operator_type == "ATTENTION_AV" and unit.request_id == 0
+        else (1, 2, 3) if unit.operator_type == "ATTENTION_AV"
+        else (0,)
+        for unit in units)
+    layers = attention_boundary_by_layer(units, ownership)
+    expected = workload.n_layers * (2 + 3) * workload.d_model * 4
+    assert sum(row["partial_bytes"] for row in layers.values()) == expected
+    assert all(
+        row["partial_bytes"] == (2 + 3) * workload.d_model * 4
+        for row in layers.values())
+    small = build_dense_decode_small_ops(
+        workload, units, ownership, trace.architecture.layout.slab_count)
+    reductions = [row for row in small if row.operator == "AV_REDUCTION"]
+    assert sum(row.gpu_local_total_bytes for row in reductions) == (
+        workload.n_layers
+        * ((2 + 3) * workload.d_model * 4 + 2 * workload.d_model * 2))
+
+
+@pytest.mark.parametrize(
+    "batch,context,kv_bits", [(1, 131072, 16), (2, 17, 8), (1, 0, 16)])
+def test_workload_ledger_formulas(payload, batch, context, kv_bits):
+    workload = payload["trace"].workload.model_copy(update={
+        "batch_size": batch, "context_length": context, "kv_bits": kv_bits})
+    metrics = evaluate_llm_decode(workload)
+    units = build_dense_decode_placement_units(workload)
+    qk = [unit for unit in units if unit.operator_type == "ATTENTION_QK"]
+    av = [unit for unit in units if unit.operator_type == "ATTENTION_AV"]
+    expected = (
+        2 * batch * workload.n_heads_q * context * workload.d_head
+        * workload.n_layers)
+    assert sum(unit.local_flops for unit in qk) == expected
+    assert sum(unit.local_flops for unit in av) == expected
+    assert sum(
+        unit.local_flops
+        * (batch if unit.placement_scope == "SHARED_BATCH" else 1)
+        for unit in units) == batch * metrics.flops_per_token
+    assert sum(unit.weight_bytes for unit in units) == metrics.weight_footprint_bytes
+    assert sum(unit.kv_bytes for unit in units) == (
+        batch * metrics.kv_read_bytes_per_token)
+    assert sum(unit.kv_write_bytes for unit in units) == (
+        batch * metrics.kv_write_bytes_per_token)
+    ownership = tuple((0, 1) for _ in units)
+    handoffs = build_dense_decode_handoffs(units, ownership, 2)
+    assert sum(boundary_bytes_per_die(units, ownership, 2)) == pytest.approx(
+        sum(row.bytes for row in handoffs))
+    keys = {
+        (row.producer, row.consumer, row.layer_id, row.request_id)
+        for row in handoffs}
+    assert len(keys) == len(handoffs)
+    assert all(row.request_id is not None for row in handoffs)

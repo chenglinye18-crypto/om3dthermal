@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, replace
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -10,76 +10,39 @@ import numpy as np
 
 from om3dthermal.case_runner import run_steady_pipeline
 from om3dthermal.architecture_comparison import _resolve_case_power_operating_points
-from om3dthermal.experiment import load_experiment_spec, load_workload_spec
-from om3dthermal.placement import evaluate_nmp_locality_case
-from om3dthermal.placement.nmp_load_balance import (
-    build_locality_only_placement, build_performance_balanced_placement,
-    remaining_external_bytes_for_ownership,
-)
-from om3dthermal.power import (calculate_memory_power,
-    calculate_physical_access_latency, load_case_config, resolve_case_geometry,
-    resolve_system_power)
-from om3dthermal.power.feol_route import calculate_feol_route
-from om3dthermal.power.m3d_subarray import calculate_m3d_subarray
-from om3dthermal.power.nmp_die_activity import canonical_nmp_hardware, evaluate_nmp_die_activity
-from om3dthermal.power.nmp_die_power import build_nmp_die_power_map
+from om3dthermal.experiment import load_workload_spec
+from om3dthermal.power import resolve_system_power
+from om3dthermal.serving import evaluate_nmp_decode_batch
 from om3dthermal.thermal.nmp_die_mapping import (
     analyze_nmp_die_thermal_pipeline, compile_nmp_die_thermal_config)
-from om3dthermal.workload import build_m3d_workload_page_demand
 
 try:
-    from evaluate_die_local_placement import ROOT, _architecture
+    from evaluate_die_local_placement import ROOT
 except ModuleNotFoundError:
-    from scripts.evaluate_die_local_placement import ROOT, _architecture
+    from scripts.evaluate_die_local_placement import ROOT
 
 
 def _frozen_case_inputs(requests: int):
-    layout, bandwidth = _architecture()
-    case_path = ROOT / "configs/cases/orthogonal_m3d_igzo.yaml"
-    case = load_case_config(case_path)
-    geometry = resolve_case_geometry(case)
-    memory = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
-    topology = calculate_m3d_subarray(case.architecture.m3d_subarray, geometry.m3d)
-    feol = calculate_feol_route(case.architecture, topology)
-    physical = calculate_physical_access_latency(
-        case.architecture.physical_access_latency, feol_route=feol,
-        miv_length_per_layer_um=memory.diagnostics["miv_length_per_layer_um"],
-        miv_delay_per_layer_ns=memory.diagnostics["miv_delay_per_layer_ns"],
-        miv_status=memory.diagnostics["miv_latency_status"],
-        miv_parameter_status=memory.diagnostics["miv_resistance_parameter_status"],
-        miv_provenance=memory.diagnostics["miv_resistance_provenance"])
     base = load_workload_spec(
         ROOT / "configs/workload/llama31_8b_decode_b1_s131072.yaml",
         project_root=ROOT).decode
     workload = base.model_copy(update={"batch_size": requests})
-    demand = build_m3d_workload_page_demand(workload, layout)
-    experiment = load_experiment_spec(
-        ROOT / "configs/experiment/m3d_igzo_llama31_8b_decode_conditional_v0.yaml",
-        project_root=ROOT)
-    gpu_flops = experiment.scenario.effective_compute_flops_per_second
-    cap_bps = bandwidth.coil_bandwidth_bytes_per_s
-    baseline = evaluate_nmp_locality_case(
-        workload, demand, layout, physical, bandwidth, case="NON_NMP_GPU",
-        gpu_compute_flops_per_s=gpu_flops,
-        external_bandwidth_cap_bytes_per_s=cap_bps)
-    hardware = canonical_nmp_hardware(layout.slab_count)
-    canonical = evaluate_nmp_locality_case(
-        workload, demand, layout, physical, bandwidth,
-        case="NMP_LOCALITY_AWARE_PLACEMENT",
-        gpu_compute_flops_per_s=gpu_flops,
-        external_bandwidth_cap_bytes_per_s=cap_bps)
-    bandwidth_per_die = (
-        bandwidth.local_service_groups_per_slab * bandwidth.read_payload_bytes_per_service
-        / (bandwidth.service_cycle_scale * canonical.placement.local_access_latency_ns * 1e-9))
-    placement = build_performance_balanced_placement(
-        workload, demand, layout, bandwidth_per_die_bytes_per_s=bandwidth_per_die,
-        compute_per_die_flops_per_s=hardware.peak_flops_per_die)
-    activity = evaluate_nmp_die_activity(
-        workload, demand, layout, bandwidth,
-        local_access_latency_ns=canonical.placement.local_access_latency_ns,
-        bandwidth_demand_bytes_per_s=cap_bps, ownership=placement.ownership)
-    power_map = build_nmp_die_power_map(case, memory, topology, feol, activity, placement)
-    gain = requests / (activity.decode_step_interval_ms * 1e-3) / baseline.timing.tokens_per_s
+    result = evaluate_nmp_decode_batch(workload, project_root=ROOT)
+    trace = result.execution_trace
+    if trace is None:
+        raise ValueError("thermal carrier construction requires a feasible Decode")
+    architecture = trace.architecture
+    case = architecture.case
+    geometry = architecture.geometry
+    placement = trace.placement
+    activity = trace.activity
+    power_map = trace.power_map
+    baseline_seconds = (
+        float(result.matrix_weight_read_bytes_per_step)
+        + 8.0 * (
+            float(result.kv_read_bytes_per_step)
+            + float(result.kv_write_bytes_per_step))) / 2.4e12
+    gain = baseline_seconds / (activity.decode_step_interval_ms * 1e-3)
     gpu_point, transfer_point, service_point = _resolve_case_power_operating_points(
         case, ROOT)
     system = resolve_system_power(

@@ -13,6 +13,11 @@ from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
 from om3dthermal.workload.llm_decode import LLMDecodeInput
 from om3dthermal.workload.m3d_page_demand import M3DWorkloadPageDemand
 
+NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS = 1.0
+NMP_LOCAL_ROUTE_PROVENANCE = (
+    "MODELING_CHOICE_FIXED_LOCAL_NMP_ROUTE_DELAY__NOT_PHYSICALLY_EXTRACTED__"
+    "NOT_OPTIMIZED__NOT_POSITION_DEPENDENT")
+
 @dataclass(frozen=True)
 class NMPHardware:
     precision: str; macs_per_die: int; active_mac_ceiling_per_die: int; clock_hz: float
@@ -41,6 +46,7 @@ class NMPDieWorkloadActivity:
 @dataclass(frozen=True)
 class NMPDieActivitySummary:
     hardware: NMPHardware; local_access_latency_ns: float; local_route_delay_ns: float
+    local_route_provenance: str
     local_bandwidth_per_die_bytes_per_s: float; aggregate_local_bandwidth_bytes_per_s: float
     hardware_balance_flop_per_byte: float; activities: tuple[NMPDieWorkloadActivity,...]
     global_nmp_stage_time_ms: float; decode_step_interval_ms: float; straggler_die_id: int
@@ -224,7 +230,11 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
     embedding_bytes=sum(u.active_weight_read_bytes for u in units
                         if u.operator_type=="TOKEN_EMBED_LOOKUP")
     embedding_ms=local_stages[-1,"TOKEN_EMBED_LOOKUP"]["time_ms"]
-    return NMPDieActivitySummary(hw,local_access_latency_ns,1.0,bw_die,bw_die*n,ai_balance,tuple(rows),stage,interval,service.index(max(service)),statistics.fmean(service),p90,max(service),
+    return NMPDieActivitySummary(
+        hw, local_access_latency_ns, NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS,
+        NMP_LOCAL_ROUTE_PROVENANCE, bw_die, bw_die*n, ai_balance, tuple(rows),
+        stage, interval, service.index(max(service)), statistics.fmean(service),
+        p90, max(service),
         sum(r.bottleneck=="MEMORY_BOUND" for r in rows),sum(r.bottleneck=="COMPUTE_BOUND" for r in rows),sum(r.bottleneck=="BALANCED" for r in rows),
         sum(r.compute_energy_j for r in rows),sum(r.power.compute_dynamic_W for r in rows),"DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B",
         "SERIAL_DEPENDENT_STAGES_WITH_GPU_SOFTMAX_BARRIERS",tuple(stages),attention_layers,
