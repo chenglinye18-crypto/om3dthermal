@@ -39,6 +39,11 @@ RESIDENT_WAVE_MODEL_STATUS = (
 OUTPUT_LENGTH_STATUS = (
     "EQUAL_OUTPUT_LENGTH__CANCELS_FROM_AGGREGATE_THROUGHPUT")
 SWAP_ADMISSION_STATUS = "NOT_INCLUDED_OPTIMISTIC_UPPER_BOUND"
+ADMISSION_POLICY = "SERIAL_HOST_TO_HBM_ADMISSION_BETWEEN_WAVES"
+OUTPUT_LENGTH_MODEL_STATUS = (
+    "EQUAL_GENERATED_LENGTH_PER_REQUEST_SENSITIVITY")
+ADMISSION_AWARE_MODEL_STATUS = (
+    "ADMISSION_AWARE_RESIDENT_WAVE_SENSITIVITY")
 
 
 class ResidentWaveDecodeResult(BaseModel):
@@ -106,6 +111,99 @@ class ResidentWaveDecodeResult(BaseModel):
             throughput, self.aggregate_decode_tokens_per_s, rel_tol=1e-12
         ):
             raise ValueError("resident-wave throughput does not close")
+        return self
+
+
+class ResidentWaveAdmissionAwareResult(BaseModel):
+    """Resident waves with serialized host-to-HBM historical-KV admission."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_id: str
+    context_length: int = Field(gt=0)
+    batch_size: int = Field(gt=0)
+    prefill_requests: int = Field(gt=0)
+    requested_decode_requests: int = Field(gt=0)
+    generated_output_tokens_per_request: int = Field(gt=0)
+    resident_batch_limit: int = Field(gt=0)
+    wave_count: int = Field(gt=0)
+    wave_sizes: tuple[int, ...]
+    wave_step_times_ms: tuple[float, ...]
+    admission_bytes_per_wave: tuple[float, ...]
+    admission_time_ms_per_wave: tuple[float, ...]
+    total_admission_GB: float = Field(ge=0.0)
+    total_admission_time_ms: float = Field(ge=0.0)
+    compute_time_ms: float = Field(gt=0.0)
+    total_completion_time_ms: float = Field(gt=0.0)
+    total_generated_tokens: int = Field(gt=0)
+    optimistic_resident_wave_tokens_per_s: float = Field(gt=0.0)
+    admission_aware_tokens_per_s: float = Field(gt=0.0)
+    throughput_retention_vs_optimistic: float = Field(gt=0.0, le=1.0)
+    throughput_loss_vs_optimistic: float = Field(ge=0.0, lt=1.0)
+    admission_impact_classification: Literal[
+        "LOW_IMPACT", "MODERATE_IMPACT", "HIGH_IMPACT"]
+    host_effective_bandwidth_bytes_per_s: float = Field(gt=0.0)
+    scheduler_policy: Literal[
+        "CAPACITY_CONSTRAINED_RUN_TO_COMPLETION_RESIDENT_WAVES"]
+    admission_policy: Literal[
+        "SERIAL_HOST_TO_HBM_ADMISSION_BETWEEN_WAVES"]
+    output_length_model_status: Literal[
+        "EQUAL_GENERATED_LENGTH_PER_REQUEST_SENSITIVITY"]
+    resident_wave_model_status: Literal[
+        "ADMISSION_AWARE_RESIDENT_WAVE_SENSITIVITY"]
+    first_wave_admission_status: Literal[
+        "ZERO_ALREADY_RESIDENT"] = "ZERO_ALREADY_RESIDENT"
+    scheduler_software_overhead_included: Literal["NO"] = "NO"
+    thermal: None = None
+
+    @model_validator(mode="after")
+    def _closures(self) -> "ResidentWaveAdmissionAwareResult":
+        if not (len(self.wave_sizes) == len(self.wave_step_times_ms)
+                == len(self.admission_bytes_per_wave)
+                == len(self.admission_time_ms_per_wave) == self.wave_count):
+            raise ValueError("admission-aware wave vectors do not close")
+        if self.admission_bytes_per_wave[0] != 0.0:
+            raise ValueError("first wave admission must be zero")
+        if self.admission_time_ms_per_wave[0] != 0.0:
+            raise ValueError("first wave admission time must be zero")
+        admission_bytes = sum(self.admission_bytes_per_wave)
+        admission_ms = sum(self.admission_time_ms_per_wave)
+        if not math.isclose(self.total_admission_GB, admission_bytes / 1e9,
+                            rel_tol=1e-12):
+            raise ValueError("total admission bytes do not close")
+        if not math.isclose(self.total_admission_time_ms, admission_ms,
+                            rel_tol=1e-12):
+            raise ValueError("total admission time does not close")
+        expected_compute = (self.generated_output_tokens_per_request
+                            * sum(self.wave_step_times_ms))
+        if not math.isclose(self.compute_time_ms, expected_compute,
+                            rel_tol=1e-12):
+            raise ValueError("generated-length compute time does not close")
+        if not math.isclose(
+            self.total_completion_time_ms,
+            self.compute_time_ms + self.total_admission_time_ms,
+            rel_tol=1e-12,
+        ):
+            raise ValueError("admission-aware completion time does not close")
+        expected_tokens = (self.requested_decode_requests
+                           * self.generated_output_tokens_per_request)
+        if self.total_generated_tokens != expected_tokens:
+            raise ValueError("total generated tokens do not close")
+        expected_rate = expected_tokens / (self.total_completion_time_ms * 1e-3)
+        if not math.isclose(self.admission_aware_tokens_per_s, expected_rate,
+                            rel_tol=1e-12):
+            raise ValueError("admission-aware throughput does not close")
+        if self.admission_aware_tokens_per_s > (
+                self.optimistic_resident_wave_tokens_per_s * (1.0 + 1e-12)):
+            raise ValueError("admission-aware throughput exceeds optimistic bound")
+        retention = (self.admission_aware_tokens_per_s
+                     / self.optimistic_resident_wave_tokens_per_s)
+        if not math.isclose(self.throughput_retention_vs_optimistic,
+                            retention, rel_tol=1e-12):
+            raise ValueError("throughput retention does not close")
+        if not math.isclose(self.throughput_loss_vs_optimistic,
+                            1.0 - retention, rel_tol=1e-12):
+            raise ValueError("throughput loss does not close")
         return self
 
 
@@ -201,4 +299,77 @@ def evaluate_conventional_hbm_resident_wave_decode(
         weight_activity_model=requested_metrics.weight_activity_model,
         weight_reuse_model=requested_metrics.weight_reuse_model,
         kv_read_model=requested_metrics.kv_read_model,
+    )
+
+
+def evaluate_conventional_hbm_resident_wave_admission(
+    *, project_root: str | Path, model: DenseLLMModelSpec,
+    case: MixedPhaseServingCase, generated_output_tokens_per_request: int,
+) -> ResidentWaveAdmissionAwareResult:
+    """Add serialized historical-KV admission to the existing wave model."""
+    if isinstance(generated_output_tokens_per_request, bool) or not isinstance(
+            generated_output_tokens_per_request, int):
+        raise TypeError("generated_output_tokens_per_request must be an int")
+    if generated_output_tokens_per_request <= 0:
+        raise ValueError("generated_output_tokens_per_request must be positive")
+    root = Path(project_root).resolve()
+    optimistic = evaluate_conventional_hbm_resident_wave_decode(
+        project_root=root, model=model, case=case)
+    backend = resolve_conventional_hbm_backend(root)
+    host_bandwidth = backend.host_offload.effective_bandwidth_bytes_per_second
+    if host_bandwidth is None:
+        raise ValueError("canonical host effective bandwidth is unresolved")
+    metrics = evaluate_llm_decode(model.decode_input(
+        batch_size=case.decode_requests, context_length=case.context_length))
+    admission_bytes = tuple(
+        0.0 if index == 0 else wave_size * metrics.kv_bytes_per_request
+        for index, wave_size in enumerate(optimistic.wave_sizes)
+    )
+    admission_times_ms = tuple(
+        value / host_bandwidth * 1e3 for value in admission_bytes)
+    total_admission_bytes = sum(admission_bytes)
+    total_admission_ms = sum(admission_times_ms)
+    compute_ms = (generated_output_tokens_per_request
+                  * sum(optimistic.wave_step_times_ms))
+    total_ms = compute_ms + total_admission_ms
+    total_tokens = (case.decode_requests
+                    * generated_output_tokens_per_request)
+    realistic_rate = total_tokens / (total_ms * 1e-3)
+    retention = realistic_rate / optimistic.aggregate_decode_tokens_per_s
+    loss = 1.0 - retention
+    impact = (
+        "LOW_IMPACT" if loss < 0.10
+        else "MODERATE_IMPACT" if loss < 0.30
+        else "HIGH_IMPACT"
+    )
+    return ResidentWaveAdmissionAwareResult(
+        model_id=model.model_id,
+        context_length=case.context_length,
+        batch_size=case.batch_size,
+        prefill_requests=case.prefill_requests,
+        requested_decode_requests=case.decode_requests,
+        generated_output_tokens_per_request=(
+            generated_output_tokens_per_request),
+        resident_batch_limit=optimistic.resident_batch_limit,
+        wave_count=optimistic.wave_count,
+        wave_sizes=optimistic.wave_sizes,
+        wave_step_times_ms=optimistic.wave_step_times_ms,
+        admission_bytes_per_wave=admission_bytes,
+        admission_time_ms_per_wave=admission_times_ms,
+        total_admission_GB=total_admission_bytes / 1e9,
+        total_admission_time_ms=total_admission_ms,
+        compute_time_ms=compute_ms,
+        total_completion_time_ms=total_ms,
+        total_generated_tokens=total_tokens,
+        optimistic_resident_wave_tokens_per_s=(
+            optimistic.aggregate_decode_tokens_per_s),
+        admission_aware_tokens_per_s=realistic_rate,
+        throughput_retention_vs_optimistic=retention,
+        throughput_loss_vs_optimistic=loss,
+        admission_impact_classification=impact,
+        host_effective_bandwidth_bytes_per_s=host_bandwidth,
+        scheduler_policy=RESIDENT_WAVE_SCHEDULER_POLICY,
+        admission_policy=ADMISSION_POLICY,
+        output_length_model_status=OUTPUT_LENGTH_MODEL_STATUS,
+        resident_wave_model_status=ADMISSION_AWARE_MODEL_STATUS,
     )

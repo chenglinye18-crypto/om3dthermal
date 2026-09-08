@@ -52,12 +52,17 @@ from .mixed_phase_e2e import (
     resolve_conventional_hbm_backend,
 )
 from .resident_wave import (
+    ADMISSION_AWARE_MODEL_STATUS,
+    ADMISSION_POLICY,
     OUTPUT_LENGTH_STATUS,
+    OUTPUT_LENGTH_MODEL_STATUS,
     RESIDENT_WAVE_MODEL,
     RESIDENT_WAVE_MODEL_STATUS,
     RESIDENT_WAVE_SCHEDULER_POLICY,
     SWAP_ADMISSION_STATUS,
     ResidentWaveDecodeResult,
+    ResidentWaveAdmissionAwareResult,
+    evaluate_conventional_hbm_resident_wave_admission,
     evaluate_conventional_hbm_resident_wave_decode,
 )
 
@@ -102,10 +107,15 @@ __all__ = [
     "load_final_dense_e2e_matrix",
     "resolve_conventional_hbm_backend",
     "OUTPUT_LENGTH_STATUS",
+    "OUTPUT_LENGTH_MODEL_STATUS",
+    "ADMISSION_AWARE_MODEL_STATUS",
+    "ADMISSION_POLICY",
     "RESIDENT_WAVE_MODEL",
     "RESIDENT_WAVE_MODEL_STATUS",
     "RESIDENT_WAVE_SCHEDULER_POLICY",
     "SWAP_ADMISSION_STATUS",
     "ResidentWaveDecodeResult",
+    "ResidentWaveAdmissionAwareResult",
+    "evaluate_conventional_hbm_resident_wave_admission",
     "evaluate_conventional_hbm_resident_wave_decode",
 ]
