@@ -36,7 +36,7 @@ def test_operator_and_die_closure(payload):
     a=payload["activity"]; p=payload["placement"]
     units=p["unit_loads"]
     assert sum(x["unit"]["weight_bytes"] for x in units) == 16e9
-    assert sum(x["weight_read_bytes"] for x in units) == 15_009_316_864
+    assert sum(x["weight_read_bytes"] for x in units) == 15_009_325_056
     other=next(x for x in units if x["unit"]["operator_type"]=="OTHER_WEIGHT")
     assert other["unit"]["weight_bytes"] == 990_683_136
     assert other["weight_read_bytes"] == other["nmp_flops"] == 0
@@ -63,7 +63,7 @@ def test_row_and_kv_shards_close_without_splitting_atomic_vectors(payload):
         assert sum(x["weight_read_bytes"] for x in shards)==pytest.approx(load["weight_read_bytes"])
         assert sum(x["nmp_flops"] for x in shards)==pytest.approx(load["nmp_flops"])
         unit=load["unit"]
-        if unit["shard_mode"] in ("ROW_PARALLEL","KV_ATOMIC"):
+        if unit["shard_mode"] in ("ROW_PARALLEL","KV_ATOMIC","LOCAL_LOOKUP"):
             assert sum(x["shard_count"] for x in shards)==unit["atomic_count"]
         if unit["shard_mode"]=="ROW_PARALLEL":
             assert unit["output_rows"]==sum(x["shard_count"] for x in shards)
@@ -99,16 +99,25 @@ def test_stage_parallelism_regression_gates(payload):
 
 def test_serial_stage_dependencies(payload):
     a=payload["activity"]
-    expected=["Q","K","V","ATTENTION_QK","SCORE_TRANSFER","GPU_SOFTMAX",
-              "PROBABILITY_TRANSFER","ATTENTION_AV","PARTIAL_TRANSFER","O","FFN_GATE","FFN_UP","FFN_DOWN"]
+    expected=["RMSNORM_PRE_ATTENTION","RMSNORM_TO_Q_TRANSFER","RMSNORM_TO_K_TRANSFER",
+              "RMSNORM_TO_V_TRANSFER","Q","Q_TO_ROPE_TRANSFER","K","K_TO_ROPE_TRANSFER",
+              "V","V_TO_KV_REPACK_TRANSFER","V_KV_REPACK_RETURN_TRANSFER","ROPE",
+              "ROPE_Q_RETURN_TRANSFER","ROPE_K_RETURN_TRANSFER","ATTENTION_QK",
+              "SCORE_TRANSFER","GPU_SOFTMAX","PROBABILITY_TRANSFER","ATTENTION_AV",
+              "PARTIAL_TRANSFER","AV_REDUCTION","AV_REDUCTION_TO_O_TRANSFER","O",
+              "O_TO_RESIDUAL_TRANSFER","RESIDUAL_ADD_ATTENTION","RMSNORM_PRE_FFN",
+              "RMSNORM_TO_FFN_GATE_TRANSFER","RMSNORM_TO_FFN_UP_TRANSFER","FFN_GATE",
+              "FFN_GATE_TO_SWIGLU_TRANSFER","FFN_UP","FFN_UP_TO_SWIGLU_TRANSFER",
+              "SWIGLU","SWIGLU_TO_FFN_DOWN_TRANSFER","FFN_DOWN",
+              "FFN_DOWN_TO_RESIDUAL_TRANSFER","RESIDUAL_ADD_FFN"]
     for layer in range(32):
         rows=[x for x in a["stages"] if x["layer"]==layer]
-        assert [x["operator"] for x in rows if not x["operator"].endswith("_GPU_BOUNDARY")] == expected
+        assert [x["operator"] for x in rows] == expected
         for row in rows:
             if "memory_ms" in row:
                 assert row["time_ms"] == max(row["memory_ms"],row["compute_ms"])
     assert a["decode_step_interval_ms"] == pytest.approx(sum(x["time_ms"] for x in a["stages"]))
-    assert a["decode_step_interval_ms"] == pytest.approx(a["global_nmp_stage_time_ms"]+a["boundary_time_ms"]+a["softmax_time_ms"])
+    assert a["decode_step_interval_ms"] == pytest.approx(a["global_nmp_stage_time_ms"]+a["boundary_time_ms"]+a["softmax_time_ms"]+a["gpu_remaining_time_ms"])
     assert a["global_nmp_stage_time_ms"] > max(x["active_service_time_ms"] for x in a["activities"])
 
 
@@ -124,6 +133,50 @@ def test_power_boundaries_and_static_once(payload):
         8*active_read*primitive["local_read_total_pj_per_bit"]*1e-12)
     assert p["aggregate_mac_dynamic_W"]*seconds == pytest.approx(sum(x["nmp_flops"] for x in a["activities"])/2*.604e-12)
     assert p["aggregate_total_W"] == pytest.approx(sum(p[k] for k in ("aggregate_memory_read_dynamic_W","aggregate_memory_write_dynamic_W","aggregate_mac_dynamic_W","aggregate_refresh_W","aggregate_residual_external_W")))
-    assert payload["summary"]["J_per_token"] == pytest.approx(p["aggregate_total_W"]*seconds+a["softmax_dynamic_energy_j"]+74*seconds)
+    assert payload["summary"]["J_per_token"] == pytest.approx(p["aggregate_total_W"]*seconds+a["softmax_dynamic_energy_j"]+a["gpu_remaining_dynamic_energy_j"]+74*seconds)
     assert p["power_component_double_count_gate"] == "PASS"
     assert math.isfinite(payload["summary"]["energy_efficiency_gain"])
+
+
+def test_small_op_dimensions_and_energy(payload):
+    a=payload["activity"]; s=payload["summary"]
+    rows=a["small_ops"]
+    def total(operator): return sum(x["gpu_local_total_bytes"] for x in rows if x["operator"]==operator)
+    assert total("RMSNORM")+total("FINAL_RMSNORM")==1_597_440
+    assert sum(x["execution_count"] for x in rows if x["operator"] in ("RMSNORM","FINAL_RMSNORM"))==65
+    assert total("ROPE")==655_360
+    assert total("SWIGLU")==2_752_512
+    assert total("RESIDUAL_ADD")==1_572_864
+    assert total("AV_REDUCTION")==55_836_672
+    assert total("SAMPLING")==256_516
+    assert a["gpu_remaining_local_bytes"]==62_671_364
+    assert a["gpu_remaining_time_ms"]==pytest.approx(a["gpu_remaining_local_bytes"]/2.4e12*1e3)
+    assert a["gpu_remaining_dynamic_energy_j"]==pytest.approx(8*a["gpu_remaining_local_bytes"]*15.29e-12)
+    assert a["embedding_local_read_bytes"]==8192
+    common=a["gpu_remaining_local_bytes"]-total("AV_REDUCTION")
+    assert s["baseline_gpu_remaining_local_MB_per_token"]==pytest.approx(common/1e6)
+    assert s["baseline_gpu_remaining_ms_per_token"]==pytest.approx(common/2.4e12*1e3)
+    assert s["baseline_gpu_remaining_dynamic_J_per_token"]==pytest.approx(8*common*15.29e-12)
+
+
+def test_explicit_handoffs_are_unique_and_rope_is_closed(payload):
+    handoffs=payload["activity"]["handoffs"]
+    keys=[(x["producer"],x["consumer"],x["layer_id"],x["request_id"]) for x in handoffs]
+    assert len(keys)==len(set(keys))
+    layer0=[x for x in handoffs if x["layer_id"]==0]
+    assert sum(x["bytes"] for x in layer0 if x["producer"]=="Q" and x["consumer"]=="ROPE")==8192
+    assert sum(x["bytes"] for x in layer0 if x["producer"]=="K" and x["consumer"]=="ROPE")==2048
+    assert sum(x["bytes"] for x in layer0 if x["producer"]=="ROPE_Q")==106*8192
+    assert sum(x["bytes"] for x in layer0 if x["producer"]=="ROPE_K")==2048
+    assert not any(x["producer"]=="V" and x["consumer"]=="ROPE" for x in handoffs)
+    assert any(x["producer"]=="V" and "not RoPE" in x["reason"] for x in handoffs)
+    assert len([x for x in layer0 if x["producer"]=="FFN_GATE" and x["consumer"]=="SWIGLU"])==1
+    assert len([x for x in layer0 if x["producer"]=="FFN_UP" and x["consumer"]=="SWIGLU"])==1
+    assert len([x for x in layer0 if x["producer"]=="SWIGLU" and x["consumer"]=="FFN_DOWN"])==1
+    assert len([x for x in handoffs if x["producer"]=="TOKEN_EMBED_LOOKUP"])==1
+    assert sum(x["bytes"] for x in handoffs)==pytest.approx(payload["activity"]["residual_boundary_bytes"])
+    logits=[x for x in handoffs if x["producer"]=="LM_HEAD" and x["consumer"]=="SAMPLING"]
+    assert len(logits)==1 and logits[0]["bytes"]==128256*2
+    sampling=next(x for x in payload["activity"]["small_ops"] if x["operator"]=="SAMPLING")
+    assert sampling["gpu_local_read_bytes"]==logits[0]["bytes"]
+    assert sampling["gpu_local_total_bytes"]==logits[0]["bytes"]+4

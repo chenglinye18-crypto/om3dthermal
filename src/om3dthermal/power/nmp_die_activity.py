@@ -4,7 +4,9 @@ from dataclasses import asdict, dataclass
 import math, statistics
 from om3dthermal.platform import load_platform_spec_file, resolve_gpu_bandwidth_service, resolve_local_memory_gpu_transfer
 from pathlib import Path
-from om3dthermal.workload.dense_decode_ledger import boundary_bytes_per_die, attention_boundary_by_layer, build_dense_decode_placement_units
+from om3dthermal.workload.dense_decode_ledger import (
+    attention_boundary_by_layer, build_dense_decode_handoffs,
+    build_dense_decode_placement_units, build_dense_decode_small_ops)
 from om3dthermal.placement.nmp_load_balance import NMPPlacementUnitLoad, shard_fractions
 from om3dthermal.power.memory_bandwidth import ArchitectureBandwidthClosure
 from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
@@ -64,6 +66,13 @@ class NMPDieActivitySummary:
     median_exec_die_span: float
     max_exec_die_span: int
     realized_effective_local_bandwidth_bytes_per_s: float
+    handoffs: tuple[dict, ...]
+    small_ops: tuple[dict, ...]
+    gpu_remaining_local_bytes: float
+    gpu_remaining_time_ms: float
+    gpu_remaining_dynamic_energy_j: float
+    embedding_local_read_bytes: float
+    embedding_local_time_ms: float
     def as_dict(self): return asdict(self)
 
 def canonical_nmp_hardware(physical_die_count:int)->NMPHardware:
@@ -113,35 +122,78 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         bandwidth_demand_bytes_per_s=bandwidth_demand_bytes_per_s,
         memory_capability_bytes_per_s=bandwidth.coil_bandwidth_bytes_per_s,
         gpu_peak_bandwidth_bytes_per_s=gpu_bw)
-    boundary=sum(boundary_bytes_per_die(units,spans,n))
+    handoffs=build_dense_decode_handoffs(units,spans,n)
+    boundary=sum(x.bytes for x in handoffs)
     attention_layers=attention_boundary_by_layer(units,spans)
     partial=sum(row["partial_bytes"] for row in attention_layers.values())
     if boundary and not transfer.bandwidth_actual_bytes_per_s:
         raise ValueError("positive boundary traffic requires positive transfer demand")
     external_boundary_time_ms=boundary/transfer.bandwidth_actual_bytes_per_s*1e3 if boundary else 0
     softmax_ms=(score+probability)/gpu_bw*1e3
-    stages=[]
+    local_stages={}
     for (layer,operator),(mem,compute) in stages_by_key.items():
         memory_ms=max(mem)/bw_die*1e3
         compute_ms=max(compute)/hw.peak_flops_per_die*1e3
         stage_ms=max(max(m/bw_die,f/hw.peak_flops_per_die)*1e3 for m,f in zip(mem,compute))
         stage_owners=set(d for u,o in zip(units,spans,strict=True)
                          if u.layer_id==layer and u.operator_type==operator for d in o)
-        stages.append(dict(layer=layer,operator=operator,execution_die_span=len(stage_owners),
-            memory_ms=memory_ms,compute_ms=compute_ms,stage_ms=stage_ms,time_ms=stage_ms))
-        if operator not in ("ATTENTION_QK","ATTENTION_AV"):
-            weight_boundary=sum(u.activation_input_bytes*len(o)+u.partial_output_bytes
-                for u,o in zip(units,spans) if u.layer_id==layer and u.operator_type==operator)
-            if weight_boundary:
-                stages.append(dict(layer=layer,operator=operator+"_GPU_BOUNDARY",
-                    time_ms=weight_boundary/transfer.bandwidth_actual_bytes_per_s*1e3))
-        if operator == "ATTENTION_QK":
-            stages.extend((dict(layer=layer,operator="SCORE_TRANSFER",time_ms=attention_layers[layer]["score_bytes"]/transfer.bandwidth_actual_bytes_per_s*1e3),
-                dict(layer=layer,operator="GPU_SOFTMAX",time_ms=softmax_ms/workload.n_layers),
-                dict(layer=layer,operator="PROBABILITY_TRANSFER",time_ms=attention_layers[layer]["probability_bytes"]/transfer.bandwidth_actual_bytes_per_s*1e3)))
-        if operator == "ATTENTION_AV":
-            layer_partial=attention_layers[layer]["partial_bytes"]
-            stages.append(dict(layer=layer,operator="PARTIAL_TRANSFER",time_ms=layer_partial/transfer.bandwidth_actual_bytes_per_s*1e3))
+        local_stages[layer,operator]=dict(layer=layer,operator=operator,kind="NMP_STAGE",
+            execution_die_span=len(stage_owners),memory_ms=memory_ms,compute_ms=compute_ms,
+            stage_ms=stage_ms,time_ms=stage_ms)
+    small_ops=build_dense_decode_small_ops(workload,units,spans,n)
+    def gpu_stage(operator,variant,layer,label):
+        rows=[x for x in small_ops if x.operator==operator and x.variant==variant and x.layer_id==layer]
+        bytes_=sum(x.gpu_local_total_bytes for x in rows)
+        return dict(layer=layer,operator=label,kind="GPU_SMALL_OP",gpu_local_bytes=bytes_,
+            time_ms=bytes_/gpu_bw*1e3)
+    def handoff_stage(producer,consumer,layer,label):
+        rows=[x for x in handoffs if x.producer==producer and x.consumer==consumer and x.layer_id==layer]
+        bytes_=sum(x.bytes for x in rows)
+        return dict(layer=layer,operator=label,kind="BOUNDARY_HANDOFF",producer=producer,
+            consumer=consumer,direction=rows[0].direction,bytes=bytes_,
+            reason="; ".join(sorted({x.reason for x in rows})),
+            time_ms=bytes_/transfer.bandwidth_actual_bytes_per_s*1e3)
+    stages=[local_stages[-1,"TOKEN_EMBED_LOOKUP"],
+        handoff_stage("TOKEN_EMBED_LOOKUP","RMSNORM_PRE_ATTENTION",-1,"EMBEDDING_TRANSFER")]
+    for layer in range(workload.n_layers):
+        stages.append(gpu_stage("RMSNORM","PRE_ATTENTION",layer,"RMSNORM_PRE_ATTENTION"))
+        for consumer in ("Q","K","V"):
+            stages.append(handoff_stage("RMSNORM_PRE_ATTENTION",consumer,layer,
+                f"RMSNORM_TO_{consumer}_TRANSFER"))
+        stages.extend((local_stages[layer,"Q"],handoff_stage("Q","ROPE",layer,"Q_TO_ROPE_TRANSFER"),
+            local_stages[layer,"K"],handoff_stage("K","ROPE",layer,"K_TO_ROPE_TRANSFER"),
+            local_stages[layer,"V"],handoff_stage("V","KV_VECTOR_REPACK",layer,"V_TO_KV_REPACK_TRANSFER"),
+            handoff_stage("KV_VECTOR_REPACK","KV_WRITE",layer,"V_KV_REPACK_RETURN_TRANSFER"),
+            gpu_stage("ROPE","Q_K",layer,"ROPE"),
+            handoff_stage("ROPE_Q","ATTENTION_QK",layer,"ROPE_Q_RETURN_TRANSFER"),
+            handoff_stage("ROPE_K","KV_WRITE",layer,"ROPE_K_RETURN_TRANSFER"),
+            local_stages[layer,"ATTENTION_QK"],
+            handoff_stage("ATTENTION_QK","GPU_SOFTMAX",layer,"SCORE_TRANSFER"),
+            dict(layer=layer,operator="GPU_SOFTMAX",kind="GPU_SOFTMAX",
+                 gpu_local_bytes=attention_layers[layer]["score_bytes"]+attention_layers[layer]["probability_bytes"],
+                 time_ms=(attention_layers[layer]["score_bytes"]+attention_layers[layer]["probability_bytes"])/gpu_bw*1e3),
+            handoff_stage("GPU_SOFTMAX","ATTENTION_AV",layer,"PROBABILITY_TRANSFER"),
+            local_stages[layer,"ATTENTION_AV"],
+            handoff_stage("ATTENTION_AV","AV_REDUCTION",layer,"PARTIAL_TRANSFER"),
+            gpu_stage("AV_REDUCTION","FP32_PARTIAL_TO_FP16",layer,"AV_REDUCTION"),
+            handoff_stage("AV_REDUCTION","O",layer,"AV_REDUCTION_TO_O_TRANSFER"),
+            local_stages[layer,"O"],handoff_stage("O","RESIDUAL_ADD_ATTENTION",layer,"O_TO_RESIDUAL_TRANSFER"),
+            gpu_stage("RESIDUAL_ADD","ATTENTION",layer,"RESIDUAL_ADD_ATTENTION"),
+            gpu_stage("RMSNORM","PRE_FFN",layer,"RMSNORM_PRE_FFN"),
+            handoff_stage("RMSNORM_PRE_FFN","FFN_GATE",layer,"RMSNORM_TO_FFN_GATE_TRANSFER"),
+            handoff_stage("RMSNORM_PRE_FFN","FFN_UP",layer,"RMSNORM_TO_FFN_UP_TRANSFER"),
+            local_stages[layer,"FFN_GATE"],handoff_stage("FFN_GATE","SWIGLU",layer,"FFN_GATE_TO_SWIGLU_TRANSFER"),
+            local_stages[layer,"FFN_UP"],handoff_stage("FFN_UP","SWIGLU",layer,"FFN_UP_TO_SWIGLU_TRANSFER"),
+            gpu_stage("SWIGLU","SILU_GATE_TIMES_UP",layer,"SWIGLU"),
+            handoff_stage("SWIGLU","FFN_DOWN",layer,"SWIGLU_TO_FFN_DOWN_TRANSFER"),
+            local_stages[layer,"FFN_DOWN"],
+            handoff_stage("FFN_DOWN","RESIDUAL_ADD_FFN",layer,"FFN_DOWN_TO_RESIDUAL_TRANSFER"),
+            gpu_stage("RESIDUAL_ADD","FFN",layer,"RESIDUAL_ADD_FFN")))
+    stages.extend((gpu_stage("FINAL_RMSNORM","FINAL",workload.n_layers,"FINAL_RMSNORM"),
+        handoff_stage("FINAL_RMSNORM","LM_HEAD",workload.n_layers,"FINAL_RMSNORM_TO_LM_HEAD_TRANSFER"),
+        local_stages[workload.n_layers,"LM_HEAD"],
+        handoff_stage("LM_HEAD","SAMPLING",workload.n_layers,"LOGITS_TRANSFER"),
+        gpu_stage("SAMPLING","GREEDY_ARGMAX",workload.n_layers,"SAMPLING")))
     for actual,expected in ((sum(weights),sum(u.active_weight_read_bytes for u in units)),
                             (sum(kvreads),sum(u.kv_bytes for u in units)),
                             (sum(kvwrites),demand.kv_write_bytes_per_decode_step)):
@@ -150,7 +202,7 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
     totals=[weights[i]+kvreads[i]+kvwrites[i] for i in range(n)]
     mem_ms=[x/bw_die*1e3 for x in totals]; comp_ms=[x/hw.peak_flops_per_die*1e3 for x in flops]
     service=[max(mem_ms[i],comp_ms[i]) for i in range(n)]
-    stage=sum(s["time_ms"] for s in stages if "memory_ms" in s)
+    stage=sum(s["time_ms"] for s in stages if s.get("kind")=="NMP_STAGE")
     interval=sum(s["time_ms"] for s in stages)
     ai_balance=hw.peak_flops_per_die/bw_die; rows=[]
     for i in range(n):
@@ -160,10 +212,18 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         rows.append(NMPDieWorkloadActivity(i,weights[i],kvreads[i],kvwrites[i],totals[i],flops[i],ai,mem_ms[i],comp_ms[i],service[i],mem_ms[i]/stage,comp_ms[i]/stage,label,energy,
             NMPDiePower(i,power,None,None,None,"COMPUTE_DYNAMIC_RESOLVED__DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B")))
     ordered=sorted(service); p90=ordered[math.ceil(.9*len(ordered))-1]
-    exec_spans=tuple(len(o) for u,o in zip(units,spans) if u.shard_mode!="RESIDENT_ONLY")
+    exec_spans=tuple(len(o) for u,o in zip(units,spans)
+                     if u.shard_mode not in ("RESIDENT_ONLY","LOCAL_LOOKUP"))
     memory_stage_seconds=sum(s["stage_ms"] for s in stages
         if "memory_ms" in s and s["memory_ms"]>=s["compute_ms"])*1e-3
     realized_bw=sum(totals)/memory_stage_seconds if memory_stage_seconds else 0.0
+    gpu_remaining_bytes=sum(x.gpu_local_total_bytes for x in small_ops
+                            if x.operator!="TOKEN_EMBED_LOOKUP")
+    gpu_remaining_ms=gpu_remaining_bytes/gpu_bw*1e3
+    gpu_remaining_j=8*gpu_remaining_bytes*gpu.e_decode_J_per_bit
+    embedding_bytes=sum(u.active_weight_read_bytes for u in units
+                        if u.operator_type=="TOKEN_EMBED_LOOKUP")
+    embedding_ms=local_stages[-1,"TOKEN_EMBED_LOOKUP"]["time_ms"]
     return NMPDieActivitySummary(hw,local_access_latency_ns,1.0,bw_die,bw_die*n,ai_balance,tuple(rows),stage,interval,service.index(max(service)),statistics.fmean(service),p90,max(service),
         sum(r.bottleneck=="MEMORY_BOUND" for r in rows),sum(r.bottleneck=="COMPUTE_BOUND" for r in rows),sum(r.bottleneck=="BALANCED" for r in rows),
         sum(r.compute_energy_j for r in rows),sum(r.power.compute_dynamic_W for r in rows),"DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B",
@@ -171,4 +231,6 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         score,probability,partial,score+probability+partial,boundary,external_boundary_time_ms,transfer.model_dump(),
         score+probability,softmax_ms,8*(score+probability)*gpu.e_decode_J_per_bit,
         gpu.static_power_W*interval*1e-3,statistics.fmean(exec_spans),statistics.median(exec_spans),
-        max(exec_spans),realized_bw)
+        max(exec_spans),realized_bw,tuple(asdict(x) for x in handoffs),
+        tuple(asdict(x) for x in small_ops),gpu_remaining_bytes,gpu_remaining_ms,
+        gpu_remaining_j,embedding_bytes,embedding_ms)

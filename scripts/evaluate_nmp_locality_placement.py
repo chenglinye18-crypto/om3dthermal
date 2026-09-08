@@ -41,14 +41,22 @@ def run(output_dir: Path):
         bandwidth_demand_bytes_per_s=bandwidth.coil_bandwidth_bytes_per_s,ownership=placement.ownership)
     power_map=build_nmp_die_power_map(case,power,topology,feol,activity,placement)
     interval=activity.decode_step_interval_ms*1e-3
-    nmp_energy=power_map.aggregate_total_W*interval+activity.softmax_dynamic_energy_j+activity.gpu_static_energy_j
-    baseline_s=baseline.timing.total_step_ms*1e-3
+    nmp_energy=(power_map.aggregate_total_W*interval+activity.softmax_dynamic_energy_j
+                +activity.gpu_remaining_dynamic_energy_j+activity.gpu_static_energy_j)
+    common_small_bytes=sum(x["gpu_local_total_bytes"] for x in activity.small_ops
+                           if x["operator"] not in ("AV_REDUCTION","TOKEN_EMBED_LOOKUP"))
+    common_small_ms=common_small_bytes/2.4e12*1e3
+    baseline_complete_ms=baseline.timing.total_step_ms
+    baseline_s=baseline_complete_ms*1e-3
     # Same accounting boundary: memory dynamic + refresh + GPU dynamic + static.
     primitive=power_map.primitives
     baseline_write=primitive.igzo_weighted_write_pj_per_bit+power.E_vertical_pj_bit+power.E_feol_route_pj_bit+power.E_base_route_pj_bit+power.E_interface_pj_bit
     active_weight=sum(x.weight_read_bytes for x in placement.unit_loads)
     baseline_memory_j=8*((active_weight+d.total_kv_read_bytes_per_decode_step)*power.E_access_total_pj_bit+d.kv_write_bytes_per_decode_step*baseline_write)*1e-12
-    baseline_energy=baseline_memory_j+(power.P_refresh_W or 0)*baseline_s+8*baseline.traffic.external_interface_bytes*gpu_power.e_decode_J_per_bit+gpu_power.static_power_W*baseline_s
+    baseline_small_j=8*common_small_bytes*gpu_power.e_decode_J_per_bit
+    baseline_energy=(baseline_memory_j+(power.P_refresh_W or 0)*baseline_s
+        +8*baseline.traffic.external_interface_bytes*gpu_power.e_decode_J_per_bit
+        +baseline_small_j+gpu_power.static_power_W*baseline_s)
     loads=placement.unit_loads
     stage_rows=[x for x in activity.stages if "memory_ms" in x]
     transfer_ms=lambda name:sum(x["time_ms"] for x in activity.stages if x["operator"]==name)
@@ -58,6 +66,20 @@ def run(output_dir: Path):
     mac_j=power_map.aggregate_mac_dynamic_W*interval
     residual_interface_j=power_map.aggregate_residual_external_W*interval
     refresh_j=power_map.aggregate_refresh_W*interval
+    small_by_operator={}
+    for row in activity.small_ops:
+        if row["operator"]=="TOKEN_EMBED_LOOKUP": continue
+        entry=small_by_operator.setdefault(row["operator"],{"bytes":0.0,"count":0})
+        entry["bytes"]+=row["gpu_local_total_bytes"]; entry["count"]+=row["execution_count"]
+    for entry in small_by_operator.values():
+        entry["MB_per_token"]=entry["bytes"]/w.batch_size/1e6
+        entry["ms_per_token"]=entry["bytes"]/2.4e12*1e3/w.batch_size
+        entry["J_per_token"]=8*entry["bytes"]*gpu_power.e_decode_J_per_bit/w.batch_size
+    rms_all_bytes=small_by_operator["RMSNORM"]["bytes"]+small_by_operator["FINAL_RMSNORM"]["bytes"]
+    embedding_transfer_ms=transfer_ms("EMBEDDING_TRANSFER")
+    embedding_local_j=8*activity.embedding_local_read_bytes*primitive.local_read_total_pj_per_bit*1e-12
+    embedding_transfer_j=8*sum(x["bytes"] for x in activity.handoffs
+        if x["producer"]=="TOKEN_EMBED_LOOKUP")*(primitive.long_feol_pj_per_bit+primitive.interface_pj_per_bit)*1e-12
     summary={
         "qk_flops_per_token":sum(x.nmp_flops for x in loads if x.unit.operator_type=="ATTENTION_QK")/w.batch_size,
         "av_flops_per_token":sum(x.nmp_flops for x in loads if x.unit.operator_type=="ATTENTION_AV")/w.batch_size,
@@ -93,12 +115,24 @@ def run(output_dir: Path):
         "mac_J_per_token":mac_j/w.batch_size,
         "residual_interface_J_per_token":residual_interface_j/w.batch_size,
         "softmax_dynamic_J_per_token":activity.softmax_dynamic_energy_j/w.batch_size,
+        "gpu_remaining_small_ops":small_by_operator,
+        "rmsnorm_including_final_count":small_by_operator["RMSNORM"]["count"]+small_by_operator["FINAL_RMSNORM"]["count"],
+        "rmsnorm_including_final_MB_per_token":rms_all_bytes/w.batch_size/1e6,
+        "gpu_remaining_local_MB_per_token":activity.gpu_remaining_local_bytes/w.batch_size/1e6,
+        "gpu_remaining_ms_per_token":activity.gpu_remaining_time_ms/w.batch_size,
+        "gpu_remaining_dynamic_J_per_token":activity.gpu_remaining_dynamic_energy_j/w.batch_size,
+        "embedding_read_bytes_per_token":activity.embedding_local_read_bytes/w.batch_size,
+        "embedding_latency_ms_per_token":(activity.embedding_local_time_ms+embedding_transfer_ms)/w.batch_size,
+        "embedding_dynamic_J_per_token":(embedding_local_j+embedding_transfer_j)/w.batch_size,
         "gpu_static_J_per_token":activity.gpu_static_energy_j/w.batch_size,
         "refresh_J_per_token":refresh_j/w.batch_size,
-        "baseline_decode_ms_per_token":baseline.timing.total_step_ms/w.batch_size,
-        "baseline_tokens_per_s":baseline.timing.tokens_per_s,
+        "baseline_decode_ms_per_token":baseline_complete_ms/w.batch_size,
+        "baseline_tokens_per_s":w.batch_size/(baseline_complete_ms*1e-3),
+        "baseline_gpu_remaining_ms_per_token":common_small_ms/w.batch_size,
+        "baseline_gpu_remaining_local_MB_per_token":common_small_bytes/w.batch_size/1e6,
+        "baseline_gpu_remaining_dynamic_J_per_token":baseline_small_j/w.batch_size,
         "baseline_J_per_token":baseline_energy/w.batch_size,"baseline_tokens_per_J":w.batch_size/baseline_energy,
-        "speedup":w.batch_size/interval/baseline.timing.tokens_per_s,
+        "speedup":baseline_complete_ms/activity.decode_step_interval_ms,
         "energy_efficiency_gain":baseline_energy/nmp_energy,
     }
     layer0=[x for x in stage_rows if x["layer"]==0]
@@ -109,7 +143,10 @@ def run(output_dir: Path):
     payload=dict(summary=summary,activity=activity.as_dict(),placement=placement.as_dict(),
         power_map=power_map.as_dict(),baseline=baseline.as_dict(),workload=w.model_dump(),
         diagnostics={"layer0_stage_example":layer0,"attention_owner_counts_by_layer":attention_owner_counts,
-            "realized_bandwidth_definition":"total active local bytes divided by summed memory-dominated stage latency"})
+            "realized_bandwidth_definition":"total active local bytes divided by summed memory-dominated stage latency",
+            "decode_interval_definition":"complete token: embedding row lookup through greedy argmax",
+            "attention_scaling":"QK/sqrt(d_head) included in GPU Softmax preprocessing; no separate throughput model",
+            "ledger_locations":{"handoffs":"activity.handoffs","small_ops":"activity.small_ops"}})
     output_dir.mkdir(parents=True,exist_ok=True)
     (output_dir/"nmp_locality_placement.json").write_text(json.dumps(payload,indent=2),encoding="utf-8")
     return payload

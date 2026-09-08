@@ -21,7 +21,8 @@ NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS = 1.0
 NMP_LOCAL_ROUTE_PROVENANCE = "MODELING_CHOICE_FIXED_LOCAL_NMP_ROUTE_DELAY__NOT_PHYSICALLY_EXTRACTED__NOT_OPTIMIZED__NOT_POSITION_DEPENDENT"
 
 from om3dthermal.workload.dense_decode_ledger import (DenseDecodePlacementUnit,
-    active_weight_read_bytes, build_dense_decode_placement_units, boundary_bytes_per_die)
+    active_weight_read_bytes, build_dense_decode_handoffs,
+    build_dense_decode_placement_units, build_dense_decode_small_ops)
 
 @dataclass(frozen=True)
 class NMPPlacementMetrics:
@@ -61,14 +62,14 @@ def _spans(units: tuple[DenseDecodePlacementUnit, ...], layout: PhysicalCapacity
     dies=layout.slab_count; cap=layout.capacity_per_slab_bytes; pagesize=layout.slot_capacity_bytes
     used=[0]*dies; spans=[]; cursor=0
     for unit in units:
-        size=max(unit.weight_bytes+unit.kv_bytes, pagesize)
+        size=unit.weight_bytes+unit.kv_bytes
         needed=max(1, math.ceil(size/cap))
         if locality:
             candidates=sorted(range(dies), key=lambda d:(used[d],d))
             chosen=candidates[:needed]
         else:
             # Normal capacity page striping: page-sized pieces continue across dies.
-            pages=math.ceil(size/pagesize); chosen=[]
+            pages=max(1,math.ceil(size/pagesize)); chosen=[]
             for _ in range(pages):
                 d=cursor % dies; cursor += 1
                 if d not in chosen: chosen.append(d)
@@ -111,14 +112,15 @@ def _traffic(case: Case, demand: M3DWorkloadPageDemand, units: tuple[DenseDecode
     if case == "NON_NMP_GPU":
         return NMPTraffic(0,0,0,weight,kvread+kvwrite,0,0,0,0,0,0,weight+kvread+kvwrite)
     spans,_=_spans(units,layout,case=="NMP_LOCALITY_AWARE_PLACEMENT")
-    score=sum(u.score_bytes for u in units)
-    prob=sum(u.probability_bytes for u in units)
-    activation=sum(u.activation_input_bytes*len(o) for u,o in zip(units,spans)
-                   if u.shard_mode=="ROW_PARALLEL")
-    boundary=sum(boundary_bytes_per_die(units,spans,layout.slab_count))
-    output=sum(u.partial_output_bytes for u in units if u.shard_mode=="ROW_PARALLEL")
-    partial=boundary-score-prob-activation-output
-    return NMPTraffic(weight,kvread,kvwrite,0,0,activation+prob,partial,score,output,0,
+    handoffs=build_dense_decode_handoffs(units,spans,layout.slab_count)
+    score=sum(x.bytes for x in handoffs if x.producer=="ATTENTION_QK" and x.consumer=="GPU_SOFTMAX")
+    prob=sum(x.bytes for x in handoffs if x.producer=="GPU_SOFTMAX" and x.consumer=="ATTENTION_AV")
+    partial=sum(x.bytes for x in handoffs if x.producer=="ATTENTION_AV" and x.consumer=="AV_REDUCTION")
+    gpu_to_nmp=sum(x.bytes for x in handoffs if x.direction=="GPU_TO_NMP")
+    nmp_to_gpu=sum(x.bytes for x in handoffs if x.direction=="NMP_TO_GPU")
+    boundary=gpu_to_nmp+nmp_to_gpu
+    return NMPTraffic(weight,kvread,kvwrite,0,0,gpu_to_nmp,partial,score,
+        nmp_to_gpu-score-partial,0,
         weight+kvread+kvwrite,boundary)
 
 def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPageDemand,
@@ -143,9 +145,15 @@ def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPage
         local_ms=(traffic.weight_bulk_external_bytes+traffic.kv_bulk_external_bytes)/local_bw*1e3
         external_ms=traffic.external_interface_bytes/external_bw*1e3
         gpu_ms=workload.batch_size*evaluate_llm_decode(workload).flops_per_token/gpu_compute_flops_per_s*1e3
+        baseline_spans,_=_spans(units,layout,False)
+        common_small_bytes=sum(x.gpu_local_total_bytes for x in
+            build_dense_decode_small_ops(workload,units,baseline_spans,layout.slab_count)
+            if x.operator not in ("AV_REDUCTION","TOKEN_EMBED_LOOKUP"))
+        remaining_gpu_ms=common_small_bytes/gpu_bw*1e3
         memory_serial=local_ms+external_ms; total_serial=memory_serial+gpu_ms
-        memory_pipeline=max(local_ms,external_ms); total_pipeline=max(memory_pipeline,gpu_ms)
-        timing=NMPCaseTiming(case,None,local_ms,external_ms,0,gpu_ms,total_pipeline,workload.batch_size/(total_pipeline*1e-3),None,None,
+        memory_pipeline=max(local_ms,external_ms); total_pipeline=max(memory_pipeline,gpu_ms)+remaining_gpu_ms
+        total_serial+=remaining_gpu_ms
+        timing=NMPCaseTiming(case,None,local_ms,external_ms,0,gpu_ms+remaining_gpu_ms,total_pipeline,workload.batch_size/(total_pipeline*1e-3),None,None,
             "EXTERNAL" if external_ms >= local_ms and external_ms >= gpu_ms else ("GPU" if gpu_ms >= local_ms else "INTERNAL"),
             local_bw,external_bw,memory_serial,total_serial,memory_pipeline,total_pipeline,
             workload.batch_size/(total_serial*1e-3),workload.batch_size/(total_pipeline*1e-3))
@@ -162,7 +170,7 @@ def evaluate_nmp_locality_case(workload: LLMDecodeInput, demand: M3DWorkloadPage
     total=activity.decode_step_interval_ms
     tps=workload.batch_size/(total*1e-3)
     timing=NMPCaseTiming(case,nmp_aggregate_tflops,local_ms,activity.boundary_time_ms,
-        nmp_ms,activity.softmax_time_ms,total,tps,None,hw.peak_flops_per_die/1e12,
+        nmp_ms,activity.softmax_time_ms+activity.gpu_remaining_time_ms,total,tps,None,hw.peak_flops_per_die/1e12,
         "SERIAL_DEPENDENT_STAGES",activity.aggregate_local_bandwidth_bytes_per_s,
         external_bw,local_ms+activity.boundary_time_ms,total,
         local_ms+activity.boundary_time_ms,total,tps,tps)

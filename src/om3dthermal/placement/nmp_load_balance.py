@@ -74,7 +74,7 @@ def _stage_time(load:NMPPlacementUnitLoad,span:int,bw:float,compute:float)->floa
 def choose_execution_die_span(load:NMPPlacementUnitLoad,physical_die_count:int,
         bandwidth_per_die_bytes_per_s:float,compute_per_die_flops_per_s:float)->int:
     lower=load.minimum_die_span
-    if load.unit.shard_mode == "RESIDENT_ONLY" or (not load.local_memory_traffic_bytes and not load.nmp_flops):
+    if load.unit.shard_mode in ("RESIDENT_ONLY","LOCAL_LOOKUP") or (not load.local_memory_traffic_bytes and not load.nmp_flops):
         return lower
     upper=min(physical_die_count,max(lower,load.unit.max_useful_parallelism))
     return min(range(lower,upper+1),key=lambda span:(
@@ -121,7 +121,7 @@ def build_performance_balanced_placement(workload:LLMDecodeInput,demand:M3DWorkl
                       flops[d]/compute_per_die_flops_per_s)*1e3 for d in range(n))
     spans=tuple(len(x) for x in ownership)
     active_spans=tuple(span for load,span in zip(loads,spans)
-                       if load.unit.shard_mode!="RESIDENT_ONLY")
+                       if load.unit.shard_mode not in ("RESIDENT_ONLY","LOCAL_LOOKUP"))
     return NMPPerformanceBalancedPlacement(loads,tuple(ownership),tuple(assignments),
         tuple(resident),tuple(traffic),tuple(flops),service,spans,
         tuple(x.minimum_die_span for x in loads),max(resident)/cap,
@@ -149,7 +149,7 @@ def build_locality_only_placement(workload:LLMDecodeInput,demand:M3DWorkloadPage
     service=tuple(max(traffic[d]/bandwidth_per_die_bytes_per_s,flops[d]/compute_per_die_flops_per_s)*1e3 for d in range(n))
     spans=tuple(len(x) for x in ownership)
     active_spans=tuple(span for load,span in zip(loads,spans)
-                       if load.unit.shard_mode!="RESIDENT_ONLY")
+                       if load.unit.shard_mode not in ("RESIDENT_ONLY","LOCAL_LOOKUP"))
     return NMPPerformanceBalancedPlacement(loads,tuple(ownership),tuple(assignments),tuple(resident),tuple(traffic),tuple(flops),service,spans,
         tuple(x.minimum_die_span for x in loads),max(resident)/cap,statistics.fmean(resident)/cap,sum(x>cap for x in resident),
         statistics.fmean(active_spans),statistics.median(active_spans),max(active_spans),

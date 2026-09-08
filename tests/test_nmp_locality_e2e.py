@@ -38,13 +38,14 @@ def test_nominal_resident_and_active_weight_closures_are_distinct(inputs):
     l,b,p,w,d,g=inputs
     units=build_dense_decode_placement_units(w); metrics=evaluate_llm_decode(w)
     assert sum(u.weight_bytes for u in units)==metrics.weight_footprint_bytes==16_000_000_000
-    assert sum(u.active_weight_read_bytes for u in units)==metrics.weight_active_per_step_bytes==15_009_316_864
+    assert sum(u.active_weight_read_bytes for u in units)==metrics.weight_active_per_step_bytes==15_009_325_056
     assert metrics.weight_active_per_step_bytes < metrics.weight_footprint_bytes
 
 
 @pytest.mark.parametrize("batch,context,kv_bits",[(1,131072,16),(2,17,8),(1,0,16)])
 def test_workload_ledger_formulas(inputs,batch,context,kv_bits):
-    from om3dthermal.workload.dense_decode_ledger import build_dense_decode_placement_units, boundary_bytes_per_die
+    from om3dthermal.workload.dense_decode_ledger import (build_dense_decode_handoffs,
+        build_dense_decode_placement_units, boundary_bytes_per_die)
     from om3dthermal.workload.llm_decode import evaluate_llm_decode
     l,b,p,w,d,g=inputs
     w=w.model_copy(update=dict(batch_size=batch,context_length=context,kv_bits=kv_bits))
@@ -57,18 +58,17 @@ def test_workload_ledger_formulas(inputs,batch,context,kv_bits):
     assert sum(u.weight_bytes for u in units) == metrics.weight_footprint_bytes
     assert sum(u.kv_bytes for u in units) == batch*metrics.kv_read_bytes_per_token
     assert sum(u.kv_write_bytes for u in units) == batch*metrics.kv_write_bytes_per_token
-    # Row-parallel input broadcast + one gathered output; attention tensors
-    # remain partitioned, while AV returns one partial per request and owner.
     ownership=tuple((0,1) for u in units)
     boundary=sum(boundary_bytes_per_die(units,ownership,2))
-    weight_boundary=sum(2*u.activation_input_bytes+u.partial_output_bytes
-                        for u in units if u.shard_mode=="ROW_PARALLEL")
-    assert boundary-weight_boundary == 2*batch*w.n_heads_q*context*2*w.n_layers+2*batch*w.d_model*4*w.n_layers
+    handoffs=build_dense_decode_handoffs(units,ownership,2)
+    assert boundary==pytest.approx(sum(x.bytes for x in handoffs))
+    assert len({(x.producer,x.consumer,x.layer_id,x.request_id) for x in handoffs})==len(handoffs)
 
 
 def test_av_partial_is_resolved_per_layer_request(inputs):
     from om3dthermal.workload.dense_decode_ledger import (
-        attention_boundary_by_layer, build_dense_decode_placement_units)
+        attention_boundary_by_layer, build_dense_decode_placement_units,
+        build_dense_decode_small_ops)
     l,b,p,w,d,g=inputs
     w=w.model_copy(update={"batch_size":2,"context_length":17})
     units=build_dense_decode_placement_units(w)
@@ -85,6 +85,9 @@ def test_av_partial_is_resolved_per_layer_request(inputs):
     exact_tensor=w.batch_size*w.n_heads_q*w.context_length*2*w.n_layers
     assert sum(row["score_bytes"] for row in layers.values())==exact_tensor
     assert sum(row["probability_bytes"] for row in layers.values())==exact_tensor
+    small=build_dense_decode_small_ops(w,units,tuple(ownership),4)
+    reductions=[x for x in small if x.operator=="AV_REDUCTION"]
+    assert sum(x.gpu_local_total_bytes for x in reductions)==w.n_layers*((2+3)*w.d_model*4+2*w.d_model*2)
 
 
 def test_demand_cap_uses_existing_resolver(inputs,monkeypatch):
