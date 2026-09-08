@@ -7,6 +7,7 @@ S-by-S attention-score matrix in DRAM.
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
@@ -75,10 +76,29 @@ class LLMPrefillMetrics(BaseModel):
     kv_write_bytes: float
     required_capacity_bytes: float
     embedding_input_bytes: float
+    q_width: int
+    kv_width: int
+    qkv_input_read_bytes: float
+    q_projection_output_bytes: float
+    k_projection_cache_write_bytes: float
+    v_projection_cache_write_bytes: float
     qkv_activation_bytes: float
-    attention_kernel_activation_bytes: float
-    output_projection_activation_bytes: float
-    attention_output_bytes: float
+    logical_kv_projection_tensor_bytes: float
+    physical_kv_projection_write_bytes: float
+    kv_projection_output_aliases_final_cache_write: Literal[True] = True
+    kv_projection_write_provenance: Literal[
+        "K_V_PROJECTION_OUTPUTS_DIRECTLY_MATERIALIZE_FINAL_PREFILL_KV_CACHE"
+    ] = "K_V_PROJECTION_OUTPUTS_DIRECTLY_MATERIALIZE_FINAL_PREFILL_KV_CACHE"
+    total_kv_cache_write_double_count_status: Literal["PASS"] = "PASS"
+    attention_q_read_bytes: float
+    attention_k_read_bytes: float
+    attention_v_read_bytes: float
+    attention_kv_tiled_read_bytes: float
+    attention_output_write_bytes: float
+    attention_memory_bytes: float
+    o_projection_input_read_bytes: float
+    o_projection_output_write_bytes: float
+    output_projection_memory_bytes: float
     ffn_activation_bytes: float
     final_logits_bytes: float
     activation_memory_bytes: float
@@ -87,12 +107,76 @@ class LLMPrefillMetrics(BaseModel):
     arithmetic_intensity_flop_per_byte: float
     linear_arithmetic_intensity_flop_per_byte: float
     attention_score_matrix_materialized_bytes: Literal[0] = 0
+    attention_probability_matrix_materialized_bytes: Literal[0] = 0
     traffic_provenance: Literal[
         "PREFILL_ATTENTION_FUSED_TILED_NO_DECODE_STYLE_FULL_KV_REREAD"
     ] = PREFILL_TRAFFIC_PROVENANCE
+    attention_tensor_read_provenance: Literal[
+        "PREFILL_ATTENTION_FUSED_TILED_LINEAR_QKV_READ"
+    ] = "PREFILL_ATTENTION_FUSED_TILED_LINEAR_QKV_READ"
+    kv_read_semantics_status: Literal[
+        "NOT_DECODE_STYLE_FULL_HISTORY_REREAD_PER_TOKEN"
+    ] = "NOT_DECODE_STYLE_FULL_HISTORY_REREAD_PER_TOKEN"
+    kv_dram_scaling_status: Literal[
+        "NO_S2_KV_DRAM_TRAFFIC"
+    ] = "NO_S2_KV_DRAM_TRAFFIC"
+    score_dram_scaling_status: Literal[
+        "NO_S2_SCORE_DRAM_TRAFFIC"
+    ] = "NO_S2_SCORE_DRAM_TRAFFIC"
     transition_status: Literal[
         "PREFILL_KV_RESIDENT_READY_FOR_DECODE"
     ] = PREFILL_TRANSITION_STATUS
+
+    @model_validator(mode="after")
+    def _traffic_closure(self) -> "LLMPrefillMetrics":
+        closures = (
+            (self.logical_kv_projection_tensor_bytes,
+             self.k_projection_cache_write_bytes
+             + self.v_projection_cache_write_bytes,
+             "logical K/V projection tensor"),
+            (self.logical_kv_projection_tensor_bytes,
+             self.final_kv_cache_bytes,
+             "logical K/V projection to final cache"),
+            (self.physical_kv_projection_write_bytes, self.kv_write_bytes,
+             "physical K/V projection write alias"),
+            (self.kv_write_bytes, self.final_kv_cache_bytes,
+             "final KV cache write"),
+            (self.qkv_activation_bytes,
+             self.qkv_input_read_bytes + self.q_projection_output_bytes,
+             "physical QKV activation excluding aliased K/V cache write"),
+            (self.attention_kv_tiled_read_bytes,
+             self.attention_k_read_bytes + self.attention_v_read_bytes,
+             "attention K/V tiled read"),
+            (self.attention_memory_bytes,
+             self.attention_q_read_bytes + self.attention_k_read_bytes
+             + self.attention_v_read_bytes
+             + self.attention_output_write_bytes,
+             "attention tensor traffic"),
+            (self.output_projection_memory_bytes,
+             self.o_projection_input_read_bytes
+             + self.o_projection_output_write_bytes,
+             "output projection tensor traffic"),
+            (self.activation_memory_bytes,
+             self.embedding_input_bytes + self.qkv_activation_bytes
+             + self.attention_memory_bytes
+             + self.output_projection_memory_bytes
+             + self.ffn_activation_bytes + self.final_logits_bytes,
+             "physical activation traffic"),
+            (self.linear_memory_bytes,
+             self.active_weight_read_bytes + self.embedding_input_bytes
+             + self.qkv_activation_bytes + self.kv_write_bytes
+             + self.output_projection_memory_bytes
+             + self.ffn_activation_bytes + self.final_logits_bytes,
+             "linear tensor traffic"),
+            (self.total_memory_bytes,
+             self.active_weight_read_bytes + self.activation_memory_bytes
+             + self.kv_write_bytes,
+             "total physical memory traffic"),
+        )
+        for actual, expected, name in closures:
+            if not math.isclose(actual, expected, rel_tol=1e-12, abs_tol=1e-6):
+                raise ValueError(f"{name} closure failed")
+        return self
 
 
 class GPUPrefillRooflineMetrics(BaseModel):
@@ -105,15 +189,31 @@ class GPUPrefillRooflineMetrics(BaseModel):
     memory_lower_bound_ms: float
     roofline_lower_bound_ms: float
     roofline_bottleneck: Literal["COMPUTE", "MEMORY"]
+    compute_time_status: Literal[
+        "THEORETICAL_PEAK_COMPUTE_LOWER_BOUND"
+    ] = "THEORETICAL_PEAK_COMPUTE_LOWER_BOUND"
+    memory_time_status: Literal[
+        "MEMORY_LOWER_BOUND"
+    ] = "MEMORY_LOWER_BOUND"
+    roofline_time_status: Literal[
+        "ROOFLINE_LOWER_BOUND"
+    ] = "ROOFLINE_LOWER_BOUND"
+    achieved_prefill_throughput_status: Literal[
+        "UNRESOLVED"
+    ] = "UNRESOLVED"
+    achieved_prefill_throughput_resolved: Literal["NO"] = "NO"
     static_power_W: float
     dynamic_compute_energy_J_min: float
     dynamic_compute_energy_J_max: float
     static_energy_J_at_roofline_bound: float
+    static_energy_status: Literal[
+        "STATIC_ENERGY_AT_PEAK_ROOFLINE_LOWER_BOUND"
+    ] = "STATIC_ENERGY_AT_PEAK_ROOFLINE_LOWER_BOUND"
     gpu_energy_J_min: float
     gpu_energy_J_max: float
     energy_model_status: Literal[
-        "COMPUTE_DYNAMIC_PER_FLOP_RANGE_PLUS_STATIC_ROOFLINE_TIME"
-    ] = "COMPUTE_DYNAMIC_PER_FLOP_RANGE_PLUS_STATIC_ROOFLINE_TIME"
+        "COMPUTE_DYNAMIC_PER_FLOP_RANGE_PLUS_STATIC_AT_PEAK_ROOFLINE_LOWER_BOUND"
+    ] = "COMPUTE_DYNAMIC_PER_FLOP_RANGE_PLUS_STATIC_AT_PEAK_ROOFLINE_LOWER_BOUND"
 
 
 def _active_matrix_weight_bytes(inp: LLMPrefillInput) -> float:
@@ -154,21 +254,41 @@ def evaluate_llm_prefill(inp: LLMPrefillInput) -> LLMPrefillMetrics:
     active_weights = _active_matrix_weight_bytes(inp)
     final_kv = 2 * B * L * S * Hkv * dh * inp.kv_bits / 8
 
-    # First-order BF16 tensor reads/writes. K/V projection results are consumed
-    # by tiled attention on-chip and written exactly once as the final cache.
+    # First-order BF16 tensor reads/writes. QKV input is a single tensor-level
+    # read. K/V projection outputs directly materialize the final cache, so
+    # their logical output tensors alias (rather than add to) final_kv.
     embedding_input = B * S * D * ACTIVATION_BYTES
-    qkv_activation = L * B * S * (3 * D + D) * ACTIVATION_BYTES
-    attention_kernel = L * B * S * (D + D) * ACTIVATION_BYTES
-    output_projection = L * B * S * (D + D) * ACTIVATION_BYTES
-    attention_output = attention_kernel + output_projection
+    qkv_input_read = L * B * S * D * ACTIVATION_BYTES
+    q_projection_output = L * B * S * D * ACTIVATION_BYTES
+    k_projection_cache_write = L * B * S * kv_width * inp.kv_bits / 8
+    v_projection_cache_write = L * B * S * kv_width * inp.kv_bits / 8
+    logical_kv_projection = k_projection_cache_write + v_projection_cache_write
+    qkv_activation = qkv_input_read + q_projection_output
+
+    # Fused/tiled attention services each Q/K/V tensor once at O(S) DRAM
+    # traffic. Scores and probabilities remain tile-local and contribute zero
+    # external S-by-S materialization traffic.
+    attention_q_read = L * B * S * D * ACTIVATION_BYTES
+    attention_k_read = L * B * S * kv_width * inp.kv_bits / 8
+    attention_v_read = L * B * S * kv_width * inp.kv_bits / 8
+    attention_kv_tiled_read = attention_k_read + attention_v_read
+    attention_output_write = L * B * S * D * ACTIVATION_BYTES
+    attention_memory = (
+        attention_q_read + attention_k_read + attention_v_read
+        + attention_output_write)
+
+    o_projection_input_read = L * B * S * D * ACTIVATION_BYTES
+    o_projection_output_write = L * B * S * D * ACTIVATION_BYTES
+    output_projection = o_projection_input_read + o_projection_output_write
     ffn_activation = L * B * S * (3 * D + 6 * Dff) * ACTIVATION_BYTES
     final_logits = B * (D + V) * ACTIVATION_BYTES
     activation_traffic = (
-        embedding_input + qkv_activation + attention_output
+        embedding_input + qkv_activation + attention_memory
+        + output_projection
         + ffn_activation + final_logits)
     linear_memory = (
         active_weights + embedding_input + qkv_activation
-        + output_projection + ffn_activation + final_logits)
+        + final_kv + output_projection + ffn_activation + final_logits)
     total_memory = active_weights + final_kv + activation_traffic
 
     return LLMPrefillMetrics(
@@ -185,10 +305,23 @@ def evaluate_llm_prefill(inp: LLMPrefillInput) -> LLMPrefillMetrics:
         final_kv_cache_bytes=final_kv, kv_write_bytes=final_kv,
         required_capacity_bytes=weight_footprint + final_kv,
         embedding_input_bytes=embedding_input,
+        q_width=D, kv_width=kv_width,
+        qkv_input_read_bytes=qkv_input_read,
+        q_projection_output_bytes=q_projection_output,
+        k_projection_cache_write_bytes=k_projection_cache_write,
+        v_projection_cache_write_bytes=v_projection_cache_write,
         qkv_activation_bytes=qkv_activation,
-        attention_kernel_activation_bytes=attention_kernel,
-        output_projection_activation_bytes=output_projection,
-        attention_output_bytes=attention_output,
+        logical_kv_projection_tensor_bytes=logical_kv_projection,
+        physical_kv_projection_write_bytes=final_kv,
+        attention_q_read_bytes=attention_q_read,
+        attention_k_read_bytes=attention_k_read,
+        attention_v_read_bytes=attention_v_read,
+        attention_kv_tiled_read_bytes=attention_kv_tiled_read,
+        attention_output_write_bytes=attention_output_write,
+        attention_memory_bytes=attention_memory,
+        o_projection_input_read_bytes=o_projection_input_read,
+        o_projection_output_write_bytes=o_projection_output_write,
+        output_projection_memory_bytes=output_projection,
         ffn_activation_bytes=ffn_activation,
         final_logits_bytes=final_logits,
         activation_memory_bytes=activation_traffic,

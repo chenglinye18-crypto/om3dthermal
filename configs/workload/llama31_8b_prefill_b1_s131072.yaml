@@ -23,3 +23,13 @@ provenance:
     source: first-order tensor traffic ledger
     status: PREFILL_ATTENTION_FUSED_TILED_NO_DECODE_STYLE_FULL_KV_REREAD
     transformation: final KV written once; no S-by-S score matrix DRAM materialization
+  - record_id: direct_prefill_kv_cache_materialization_v0
+    classification: MODELING_CHOICE
+    source: first-order tensor traffic ledger
+    status: K_V_PROJECTION_OUTPUTS_DIRECTLY_MATERIALIZE_FINAL_PREFILL_KV_CACHE
+    transformation: logical K/V projection outputs alias one physical final KV-cache write
+  - record_id: fused_tiled_linear_qkv_read_v0
+    classification: MODELING_CHOICE
+    source: first-order tensor traffic ledger
+    status: PREFILL_ATTENTION_FUSED_TILED_LINEAR_QKV_READ
+    transformation: one O(S) tensor-level Q/K/V read; no decode-style history reread and no S-by-S DRAM traffic
