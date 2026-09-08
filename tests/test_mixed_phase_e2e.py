@@ -248,6 +248,10 @@ def test_system_roles_and_resolved_nmp_batch_path(
     assert result.resident_requests == batch
     assert result.decode_tokens_per_s > 0.0
     assert result.decode_total_J > 0.0
+    assert result.prefill_memory_write_dynamic_J > 0.0
+    assert result.prefill_memory_dynamic_J == pytest.approx(
+        result.prefill_memory_read_dynamic_J
+        + result.prefill_memory_write_dynamic_J)
     assert result.mixed_epoch_time_ms == pytest.approx(
         result.prefill_service_time_ms + result.decode_service_time_ms)
     assert result.thermal is None
@@ -266,6 +270,7 @@ def test_memory_only_backend_is_evaluated_and_gpu_only(registry):
     assert result.decode_nmp_mac_dynamic_J == 0.0
     assert result.decode_residual_interface_J == 0.0
     assert result.decode_total_J > 0.0
+    assert result.prefill_memory_write_dynamic_J > 0.0
     assert result.nmp_batch_generalization_status == "NOT_APPLICABLE"
     assert result.thermal is None
 

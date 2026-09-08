@@ -140,6 +140,44 @@ def build_performance_balanced_placement(workload:LLMDecodeInput,demand:M3DWorkl
         "DETERMINISTIC_PER_STAGE_SPAN_LATENCY_OPTIMIZER__TIE_FEWER_DIES__CAPACITY_BALANCED_OWNERS",
         "ROW_BLOCKS_AND_WHOLE_TOKEN_KV_HEAD_VECTORS__PAIRED_KV_COLOCATION")
 
+
+def project_active_execution_placement(
+        resident_placement:NMPPerformanceBalancedPlacement,
+        workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,
+        layout:PhysicalCapacityLayout,*,bandwidth_per_die_bytes_per_s:float,
+        compute_per_die_flops_per_s:float)->NMPPerformanceBalancedPlacement:
+    """Project active-request load onto one validated persistent layout."""
+    loads=derive_unit_loads(workload,demand,layout); n=layout.slab_count
+    resident_owner_by_id={load.unit.unit_id:owners for load,owners in zip(
+        resident_placement.unit_loads,resident_placement.ownership,strict=True)}
+    ownership=[]; assignments=[]; traffic=[0.0]*n; flops=[0.0]*n
+    for load in loads:
+        try:
+            owners=resident_owner_by_id[load.unit.unit_id]
+        except KeyError as error:
+            raise ValueError(
+                f"active unit absent from resident layout: {load.unit.unit_id}") from error
+        shards=_assign(load,owners)
+        ownership.append(owners); assignments.append(shards)
+        for shard in shards:
+            traffic[shard.die_id]+=shard.local_memory_traffic_bytes
+            flops[shard.die_id]+=shard.nmp_flops
+    service=tuple(max(traffic[d]/bandwidth_per_die_bytes_per_s,
+                      flops[d]/compute_per_die_flops_per_s)*1e3 for d in range(n))
+    spans=tuple(len(x) for x in ownership)
+    active_spans=tuple(span for load,span in zip(loads,spans)
+                       if load.unit.shard_mode not in ("RESIDENT_ONLY","LOCAL_LOOKUP"))
+    return NMPPerformanceBalancedPlacement(
+        loads,tuple(ownership),tuple(assignments),
+        resident_placement.resident_used_bytes_per_die,tuple(traffic),tuple(flops),
+        service,spans,tuple(x.minimum_die_span for x in loads),
+        resident_placement.max_capacity_utilization,
+        resident_placement.mean_capacity_utilization,
+        resident_placement.capacity_violations,statistics.fmean(active_spans),
+        statistics.median(active_spans),max(active_spans),
+        "PERSISTENT_RESIDENT_LAYOUT__ACTIVE_REQUEST_LOAD_PROJECTION",
+        resident_placement.locality_constraint)
+
 def build_locality_only_placement(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,
         layout:PhysicalCapacityLayout,*,bandwidth_per_die_bytes_per_s:float,compute_per_die_flops_per_s:float)->NMPPerformanceBalancedPlacement:
     """Minimum-capacity-span reference, retained for placement comparisons."""

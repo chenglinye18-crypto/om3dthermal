@@ -348,6 +348,19 @@ def _host_dynamic_energies(
     return point.ddr_dynamic_power_W * duration_s, point.pcie_dynamic_power_W * duration_s
 
 
+def _m3d_prefill_memory_energies(
+        architecture, prefill_metrics, duration_s: float,
+) -> tuple[float, float, float, float]:
+    """Resolve existing M3D read/write/refresh terms; GPU range stays separate."""
+    read_J=(8.0*prefill_metrics.prefill_read_bytes
+            * architecture.memory.E_access_total_pj_bit*1e-12)
+    write_pj=resolve_orthogonal_m3d_write_energy_pj_per_bit(
+        architecture.case,architecture.memory)
+    write_J=8.0*prefill_metrics.prefill_write_bytes*write_pj*1e-12
+    refresh_J=float(architecture.memory.P_refresh_W or 0.0)*duration_s
+    return read_J,write_J,read_J+write_J,refresh_J
+
+
 def evaluate_conventional_hbm_mixed_phase(
     *, project_root: str | Path, model: DenseLLMModelSpec,
     case: MixedPhaseServingCase,
@@ -618,6 +631,8 @@ def evaluate_orthogonal_m3d_igzo_memory_only_mixed_phase(
     refresh_J = float(architecture.memory.P_refresh_W or 0.0) * decode_s
     static_J = gpu_decode_spec.static_power_W * decode_s
     decode_total = memory_J + gpu_J + refresh_J + static_J
+    prefill_read_J,prefill_write_J,prefill_memory_J,prefill_refresh_J=(
+        _m3d_prefill_memory_energies(architecture,prefill_metrics,prefill_s))
     max_die = math.ceil(rounded / architecture.layout.slot_capacity_bytes
                         / architecture.layout.slab_count) * architecture.layout.slot_capacity_bytes
     max_die /= architecture.layout.capacity_per_slab_bytes
@@ -633,6 +648,10 @@ def evaluate_orthogonal_m3d_igzo_memory_only_mixed_phase(
         prefill_gpu_dynamic_J_min=roofline.total_dynamic_energy_J_min,
         prefill_gpu_dynamic_J_max=roofline.total_dynamic_energy_J_max,
         prefill_gpu_static_J=gpu_compute.static_power_W * prefill_s,
+        prefill_memory_read_dynamic_J=prefill_read_J,
+        prefill_memory_write_dynamic_J=prefill_write_J,
+        prefill_memory_dynamic_J=prefill_memory_J,
+        prefill_refresh_J=prefill_refresh_J,
         prefill_host_ddr_J=0.0, prefill_host_pcie_J=0.0,
         decode_gpu_dynamic_J=gpu_J, decode_gpu_static_J=static_J,
         decode_memory_read_dynamic_J=read_J,
@@ -663,6 +682,7 @@ def evaluate_iom3d_feol_nmp_mixed_phase(
     if model.model_id != case.model_id:
         raise ValueError("model and mixed case model_id must match")
     root = Path(project_root)
+    architecture = resolve_m3d_architecture_backend(root)
     platform = load_platform_spec_file(
         root / "configs/platform/gpu_package_h200_reference.yaml")
     gpu_compute = platform.gpu_compute_power
@@ -744,6 +764,9 @@ def evaluate_iom3d_feol_nmp_mixed_phase(
     decode_ms = float(decode.decode_step_time_ms)
     all_metrics = evaluate_llm_decode(model.decode_input(
         batch_size=case.batch_size, context_length=case.context_length))
+    prefill_read_J,prefill_write_J,prefill_memory_J,prefill_refresh_J=(
+        _m3d_prefill_memory_energies(
+            architecture,prefill_metrics,roofline.nominal_prefill_latency_s))
     return MixedPhaseE2EResult(
         **common, evaluation_status="EVALUATED",
         energy_status="PREFILL_GPU_DYNAMIC_RANGE_NO_SINGLE_NOMINAL",
@@ -757,9 +780,10 @@ def evaluate_iom3d_feol_nmp_mixed_phase(
         prefill_gpu_dynamic_J_max=roofline.total_dynamic_energy_J_max,
         prefill_gpu_static_J=(
             gpu_compute.static_power_W * roofline.nominal_prefill_latency_s),
-        prefill_memory_read_dynamic_J=None,
-        prefill_memory_write_dynamic_J=None,
-        prefill_memory_dynamic_J=None, prefill_refresh_J=None,
+        prefill_memory_read_dynamic_J=prefill_read_J,
+        prefill_memory_write_dynamic_J=prefill_write_J,
+        prefill_memory_dynamic_J=prefill_memory_J,
+        prefill_refresh_J=prefill_refresh_J,
         prefill_host_ddr_J=0.0, prefill_host_pcie_J=0.0,
         prefill_total_J=None,
         decode_gpu_dynamic_J=decode.gpu_dynamic_J_per_step,

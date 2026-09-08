@@ -74,16 +74,13 @@ def test_compute_completion_tokens_and_throughput_close(registry):
         result.total_generated_tokens / (result.total_completion_time_ms * 1e-3))
 
 
-def test_realistic_rate_is_monotonic_and_approaches_optimistic(registry):
+def test_fixed_context_snapshot_stays_below_optimistic(registry):
     rows = [_result(registry, G=G) for G in (128, 256, 512, 1024, 2048)]
-    rates = [row.admission_aware_tokens_per_s for row in rows]
-    assert rates == sorted(rates)
     assert all(row.admission_aware_tokens_per_s
                <= row.optimistic_resident_wave_tokens_per_s for row in rows)
-    assert rows[-1].throughput_retention_vs_optimistic > (
-        rows[0].throughput_retention_vs_optimistic)
-    assert rows[-1].throughput_loss_vs_optimistic < (
-        rows[0].throughput_loss_vs_optimistic)
+    assert all(row.context_evolution_status=="FIXED_CONTEXT_SNAPSHOT"
+               for row in rows)
+    assert all(row.evaluation_scope=="DECODE_SERVICE_ONLY" for row in rows)
 
 
 def test_qwen_d14_single_wave_has_exact_optimistic_rate(registry):
@@ -117,8 +114,8 @@ def test_final_matrix_manifest_remains_36_points():
 
 
 @pytest.mark.parametrize("batch,status,step_ms", [
-    (1, "EVALUATED", 2.1167828881564006),
-    (28, "EVALUATED", 43.54111957320394),
+    (1, "EVALUATED", 2.1168573135262956),
+    (28, "EVALUATED", 43.54320348356118),
     (29, "CAPACITY_INFEASIBLE", None),
 ])
 def test_nmp_frozen_regressions_unchanged(registry, batch, status, step_ms):

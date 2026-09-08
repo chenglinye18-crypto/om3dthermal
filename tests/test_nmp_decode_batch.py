@@ -26,10 +26,10 @@ def results():
 
 def test_b1_exact_regression(results):
     row = results[1]
-    assert row.decode_step_time_ms == 2.1167828881564006
-    assert row.aggregate_decode_tokens_per_s == 472.41500561776746
-    assert row.J_per_token == 0.3188179932437353
-    assert row.tokens_per_J == 3.13658583013382
+    assert row.decode_step_time_ms == 2.1168573135262956
+    assert row.aggregate_decode_tokens_per_s == 472.3983962500446
+    assert row.J_per_token == 0.3188235034702144
+    assert row.tokens_per_J == 3.1365316205222102
     assert row.boundary_bytes_per_step == 886_655_488
     assert row.score_bytes_per_step == 268_435_456
     assert row.probability_bytes_per_step == 268_435_456

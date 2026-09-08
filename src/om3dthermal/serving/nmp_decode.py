@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from om3dthermal.placement.nmp_load_balance import (
     build_performance_balanced_placement,
+    project_active_execution_placement,
 )
 from om3dthermal.power import (
     calculate_memory_power,
@@ -49,6 +50,7 @@ class NMPDecodeExecutionTrace:
     workload: LLMDecodeInput
     demand: object
     placement: object
+    resident_placement: object
     activity: object
     power_map: object
 
@@ -61,12 +63,15 @@ class NMPDecodeBatchResult(BaseModel):
 
     batch_size: int = Field(gt=0)
     active_capacity_requests: int = Field(gt=0)
+    resident_context_length: int = Field(gt=0)
     batch_model_status: Literal["RESOLVED_ANALYTICAL_BATCH_MODEL"]
     capacity_status: Literal["FEASIBLE", "CAPACITY_INFEASIBLE"]
     evaluation_status: Literal["EVALUATED", "CAPACITY_INFEASIBLE"]
     weight_batch_reuse_status: Literal["PASS"] = "PASS"
     no_cross_request_handoff_alias: Literal["PASS"] | None = None
     qk_av_paired_request_ownership: Literal["PASS"] | None = None
+    resident_execution_placement_status: Literal[
+        "SINGLE_PERSISTENT_RESIDENT_LAYOUT_ACTIVE_LOAD_PROJECTION"] | None = None
 
     logical_required_capacity_GB: float
     physical_page_rounded_capacity_GB: float
@@ -75,6 +80,9 @@ class NMPDecodeBatchResult(BaseModel):
     capacity_utilization: float
     max_die_capacity_utilization: float | None = None
     capacity_violations: int | None = None
+    post_step_max_die_capacity_utilization: float | None = None
+    post_step_capacity_violations: int | None = None
+    kv_append_allocation_status: str | None = None
 
     matrix_weight_read_bytes_per_step: float | None = None
     embedding_weight_read_bytes_per_step: float | None = None
@@ -217,14 +225,20 @@ def rounded_capacity_bytes(objects: tuple[ResidentDataObject, ...], page_bytes: 
 def evaluate_nmp_decode_batch(
     workload: LLMDecodeInput, *, project_root: str | Path,
     active_capacity_requests: int | None = None,
+    resident_context_length: int | None = None,
 ) -> NMPDecodeBatchResult:
     """Run one aggregate placement/activity/power solve; never loops over B1."""
     root = Path(project_root).resolve()
     architecture = resolve_m3d_architecture_backend(root)
     active = workload.batch_size if active_capacity_requests is None else active_capacity_requests
+    resident_context = (workload.context_length if resident_context_length is None
+                        else resident_context_length)
     if active < workload.batch_size:
         raise ValueError("active capacity requests cannot be below Decode batch size")
-    capacity_workload = workload.model_copy(update={"batch_size": active})
+    if resident_context < workload.context_length:
+        raise ValueError("resident context cannot be below execution context")
+    capacity_workload = workload.model_copy(update={
+        "batch_size": active,"context_length": resident_context})
     capacity_metrics = evaluate_llm_decode(capacity_workload)
     capacity_objects = build_m3d_only_workload_objects(capacity_workload)
     rounded = rounded_capacity_bytes(
@@ -232,6 +246,7 @@ def evaluate_nmp_decode_batch(
     available = architecture.layout.total_capacity_bytes
     capacity_common = dict(
         batch_size=workload.batch_size, active_capacity_requests=active,
+        resident_context_length=resident_context,
         batch_model_status=NMP_BATCH_GENERALIZATION_STATUS,
         logical_required_capacity_GB=capacity_metrics.required_capacity_bytes / 1e9,
         physical_page_rounded_capacity_GB=rounded / 1e9,
@@ -264,12 +279,14 @@ def evaluate_nmp_decode_batch(
         raise RuntimeError("page-feasible workload produced die capacity violations")
 
     demand = (
-        capacity_demand if active == workload.batch_size
+        capacity_demand if (active == workload.batch_size
+                            and resident_context == workload.context_length)
         else build_m3d_workload_page_demand(workload, architecture.layout))
     placement = (
-        capacity_placement if active == workload.batch_size
-        else build_performance_balanced_placement(
-            workload, demand, architecture.layout,
+        capacity_placement if (active == workload.batch_size
+                               and resident_context == workload.context_length)
+        else project_active_execution_placement(
+            capacity_placement, workload, demand, architecture.layout,
             bandwidth_per_die_bytes_per_s=bandwidth_per_die,
             compute_per_die_flops_per_s=hardware.peak_flops_per_die))
     if placement.capacity_violations:
@@ -280,6 +297,23 @@ def evaluate_nmp_decode_batch(
         bandwidth_demand_bytes_per_s=(
             architecture.bandwidth.coil_bandwidth_bytes_per_s),
         ownership=placement.ownership)
+    cap_per_die=architecture.layout.capacity_per_slab_bytes
+    post_step_used=tuple(
+        resident+active.kv_write_bytes for resident,active in zip(
+            capacity_placement.resident_used_bytes_per_die,
+            activity.activities,strict=True))
+    post_step_violations=sum(value>cap_per_die for value in post_step_used)
+    post_step_max=max(post_step_used)/cap_per_die
+    if post_step_violations:
+        return NMPDecodeBatchResult(
+            **capacity_common,capacity_status="CAPACITY_INFEASIBLE",
+            evaluation_status="CAPACITY_INFEASIBLE",
+            max_die_capacity_utilization=post_step_max,
+            capacity_violations=post_step_violations,
+            post_step_max_die_capacity_utilization=post_step_max,
+            post_step_capacity_violations=post_step_violations,
+            kv_append_allocation_status=(
+                "WHOLE_VECTOR_APPEND_EXCEEDS_PERSISTENT_DIE_CAPACITY"))
     power = build_nmp_die_power_map(
         architecture.case, architecture.memory, architecture.topology,
         architecture.feol, activity, placement)
@@ -325,9 +359,15 @@ def evaluate_nmp_decode_batch(
         **capacity_common, capacity_status="FEASIBLE", evaluation_status="EVALUATED",
         no_cross_request_handoff_alias="PASS",
         qk_av_paired_request_ownership="PASS",
-        max_die_capacity_utilization=(
-            capacity_placement.max_capacity_utilization),
-        capacity_violations=capacity_placement.capacity_violations,
+        resident_execution_placement_status=(
+            "SINGLE_PERSISTENT_RESIDENT_LAYOUT_ACTIVE_LOAD_PROJECTION"),
+        max_die_capacity_utilization=post_step_max,
+        capacity_violations=post_step_violations,
+        post_step_max_die_capacity_utilization=post_step_max,
+        post_step_capacity_violations=post_step_violations,
+        kv_append_allocation_status=(
+            "WHOLE_VECTOR_APPEND_DIE_OWNER_AND_CAPACITY_VALIDATED__"
+            "PHYSICAL_PAGE_SLOT_ID_NOT_MODELED"),
         matrix_weight_read_bytes_per_step=matrix_weight,
         embedding_weight_read_bytes_per_step=embedding_weight,
         weight_read_bytes_per_step=weight,
@@ -361,5 +401,6 @@ def evaluate_nmp_decode_batch(
         tokens_per_J=workload.batch_size / total_J,
         execution_trace=NMPDecodeExecutionTrace(
             architecture=architecture, workload=workload, demand=demand,
-            placement=placement, activity=activity, power_map=power),
+            placement=placement, resident_placement=capacity_placement,
+            activity=activity, power_map=power),
     )

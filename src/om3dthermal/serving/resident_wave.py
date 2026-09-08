@@ -85,6 +85,15 @@ class ResidentWaveDecodeResult(BaseModel):
     weight_reuse_model: Literal["tile_reuse"]
     kv_read_model: Literal["full_reread"]
     thermal: None = None
+    evaluation_scope: Literal["DECODE_SERVICE_ONLY"] = "DECODE_SERVICE_ONLY"
+    context_evolution_status: Literal["FIXED_CONTEXT_SNAPSHOT"] = (
+        "FIXED_CONTEXT_SNAPSHOT")
+    initial_state_requirement: Literal[
+        "FIRST_WAVE_KV_ALREADY_LOCAL__LATER_WAVES_HOST_VALID"] = (
+            "FIRST_WAVE_KV_ALREADY_LOCAL__LATER_WAVES_HOST_VALID")
+    final_state_requirement: Literal[
+        "NOT_MODELED_NORMALIZED_OUTPUT_TOKEN_DEPTH"] = (
+            "NOT_MODELED_NORMALIZED_OUTPUT_TOKEN_DEPTH")
 
     @model_validator(mode="after")
     def _closures(self) -> "ResidentWaveDecodeResult":
@@ -151,6 +160,9 @@ class ResidentWaveAdmissionAwareResult(BaseModel):
         "EQUAL_GENERATED_LENGTH_PER_REQUEST_SENSITIVITY"]
     resident_wave_model_status: Literal[
         "ADMISSION_AWARE_RESIDENT_WAVE_SENSITIVITY"]
+    evaluation_scope: Literal["DECODE_SERVICE_ONLY"] = "DECODE_SERVICE_ONLY"
+    context_evolution_status: Literal["FIXED_CONTEXT_SNAPSHOT"] = (
+        "FIXED_CONTEXT_SNAPSHOT")
     first_wave_admission_status: Literal[
         "ZERO_ALREADY_RESIDENT"] = "ZERO_ALREADY_RESIDENT"
     scheduler_software_overhead_included: Literal["NO"] = "NO"
@@ -204,6 +216,84 @@ class ResidentWaveAdmissionAwareResult(BaseModel):
         if not math.isclose(self.throughput_loss_vs_optimistic,
                             1.0 - retention, rel_tol=1e-12):
             raise ValueError("throughput loss does not close")
+        return self
+
+
+class ResidentWaveGrowingKVResult(BaseModel):
+    """True G-step Decode horizon with S+j traffic and S+G reservation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_id: str
+    initial_context_length: int
+    generated_decode_steps: int
+    high_water_context_length: int
+    requested_decode_requests: int
+    resident_batch_limit_at_high_water: int
+    wave_sizes: tuple[int, ...]
+    step_context_lengths: tuple[int, ...]
+    step_times_ms_by_wave: tuple[tuple[float, ...], ...]
+    wave_compute_times_ms: tuple[float, ...]
+    admission_bytes_per_wave: tuple[float, ...]
+    total_admission_GB: float
+    total_admission_time_ms: float
+    total_compute_time_ms: float
+    total_completion_time_ms: float
+    total_generated_tokens: int
+    aggregate_decode_tokens_per_s: float
+    evaluation_scope: Literal["DECODE_SERVICE_ONLY"] = "DECODE_SERVICE_ONLY"
+    context_evolution_status: Literal["GROWING_KV__STEP_CONTEXT_S_PLUS_J"] = (
+        "GROWING_KV__STEP_CONTEXT_S_PLUS_J")
+    capacity_reservation_status: Literal[
+        "HIGH_WATER_S_PLUS_G_MODEL_DECLARED_FOOTPRINT"] = (
+            "HIGH_WATER_S_PLUS_G_MODEL_DECLARED_FOOTPRINT")
+    first_generated_token_status: Literal[
+        "STEP_J0_READS_S_AND_APPENDS_TOKEN_S"] = (
+            "STEP_J0_READS_S_AND_APPENDS_TOKEN_S")
+    scheduler_policy: Literal[
+        "CAPACITY_CONSTRAINED_RUN_TO_COMPLETION_RESIDENT_WAVES"]
+    admission_policy: Literal[
+        "SERIAL_HOST_TO_HBM_ADMISSION_BETWEEN_WAVES"]
+    workspace_capacity_status: Literal[
+        "WORKSPACE_UNRESOLVED__NOT_ASSUMED_ZERO"] = (
+            "WORKSPACE_UNRESOLVED__NOT_ASSUMED_ZERO")
+    thermal: None = None
+
+    @model_validator(mode="after")
+    def _growing_closures(self) -> "ResidentWaveGrowingKVResult":
+        if self.high_water_context_length != (
+                self.initial_context_length + self.generated_decode_steps):
+            raise ValueError("S+G high-water context does not close")
+        if self.step_context_lengths != tuple(
+                self.initial_context_length+j
+                for j in range(self.generated_decode_steps)):
+            raise ValueError("step context sequence does not close")
+        if sum(self.wave_sizes) != self.requested_decode_requests:
+            raise ValueError("growing-KV wave sizes do not close")
+        if any(size > self.resident_batch_limit_at_high_water
+               for size in self.wave_sizes):
+            raise ValueError("wave exceeds high-water resident limit")
+        if len(self.step_times_ms_by_wave) != len(self.wave_sizes):
+            raise ValueError("wave timing vector count does not close")
+        if any(len(row) != self.generated_decode_steps
+               for row in self.step_times_ms_by_wave):
+            raise ValueError("each wave must execute exactly G Decode steps")
+        expected_wave = tuple(sum(row) for row in self.step_times_ms_by_wave)
+        if any(not math.isclose(a,b,rel_tol=1e-12)
+               for a,b in zip(self.wave_compute_times_ms,expected_wave)):
+            raise ValueError("per-wave growing compute time does not close")
+        if not math.isclose(self.total_compute_time_ms,sum(expected_wave),rel_tol=1e-12):
+            raise ValueError("total growing compute time does not close")
+        if not math.isclose(self.total_completion_time_ms,
+                            self.total_compute_time_ms+self.total_admission_time_ms,
+                            rel_tol=1e-12):
+            raise ValueError("growing horizon completion does not close")
+        tokens=self.requested_decode_requests*self.generated_decode_steps
+        if self.total_generated_tokens != tokens:
+            raise ValueError("growing horizon token count does not close")
+        if not math.isclose(self.aggregate_decode_tokens_per_s,
+                            tokens/(self.total_completion_time_ms*1e-3),rel_tol=1e-12):
+            raise ValueError("growing horizon throughput does not close")
         return self
 
 
@@ -373,3 +463,67 @@ def evaluate_conventional_hbm_resident_wave_admission(
         output_length_model_status=OUTPUT_LENGTH_MODEL_STATUS,
         resident_wave_model_status=ADMISSION_AWARE_MODEL_STATUS,
     )
+
+
+def evaluate_conventional_hbm_resident_wave_growing_kv(
+    *, project_root: str | Path, model: DenseLLMModelSpec,
+    case: MixedPhaseServingCase, generated_decode_steps: int,
+) -> ResidentWaveGrowingKVResult:
+    """Evaluate real S..S+G-1 Decode steps with high-water capacity gating."""
+    if isinstance(generated_decode_steps,bool) or not isinstance(generated_decode_steps,int):
+        raise TypeError("generated_decode_steps must be an int")
+    if generated_decode_steps<=0:
+        raise ValueError("generated_decode_steps must be positive")
+    root=Path(project_root).resolve(); backend=resolve_conventional_hbm_backend(root)
+    platform=load_platform_spec_file(
+        root/"configs/platform/gpu_package_h200_reference.yaml")
+    gpu_compute=platform.gpu_compute_power
+    if gpu_compute is None:
+        raise ValueError("canonical H200 GPU compute is unresolved")
+    high_water=case.context_length+generated_decode_steps
+    high_metrics=evaluate_llm_decode(model.decode_input(
+        batch_size=case.decode_requests,context_length=high_water))
+    capacity=ServingCapacitySource(
+        architecture=backend.architecture,usable_capacity_bytes=backend.capacity_bytes,
+        capacity_source_status=backend.capacity_source_status,
+        provenance_status="CANONICAL_CONVENTIONAL_HBM_CASE")
+    residency=evaluate_capacity_residency(
+        high_metrics,capacity,requested_requests=case.decode_requests)
+    limit=residency.max_resident_requests
+    if limit is None: limit=case.decode_requests
+    if limit<=0: raise ValueError("high-water model fixed footprint does not fit HBM")
+    remaining=case.decode_requests; waves=[]
+    while remaining:
+        wave=min(limit,remaining); waves.append(wave); remaining-=wave
+    gpu_model=AnalyticalRooflineGPUModel(
+        matched_payload_bandwidth_bits_per_second=8*backend.sustained_bandwidth_bytes_per_s,
+        effective_compute_flops_per_second=gpu_compute.peak_compute_BF16_dense_flops_per_s)
+    contexts=tuple(case.context_length+j for j in range(generated_decode_steps))
+    timings=[]
+    for wave in waves:
+        timings.append(tuple(gpu_model.evaluate(
+            model.decode_input(batch_size=wave,context_length=context),batch_size=wave
+        ).decode_step_time_ms for context in contexts))
+    start_metrics=evaluate_llm_decode(model.decode_input(
+        batch_size=case.decode_requests,context_length=case.context_length))
+    admission=tuple(0.0 if index==0 else wave*start_metrics.kv_bytes_per_request
+                    for index,wave in enumerate(waves))
+    host_bw=backend.host_offload.effective_bandwidth_bytes_per_second
+    if host_bw is None: raise ValueError("canonical host bandwidth is unresolved")
+    admission_ms=sum(admission)/host_bw*1e3
+    compute_ms=sum(sum(row) for row in timings); total_ms=compute_ms+admission_ms
+    tokens=case.decode_requests*generated_decode_steps
+    return ResidentWaveGrowingKVResult(
+        model_id=model.model_id,initial_context_length=case.context_length,
+        generated_decode_steps=generated_decode_steps,
+        high_water_context_length=high_water,
+        requested_decode_requests=case.decode_requests,
+        resident_batch_limit_at_high_water=limit,wave_sizes=tuple(waves),
+        step_context_lengths=contexts,step_times_ms_by_wave=tuple(timings),
+        wave_compute_times_ms=tuple(sum(row) for row in timings),
+        admission_bytes_per_wave=admission,total_admission_GB=sum(admission)/1e9,
+        total_admission_time_ms=admission_ms,total_compute_time_ms=compute_ms,
+        total_completion_time_ms=total_ms,total_generated_tokens=tokens,
+        aggregate_decode_tokens_per_s=tokens/(total_ms*1e-3),
+        scheduler_policy=RESIDENT_WAVE_SCHEDULER_POLICY,
+        admission_policy=ADMISSION_POLICY)

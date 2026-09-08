@@ -5,6 +5,7 @@ Resident capacity and active decode traffic are deliberately separate.
 invented operator and therefore has no read traffic or FLOPs.
 """
 from dataclasses import dataclass
+import math
 from typing import Literal
 
 from .llm_decode import LLMDecodeInput
@@ -177,6 +178,27 @@ def _per_die_partition(unit, owners, total_bytes, die_count):
     return tuple(result)
 
 
+def kv_append_bytes_per_die(unit, owners, die_count, *, total_bytes=None):
+    """Map new whole KV-head vectors to deterministic integer owners."""
+    if unit.shard_mode != "KV_ATOMIC" or unit.kv_write_bytes <= 0:
+        return (0.0,) * die_count
+    if not owners:
+        raise ValueError("KV append requires at least one owner")
+    stored_vector_bytes = unit.atomic_locality_bytes
+    vector_count_float = unit.kv_write_bytes / stored_vector_bytes
+    vector_count = round(vector_count_float)
+    if not math.isclose(vector_count_float, vector_count, rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError("KV append must contain whole head vectors")
+    assigned_total = unit.kv_write_bytes if total_bytes is None else total_bytes
+    vector_bytes = assigned_total / vector_count
+    result = [0.0] * die_count
+    for vector_id in range(vector_count):
+        result[owners[vector_id % len(owners)]] += vector_bytes
+    if not math.isclose(sum(result), assigned_total, rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError("KV whole-vector append does not close")
+    return tuple(result)
+
+
 def _per_die_broadcast(owners, bytes_per_owner, die_count):
     result=[0.0]*die_count
     for die in owners:
@@ -227,10 +249,10 @@ def build_dense_decode_handoffs(units, ownership, die_count):
                 _per_die_broadcast(qkowners,qbytes,die_count))
             add("ROPE_K","KV_WRITE","GPU_TO_NMP",kbytes,layer,request,
                 "whole K-head vectors routed to cache owners",
-                _per_die_partition(qk,qkowners,kbytes,die_count))
+                kv_append_bytes_per_die(qk,qkowners,die_count,total_bytes=kbytes))
             add("KV_VECTOR_REPACK","KV_WRITE","GPU_TO_NMP",vbytes,layer,request,
                 "whole V-head vectors routed to cache owners; not RoPE traffic",
-                _per_die_partition(av,avowners,vbytes,die_count))
+                kv_append_bytes_per_die(av,avowners,die_count,total_bytes=vbytes))
             add("ATTENTION_QK","GPU_SOFTMAX","NMP_TO_GPU",qk.score_bytes,layer,request,
                 "partitioned score gather",
                 _per_die_partition(qk,qkowners,qk.score_bytes,die_count))

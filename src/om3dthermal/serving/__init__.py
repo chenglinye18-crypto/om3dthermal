@@ -62,8 +62,31 @@ from .resident_wave import (
     SWAP_ADMISSION_STATUS,
     ResidentWaveDecodeResult,
     ResidentWaveAdmissionAwareResult,
+    ResidentWaveGrowingKVResult,
     evaluate_conventional_hbm_resident_wave_admission,
+    evaluate_conventional_hbm_resident_wave_growing_kv,
     evaluate_conventional_hbm_resident_wave_decode,
+)
+from .state_ledger import (
+    EvaluationSemantics,
+    RequestKVState,
+    ServingStateEvent,
+    complete_prefill,
+    decode_step,
+    free_local,
+    initial_decode_state,
+    initial_prefill_state,
+    require_comparable_semantics,
+    transfer_host_to_local,
+    transfer_local_to_host,
+)
+from .mixed_state_window import (
+    ConventionalMixedStateWindowResult,
+    evaluate_conventional_prefill_first_state_window,
+)
+from .growing_kv import (
+    M3DGrowingKVCapacityResult,
+    evaluate_m3d_growing_kv_capacity,
 )
 
 __all__ = [
@@ -116,6 +139,23 @@ __all__ = [
     "SWAP_ADMISSION_STATUS",
     "ResidentWaveDecodeResult",
     "ResidentWaveAdmissionAwareResult",
+    "ResidentWaveGrowingKVResult",
     "evaluate_conventional_hbm_resident_wave_admission",
+    "evaluate_conventional_hbm_resident_wave_growing_kv",
     "evaluate_conventional_hbm_resident_wave_decode",
+    "EvaluationSemantics",
+    "RequestKVState",
+    "ServingStateEvent",
+    "complete_prefill",
+    "decode_step",
+    "free_local",
+    "initial_decode_state",
+    "initial_prefill_state",
+    "require_comparable_semantics",
+    "transfer_host_to_local",
+    "transfer_local_to_host",
+    "ConventionalMixedStateWindowResult",
+    "evaluate_conventional_prefill_first_state_window",
+    "M3DGrowingKVCapacityResult",
+    "evaluate_m3d_growing_kv_capacity",
 ]

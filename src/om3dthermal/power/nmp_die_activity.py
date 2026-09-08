@@ -6,7 +6,8 @@ from om3dthermal.platform import load_platform_spec_file, resolve_gpu_bandwidth_
 from pathlib import Path
 from om3dthermal.workload.dense_decode_ledger import (
     attention_boundary_by_layer, build_dense_decode_handoffs,
-    build_dense_decode_placement_units, build_dense_decode_small_ops)
+    build_dense_decode_placement_units, build_dense_decode_small_ops,
+    kv_append_bytes_per_die)
 from om3dthermal.placement.nmp_load_balance import NMPPlacementUnitLoad, shard_fractions
 from om3dthermal.power.memory_bandwidth import ArchitectureBandwidthClosure
 from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
@@ -79,6 +80,7 @@ class NMPDieActivitySummary:
     gpu_remaining_dynamic_energy_j: float
     embedding_local_read_bytes: float
     embedding_local_time_ms: float
+    kv_append_owner_by_layer_request: dict
     def as_dict(self): return asdict(self)
 
 def canonical_nmp_hardware(physical_die_count:int)->NMPHardware:
@@ -95,7 +97,7 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
     units=build_dense_decode_placement_units(workload); spans=ownership; n=layout.slab_count
     if len(spans)!=len(units): raise ValueError("unit ownership count mismatch")
     weights=[0.0]*n; kvreads=[0.0]*n; kvwrites=[0.0]*n; flops=[0.0]*n
-    stages_by_key={}
+    stages_by_key={}; append_owners={}
     score=probability=partial=0.0
     for u,owners in zip(units,spans,strict=True):
         if not owners or len(set(owners)) != len(owners) or any(d < 0 or d >= n for d in owners):
@@ -109,12 +111,16 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
             u.kv_bytes,u.kv_write_bytes,u.active_weight_read_bytes+u.kv_bytes+u.kv_write_bytes,
             unit_flops,1)
         fractions=shard_fractions(load,len(owners))
+        append_by_die=kv_append_bytes_per_die(u,owners,n)
+        if u.shard_mode=="KV_ATOMIC":
+            append_owners[(u.layer_id,u.request_id,u.operator_type)]=tuple(
+                die for die,value in enumerate(append_by_die) if value>0.0)
         for die,share in zip(owners,fractions,strict=True):
             weights[die]+=u.active_weight_read_bytes*share
             kvreads[die]+=u.kv_bytes*share
-            kvwrites[die]+=u.kv_write_bytes*share
+            kvwrites[die]+=append_by_die[die]
             flops[die]+=unit_flops*share
-            stage_mem[die]+=(u.active_weight_read_bytes+u.kv_bytes+u.kv_write_bytes)*share
+            stage_mem[die]+=(u.active_weight_read_bytes+u.kv_bytes)*share+append_by_die[die]
             stage_flops[die]+=unit_flops*share
     platform=load_platform_spec_file(Path(__file__).resolve().parents[3]/"configs/platform/gpu_package_h200_reference.yaml")
     gpu=platform.gpu_decode_power
@@ -243,4 +249,4 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
         gpu.static_power_W*interval*1e-3,statistics.fmean(exec_spans),statistics.median(exec_spans),
         max(exec_spans),realized_bw,tuple(asdict(x) for x in handoffs),
         tuple(asdict(x) for x in small_ops),gpu_remaining_bytes,gpu_remaining_ms,
-        gpu_remaining_j,embedding_bytes,embedding_ms)
+        gpu_remaining_j,embedding_bytes,embedding_ms,append_owners)

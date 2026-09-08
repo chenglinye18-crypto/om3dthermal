@@ -1,4 +1,8 @@
-"""Run 60 admission-aware resident-wave output-length sensitivity rows."""
+"""Historical fixed-context Decode-only admission sensitivity runner.
+
+This runner intentionally makes no cross-system comparison.  Growing-KV or
+mixed-window results require separately matched evaluation semantics.
+"""
 
 from __future__ import annotations
 
@@ -84,19 +88,10 @@ def main() -> None:
                 if result.optimistic_resident_wave_tokens_per_s != (
                         old["aggregate_decode_tokens_per_s"]):
                     raise RuntimeError("optimistic resident-wave regression changed")
-                memory_rate = systems[
-                    "ORTHOGONAL_M3D_IGZO_MEMORY_ONLY"]["decode_tokens_per_s"]
-                nmp_rate = systems["IOM3D_FEOL_NMP"]["decode_tokens_per_s"]
                 row = result.model_dump(mode="json")
                 row.update({
-                    "m3d_memory_only_tokens_per_s": memory_rate,
-                    "nmp_tokens_per_s": nmp_rate,
-                    "m3d_speedup_vs_admission_aware_resident_wave": (
-                        None if memory_rate is None else
-                        memory_rate / result.admission_aware_tokens_per_s),
-                    "nmp_speedup_vs_admission_aware_resident_wave": (
-                        None if nmp_rate is None else
-                        nmp_rate / result.admission_aware_tokens_per_s),
+                    "comparison_scope_status": (
+                        "NO_CROSS_SYSTEM_RATIO__FIXED_CONTEXT_DECODE_ONLY"),
                 })
                 rows.append(row)
                 grouped[key].append(row)
@@ -107,13 +102,10 @@ def main() -> None:
         if [row["generated_output_tokens_per_request"]
                 for row in sensitivity] != list(OUTPUT_LENGTHS):
             raise RuntimeError(f"output-length grid closure failed: {key}")
-        rates = [row["admission_aware_tokens_per_s"] for row in sensitivity]
-        if any(after < before for before, after in zip(rates, rates[1:])):
-            raise RuntimeError(f"admission-aware throughput is not monotonic: {key}")
-        gaps = [row["optimistic_resident_wave_tokens_per_s"]
-                - row["admission_aware_tokens_per_s"] for row in sensitivity]
-        if gaps[-1] > gaps[0]:
-            raise RuntimeError(f"large G did not approach optimistic bound: {key}")
+        if any(row["admission_aware_tokens_per_s"] >
+               row["optimistic_resident_wave_tokens_per_s"]
+               for row in sensitivity):
+            raise RuntimeError(f"fixed-context result exceeds optimistic bound: {key}")
 
     low_impact_G = {}
     for key, sensitivity in grouped.items():
@@ -134,6 +126,10 @@ def main() -> None:
         "admission_policy": "SERIAL_HOST_TO_HBM_ADMISSION_BETWEEN_WAVES",
         "first_wave_admission": "ZERO_ALREADY_RESIDENT",
         "scheduler_software_overhead_included": False,
+        "evaluation_scope": "DECODE_SERVICE_ONLY",
+        "context_evolution": "FIXED_CONTEXT_SNAPSHOT",
+        "cross_system_comparison_status": (
+            "NOT_COMPUTED__REQUIRES_MATCHED_GROWING_KV_OR_MIXED_WINDOW_SCOPE"),
         "first_LOW_IMPACT_G_by_workload": low_impact_G,
         "impact_classification_counts": dict(Counter(
             row["admission_impact_classification"] for row in rows)),
@@ -153,8 +149,8 @@ def main() -> None:
         "- First wave: `ZERO_ALREADY_RESIDENT`",
         "- Scheduler software overhead: `NOT_INCLUDED`", "",
         "## B=28 sensitivity", "",
-        "| model | P:D | G | limit | waves | optimistic tok/s | aware tok/s | retention | admission GB | admission s | M3D tok/s | NMP tok/s | M3D/aware | NMP/aware | impact |",
-        "|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| model | P:D | G | limit | waves | optimistic tok/s | aware tok/s | retention | admission GB | admission s | impact |",
+        "|---|---|---:|---:|---|---:|---:|---:|---:|---:|---|",
     ]
     for row in rows:
         if row["batch_size"] != 28:
@@ -168,16 +164,12 @@ def main() -> None:
             row["admission_aware_tokens_per_s"],
             row["throughput_retention_vs_optimistic"],
             row["total_admission_GB"], row["total_admission_time_ms"] / 1e3,
-            row["m3d_memory_only_tokens_per_s"], row["nmp_tokens_per_s"],
-            row["m3d_speedup_vs_admission_aware_resident_wave"],
-            row["nmp_speedup_vs_admission_aware_resident_wave"],
             row["admission_impact_classification"],
         )
         lines.append("| " + " | ".join(_fmt(value) for value in values) + " |")
     lines += [
         "", "## Interpretation", "",
-        "Admission matters most for workloads with many waves and large KV/request. Increasing G monotonically amortizes the one-time admission cost and approaches the optimistic resident-wave bound. Single-wave workloads have zero admission and exact optimistic throughput at every G.", "",
-        "Insufficient local capacity still forces Conventional HBM to choose between maintaining concurrency through host offload or accepting reduced concurrency plus host-to-HBM admission between resident waves. M3D removes that capacity trade-off when the full active set fits; NMP additionally removes bulk local-memory-to-GPU movement.",
+        "These rows are historical fixed-context Decode-only snapshots. They do not model S+j KV growth and must not be divided into mixed-window or growing-KV M3D/NMP rates. Single-wave workloads have zero admission by their declared initial state.",
     ]
     (RUN_DIR / "final_dense_e2e_resident_wave_admission_sensitivity.md").write_text(
         "\n".join(lines) + "\n", encoding="utf-8")
