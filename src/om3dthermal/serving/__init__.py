@@ -51,6 +51,15 @@ from .mixed_phase_e2e import (
     load_final_dense_e2e_matrix,
     resolve_conventional_hbm_backend,
 )
+from .resident_wave import (
+    OUTPUT_LENGTH_STATUS,
+    RESIDENT_WAVE_MODEL,
+    RESIDENT_WAVE_MODEL_STATUS,
+    RESIDENT_WAVE_SCHEDULER_POLICY,
+    SWAP_ADMISSION_STATUS,
+    ResidentWaveDecodeResult,
+    evaluate_conventional_hbm_resident_wave_decode,
+)
 
 __all__ = [
     "AnalyticalRooflineGPUModel",
@@ -92,4 +101,11 @@ __all__ = [
     "evaluate_mixed_phase_e2e",
     "load_final_dense_e2e_matrix",
     "resolve_conventional_hbm_backend",
+    "OUTPUT_LENGTH_STATUS",
+    "RESIDENT_WAVE_MODEL",
+    "RESIDENT_WAVE_MODEL_STATUS",
+    "RESIDENT_WAVE_SCHEDULER_POLICY",
+    "SWAP_ADMISSION_STATUS",
+    "ResidentWaveDecodeResult",
+    "evaluate_conventional_hbm_resident_wave_decode",
 ]
