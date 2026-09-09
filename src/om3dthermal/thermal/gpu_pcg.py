@@ -15,7 +15,7 @@ import numpy as np
 
 from .boundary import BoundaryLinkTable
 from .gpu_common import require_cupy
-from .gpu_relaxation import MAX_NEIGHBORS_PER_CELL
+from .gpu_common import MAX_NEIGHBORS_PER_CELL
 from .operator import MatrixFreeThermalOperator
 from .steady_state import SteadyStateResult, _global_power_balance
 

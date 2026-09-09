@@ -7,19 +7,14 @@ central entity box plus up to four lateral fill boxes in the column
 footprint's remaining cavity; the fill material is the
 ``memory_zone.background_material`` (default ``Mold``).
 """
-from pathlib import Path
-from textwrap import dedent
 
 import pytest
-import yaml
 from pydantic import ValidationError
 
 from om3dthermal.config import (
     LateralInset,
-    Layer,
     SimulationConfig,
     StackTemplate,
-    load_config,
 )
 from om3dthermal.geometry.horizontal_columns import (
     HorizontalColumnsBuilder,
@@ -27,14 +22,8 @@ from om3dthermal.geometry.horizontal_columns import (
 )
 from om3dthermal.geometry.primitives import AxisAlignedBox, Footprint
 
-CONFIG = Path(__file__).parents[1] / "configs" / "legacy" / "exp_conv_2x2_g414_m160.yaml"
 
-HBM_COLUMNS = ("hbm_left_top", "hbm_left_bottom", "hbm_right_top", "hbm_right_bottom")
-
-
-# ---------------------------------------------------------------------------
 # A. Backward compatibility: no lateral_inset behaves exactly as before.
-# ---------------------------------------------------------------------------
 
 def test_layer_without_lateral_inset_keeps_full_footprint():
     cfg = _single_column_config(
@@ -67,9 +56,7 @@ def test_zero_inset_is_treated_as_no_inset():
     assert inset.is_zero()
 
 
-# ---------------------------------------------------------------------------
 # B. Symmetric inset: central entity + 4 fill strips, area conservation.
-# ---------------------------------------------------------------------------
 
 def test_symmetric_inset_produces_central_and_four_fills():
     cfg = _single_column_config(
@@ -118,9 +105,7 @@ def test_symmetric_inset_produces_central_and_four_fills():
     assert total == pytest.approx(80e-6, rel=1e-6)
 
 
-# ---------------------------------------------------------------------------
 # C. Asymmetric inset: per-edge coordinates are honoured exactly.
-# ---------------------------------------------------------------------------
 
 def test_asymmetric_inset_per_edge_coordinates():
     cfg = _single_column_config(
@@ -162,10 +147,8 @@ def test_partial_shorthand_uses_only_x_value():
     assert {b.tags["inset_side"] for b in fills} == {"left", "right"}
 
 
-# ---------------------------------------------------------------------------
 # D. Invalid inset: rejected by schema (negative / unknown / bad unit) and
 #    by the builder (inset that erases the central entity).
-# ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("bad", [
     {"x_minus": "-0.1 mm"},
@@ -181,9 +164,7 @@ def test_invalid_lateral_inset_unit_is_rejected_by_schema():
         LateralInset.model_validate({"x_minus": "3 seconds"})
 
 
-# ---------------------------------------------------------------------------
 # Hardening: the validator must not mutate the caller's mapping.
-# ---------------------------------------------------------------------------
 
 def test_lateral_inset_validator_does_not_mutate_input_mapping():
     original = {"x": "0.5 mm", "y_minus": "0.2 mm"}
@@ -233,9 +214,7 @@ def test_builder_rejects_inset_with_y_sum_exceeding_parent():
         builder.build()
 
 
-# ---------------------------------------------------------------------------
 # E. Repeat-block expansion preserves the inset and keeps names unique.
-# ---------------------------------------------------------------------------
 
 def test_repeat_block_preserves_lateral_inset():
     template = StackTemplate.model_validate({
@@ -275,9 +254,7 @@ def test_repeat_block_unique_names_with_inset():
     assert len(names) == len(set(names))
 
 
-# ---------------------------------------------------------------------------
 # F. validate_layer_partition: independent unit-level invariant check.
-# ---------------------------------------------------------------------------
 
 def _make_footprint(name="fp", x0=0.0, x1=10e-3, y0=0.0, y1=10e-3) -> Footprint:
     return Footprint.model_validate({
@@ -362,122 +339,15 @@ def test_validate_layer_partition_rejects_fill_outside_parent():
         validate_layer_partition(parent, central, [bad_fill])
 
 
-# ---------------------------------------------------------------------------
 # G. The shipped benchmark: DRAM layers get 0.5 mm per-side inset and the
 #    four HBM columns and the central thermal-silicon column behave as
 #    documented.
-# ---------------------------------------------------------------------------
-
-def test_benchmark_hbm_base_layers_keep_full_11x11_footprint():
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    for name in HBM_COLUMNS:
-        for layer_name in ("gpu_hbm_ubump", "hbm_base_beol", "hbm_base_si"):
-            box = next(b for b in scene.filter(component=f"memory_column:{name}")
-                       if b.name.endswith(layer_name))
-            # 11x11 mm centred on the column footprint.
-            assert (box.x1 - box.x0) == pytest.approx(11e-3)
-            assert (box.y1 - box.y0) == pytest.approx(11e-3)
-            assert box.tags.get("lateral_inset_applied") is not True
-            assert box.tags.get("role") != "lateral_fill"
 
 
-def test_benchmark_dram_layers_have_10_8x10_8_central_entity_and_4_fills():
-    """The locked benchmark uses a 10.8 x 10.8 mm DRAM die
-    (with 11 x 11 mm HBM base, 0.1 mm per-side mold ring); see
-    the canonical conventional config and IEDM25 provenance document."""
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    for name in HBM_COLUMNS:
-        central = [b for b in scene.filter(component=f"memory_column:{name}")
-                   if b.tags.get("lateral_inset_applied") is True
-                   and b.tags.get("role") in {"dram_si", "dram_beol", "hybrid_bonding"}]
-        # 11 regular dies * 3 layers + 3 top layers = 36 inset layers.
-        assert len(central) == 36
-        for box in central:
-            assert (box.x1 - box.x0) == pytest.approx(10.8e-3)
-            assert (box.y1 - box.y0) == pytest.approx(10.8e-3)
-        fills = [b for b in scene.filter(component=f"memory_column:{name}")
-                 if b.tags.get("role") == "lateral_fill"]
-        # 36 central layers * 4 fill sides per layer.
-        assert len(fills) == 36 * 4
-        assert all(b.material == "Mold" for b in fills)
-
-
-def test_benchmark_hbm_column_total_height_still_775_um():
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    for name in HBM_COLUMNS:
-        boxes = scene.filter(component=f"memory_column:{name}")
-        assert max(b.z1 for b in boxes) - min(b.z0 for b in boxes) == pytest.approx(775e-6)
-
-
-def test_benchmark_thermal_silicon_column_has_no_lateral_inset_fills():
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    fills = [b for b in scene.filter(component="memory_column:thermal_silicon")
-             if b.tags.get("role") == "lateral_fill"]
-    assert fills == []
-
-
-def test_benchmark_hbm_partition_no_3d_overlap():
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    tolerance = 1e-12
-    for name in HBM_COLUMNS:
-        boxes = list(scene.filter(component=f"memory_column:{name}"))
-        for i, a in enumerate(boxes):
-            for b in boxes[i + 1:]:
-                overlap = (
-                    a.x1 - b.x0 > tolerance and a.x0 - b.x1 < -tolerance
-                    and a.y1 - b.y0 > tolerance and a.y0 - b.y1 < -tolerance
-                    and a.z1 - b.z0 > tolerance and a.z0 - b.z1 < -tolerance
-                )
-                assert not overlap, f"{a.name} and {b.name} overlap in column {name}"
-
-
-def test_benchmark_each_hbm_column_box_count():
-    """3 single-box layers + 36 inset layers * 5 boxes = 183 per column."""
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    for name in HBM_COLUMNS:
-        boxes = scene.filter(component=f"memory_column:{name}")
-        assert len(boxes) == 3 + 36 * 5  # 183
-
-
-def test_benchmark_each_hbm_column_inset_layer_names():
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    for name in HBM_COLUMNS:
-        boxes = scene.filter(component=f"memory_column:{name}")
-        inset_names = {b.name.split(".")[-1] for b in boxes
-                       if b.tags.get("lateral_inset_applied") is True}
-        for n in range(1, 12):
-            for kind in ("hybrid_bonding", "dram_beol", "dram_si"):
-                assert f"{kind}_{n:02d}" in inset_names
-        for kind in ("top_hybrid_bonding", "top_dram_beol", "top_dram_si"):
-            assert kind in inset_names
-
-
-def test_benchmark_lateral_fills_share_z_with_their_central_box():
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    for name in HBM_COLUMNS:
-        boxes = scene.filter(component=f"memory_column:{name}")
-        for fill in (b for b in boxes if b.tags.get("role") == "lateral_fill"):
-            parent_layer = fill.tags["parent_layer"]
-            central_name = f"memory_column:{name}.{parent_layer}"
-            central = next(b for b in boxes if b.name == central_name)
-            assert fill.z0 == pytest.approx(central.z0)
-            assert fill.z1 == pytest.approx(central.z1)
-
-
-def test_benchmark_total_scene_height_unchanged():
-    scene = HorizontalColumnsBuilder(load_config(CONFIG)).build()
-    z0_min = min(b.z0 for b in scene.boxes)
-    z1_max = max(b.z1 for b in scene.boxes)
-    # 300 (Laminate) + 73.265 (GPU) + 775 (memory) + 3200 (top) = 4348.265 um.
-    assert z1_max - z0_min == pytest.approx(4348.265e-6)
-
-
-# ---------------------------------------------------------------------------
 # Hardening: tolerance helpers + z-level clustering do not depend on
 # ``round()`` or any fixed quantisation grid. Tests use non-integer
 # nanometre boundaries to make sure the partition and continuity logic
 # survives arbitrary z values.
-# ---------------------------------------------------------------------------
 
 def test_length_close_respects_absolute_and_relative_tol():
     from om3dthermal.geometry.horizontal_columns import _length_close
@@ -639,9 +509,7 @@ def test_validate_layer_partition_groups_boxes_at_same_z_with_float_drift():
     validate_layer_partition(parent, central, fills)  # no exception
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _single_column_config(items, *, footprint_size=(10e-3, 10e-3)):
     """Build a minimal SimulationConfig that has a single column running

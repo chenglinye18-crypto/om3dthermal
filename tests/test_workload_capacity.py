@@ -48,7 +48,7 @@ def _decode_input(**overrides: int) -> LLMDecodeInput:
         "context_length": 1,
         "weight_bits": 8,
         "kv_bits": 8,
-        "runtime_bytes": 0,
+        "runtime_fixed_bytes": 0,
     }
     values.update(overrides)
     return LLMDecodeInput(**values)
@@ -183,7 +183,7 @@ def test_positive_required_and_zero_usable_has_undefined_utilization() -> None:
 
 
 def test_runtime_is_already_in_required_and_is_not_added_again() -> None:
-    workload = evaluate_llm_decode(_decode_input(runtime_bytes=7))
+    workload = evaluate_llm_decode(_decode_input(runtime_fixed_bytes=7))
     expected = (
         workload.weight_footprint_bytes
         + workload.kv_footprint_bytes

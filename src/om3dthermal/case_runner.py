@@ -1,17 +1,4 @@
-"""Shared end-to-end steady-state pipeline runner.
-
-The CLI's ``solve-steady`` command and the mesh-convergence sweep
-both need to run the same sequence
-
-    config
-      -> geometry
-      -> mesh
-      -> conductance / boundary links / power
-      -> matrix-free operator
-      -> thermal-resistance-network relaxation (CPU or GPU)
-
-without ever materialising a dense matrix. This module isolates that
-pipeline as a single function so the two call sites cannot drift.
+"""Geometry, power mapping, cached operator, and FP64 GPU-PCG pipeline.
 """
 from __future__ import annotations
 
@@ -37,8 +24,6 @@ from .thermal import (
     build_conductance_table,
     build_matrix_free_operator,
     map_power_sources,
-    solve_thermal_resistance_relaxation,
-    solve_thermal_resistance_relaxation_gpu,
     solve_pcg_gpu,
     validate_anchored_components,
 )
@@ -166,13 +151,12 @@ def run_steady_pipeline(
     config: SimulationConfig,
     *,
     max_cell_size_m: tuple[float, float, float] | None = None,
-    alpha: float = 0.7,
     rtol: float = 1e-8,
     max_delta_t_K: float = 1e-6,
     max_iterations: int = 100_000,
     check_interval: int = 10,
     initial_temperature_K: float = 293.15,
-    backend: str = "cpu",
+    backend: str = "gpu_pcg",
     setup_cache_path: str | Path | None = None,
     reusable_setup: ThermalSetupArtifacts | None = None,
 ) -> PipelineResult:
@@ -186,23 +170,10 @@ def run_steady_pipeline(
     mappings, graph, boundary links, matrix-free operator and Jacobi diagonal.
     Its physical signature excludes workload power and the RHS.
 
-    ``backend`` selects between two implementations of the
-    *same* thermal-resistance-network relaxation equation:
-
-    * ``"cpu"`` (default) calls
-      :func:`solve_thermal_resistance_relaxation` (NumPy on host).
-    * ``"gpu"`` calls
-      :func:`solve_thermal_resistance_relaxation_gpu` (CuPy / NVRTC).
-
-    Convergence is measured on two physical quantities:
-    ``relative_heat_flow_residual`` and ``max_abs_delta_T``.  Both
-    must drop below the configured tolerance at the same
-    ``check_interval`` boundary.
+    The production backend is GPU-PCG with Jacobi preconditioning.
     """
-    if backend not in {"cpu", "gpu", "gpu_pcg"}:
-        raise ValueError(
-            f"unknown backend {backend!r}; expected 'cpu', 'gpu', or "
-            "'gpu_pcg'")
+    if backend != "gpu_pcg":
+        raise ValueError(f"unknown backend {backend!r}; expected 'gpu_pcg'")
     if config.thermal_conductance is None:
         raise ValueError(
             "config has no 'thermal_conductance' block; add one before "
@@ -299,32 +270,13 @@ def run_steady_pipeline(
     # Solve.
     initial_T = np.full(operator.cell_count, initial_temperature_K,
                         dtype=np.float64)
-    if backend == "cpu":
-        result = solve_thermal_resistance_relaxation(
-            operator, initial_T, boundary_table,
-            alpha=alpha,
-            relative_residual_tolerance=rtol,
-            max_temperature_update_tolerance=max_delta_t_K,
-            max_iterations=max_iterations,
-            check_interval=check_interval,
-        )
-    elif backend == "gpu":
-        result = solve_thermal_resistance_relaxation_gpu(
-            operator, initial_T, boundary_table,
-            alpha=alpha,
-            relative_residual_tolerance=rtol,
-            max_temperature_update_tolerance=max_delta_t_K,
-            max_iterations=max_iterations,
-            check_interval=check_interval,
-        )
-    else:
-        result = solve_pcg_gpu(
-            operator, initial_T, boundary_table,
-            relative_residual_tolerance=rtol,
-            max_temperature_update_tolerance=max_delta_t_K,
-            max_iterations=max_iterations,
-            check_interval=check_interval,
-        )
+    result = solve_pcg_gpu(
+        operator, initial_T, boundary_table,
+        relative_residual_tolerance=rtol,
+        max_temperature_update_tolerance=max_delta_t_K,
+        max_iterations=max_iterations,
+        check_interval=check_interval,
+    )
 
     # Power-by-source breakdown.
     gpu_power = 0.0

@@ -18,7 +18,7 @@ from .config import (
     load_workload_spec,
     resolve_scenario_matched_bandwidth_bits_per_second,
 )
-from .result_bundle import RESULT_FILES, write_result_bundle
+from om3dthermal.result import RESULT_FILES, write_result_bundle
 from .runner import ExperimentRunResult, run_experiment
 from .m3d_sensitivity import (
     M3DParameterSensitivityResult,

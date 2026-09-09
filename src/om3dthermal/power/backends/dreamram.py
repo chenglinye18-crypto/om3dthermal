@@ -17,7 +17,6 @@ from ..config import MemoryPowerConfig, resolve_project_path
 from ..geometry import (
     ResolvedGeometry,
     evaluate_geometry_fit,
-    resolve_legacy_geometry,
 )
 from ..miv import (
     build_miv_topology,
@@ -123,10 +122,7 @@ class DreamRAMBackend:
             geometry: ResolvedGeometry | None = None,
             ) -> BackendEnergyResult:
         if geometry is None:
-            source = config.architecture.geometry_source
-            if source is None:
-                raise ValueError("DreamRAM backend requires resolved geometry")
-            geometry = resolve_legacy_geometry(self.project_root, source)
+            raise ValueError("DreamRAM backend requires resolved geometry")
         dreamram_input = config.memory.dreamram
         if dreamram_input is None:
             raise ValueError("DreamRAM backend requires memory.dreamram")

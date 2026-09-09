@@ -64,7 +64,7 @@ def _frozen_workload():
         context_length=131_072,
         weight_bits=16,
         kv_bits=16,
-        runtime_bytes=0,
+        runtime_fixed_bytes=0,
     ))
 
 
@@ -95,34 +95,6 @@ def test_exact_bit_closure_and_unit_conversion(
             capacity.system_capacity_bytes / 2**30)
         assert capacity.capacity_per_instance_GiB == (
             capacity.capacity_per_instance_bytes / 2**30)
-
-
-def test_architecture_comparison_compatibility_uses_public_resolver(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    case = load_case_config(CASES / "conventional_hbm_2x1.yaml")
-    geometry = resolve_case_geometry(case)
-    system = resolve_system_power(
-        case, project_root=ROOT, geometry=geometry,
-        **architecture_comparison._resolve_case_power_operating_point_kwargs(
-            case, ROOT))
-    called = False
-    public_resolver = resolve_architecture_capacity
-
-    def recording_resolver(*args):
-        nonlocal called
-        called = True
-        return public_resolver(*args)
-
-    monkeypatch.setattr(
-        architecture_comparison,
-        "resolve_architecture_capacity",
-        recording_resolver,
-    )
-    compatibility = architecture_comparison._resolved_capacity(
-        case, geometry, system)
-    assert called is True
-    assert compatibility["system_capacity_GiB"] == 135.0  # rev v2 re-frozen
 
 
 def test_same_workload_and_first_table_are_feasible(

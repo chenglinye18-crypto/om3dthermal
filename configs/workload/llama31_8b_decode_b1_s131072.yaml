@@ -13,7 +13,7 @@ decode:
   context_length: 131072
   weight_bits: 16
   kv_bits: 16
-  runtime_bytes: 0
+  runtime_fixed_bytes: 0
   weight_activity_model: dimension_derived_active_operators
   weight_reuse_model: tile_reuse
   kv_read_model: full_reread

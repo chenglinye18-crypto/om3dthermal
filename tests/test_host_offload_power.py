@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import inspect
 from pathlib import Path
 
@@ -100,19 +99,3 @@ def test_schema_preserves_components_and_has_no_host_static_or_compute_branch() 
                    for name in names)
     assert "host_static_power_W" not in names
     assert spec.host_static_power_status == "UNRESOLVED"
-
-
-def test_host_offload_csv_preserves_components_and_provenance() -> None:
-    path = ROOT / "docs" / "research" / "host_offload_power_table_2026-09-07.csv"
-    with path.open(encoding="utf-8", newline="") as stream:
-        rows = {row["parameter"]: row for row in csv.DictReader(stream)}
-    assert float(rows["e_pcie_dynamic"]["value"]) == 167.9
-    assert float(rows["e_pcie_dynamic_uncertainty"]["value"]) == 10.5
-    assert float(rows["e_ddr_dynamic"]["value"]) == pytest.approx(E_DDR * 1e12)
-    assert float(rows["e_host_offload_dynamic"]["value"]) == pytest.approx(
-        (E_PCIE + E_DDR) * 1e12)
-    assert rows["e_pcie_dynamic"]["provenance_status"] == "PAPER_REPORTED"
-    assert rows["e_ddr_dynamic"]["provenance_status"] == (
-        "SOFTWARE_DERIVED_FROM_PAPER_REPRESENTATIVE_RUN")
-    assert rows["host_static_power"]["value"] == "UNRESOLVED"
-    assert all(row["provenance_status"] and row["source"] for row in rows.values())

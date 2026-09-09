@@ -21,7 +21,7 @@ Accounting policy (frozen for B1-R2):
   footprint or per-token traffic accounting in this module.
 - FLOP counts remain integers; they are not subject to the same
   fractional-byte rule.
-- ``runtime_bytes`` is supplied as an integer (bytes), and is added
+- ``runtime_fixed_bytes`` is supplied as an integer (bytes), and is added
   to other byte-equivalent totals consistently in the metrics
   output (no int/float semantic confusion in the sum).
 """
@@ -106,23 +106,15 @@ class LLMDecodeInput(BaseModel):
     kv_bits: int = Field(gt=0, description="Bits per KV-cache element")
 
     # Overhead
-    runtime_bytes: int = Field(
-        ge=0, default=0, description="Activation workspace / scheduler metadata bytes"
-    )
-    runtime_fixed_bytes: int | None = Field(
-        ge=0,
-        default=None,
-        description=(
-            "Optional explicit fixed runtime/workspace capacity. When omitted, "
-            "legacy runtime_bytes is preserved and treated as fixed capacity."
-        ),
+    runtime_fixed_bytes: int = Field(
+        ge=0, default=0, description="Fixed runtime/workspace capacity in bytes"
     )
     runtime_per_request_bytes: int = Field(
         ge=0,
         default=0,
         description=(
             "MODELING_CHOICE: additional runtime/workspace capacity per active "
-            "request; zero preserves the legacy workload semantics."
+            "request; zero excludes this optional overhead."
         ),
     )
 
@@ -191,15 +183,6 @@ class LLMDecodeInput(BaseModel):
             )
         return self
 
-    @model_validator(mode="after")
-    def _runtime_capacity_semantics(self) -> "LLMDecodeInput":
-        if self.runtime_fixed_bytes is not None and self.runtime_bytes != 0:
-            raise ValueError(
-                "explicit runtime_fixed_bytes requires legacy runtime_bytes=0 "
-                "to avoid double counting"
-            )
-        return self
-
     @computed_field(return_type=int)
     @property
     def d_head(self) -> int:
@@ -208,20 +191,12 @@ class LLMDecodeInput(BaseModel):
 
     @property
     def resolved_runtime_fixed_bytes(self) -> int:
-        """Resolve legacy runtime as fixed without changing its old meaning."""
-        return (
-            self.runtime_bytes
-            if self.runtime_fixed_bytes is None
-            else self.runtime_fixed_bytes
-        )
+        """Fixed workspace capacity, independent of the active request count."""
+        return self.runtime_fixed_bytes
 
     @property
     def runtime_capacity_semantics_status(self) -> str:
-        return (
-            "LEGACY_RUNTIME_BYTES_AS_FIXED_MODELING_CHOICE"
-            if self.runtime_fixed_bytes is None
-            else "EXPLICIT_FIXED_PLUS_PER_REQUEST_MODELING_CHOICE"
-        )
+        return "EXPLICIT_FIXED_PLUS_PER_REQUEST_MODELING_CHOICE"
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +224,7 @@ class LLMDecodeMetrics(BaseModel):
     runtime_fixed_bytes: float = 0.0
     runtime_per_request_bytes: float = 0.0
     runtime_capacity_semantics_status: str = (
-        "LEGACY_RUNTIME_BYTES_AS_FIXED_MODELING_CHOICE"
+        "EXPLICIT_FIXED_PLUS_PER_REQUEST_MODELING_CHOICE"
     )
     required_capacity_bytes: float
 

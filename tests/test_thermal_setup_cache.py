@@ -55,7 +55,7 @@ def test_pipeline_reloads_fixed_setup_and_rebuilds_only_rhs(tmp_path: Path) -> N
     config = load_config(ROOT / "tests" / "fixtures" / "toy_1box.yaml")
     cache = tmp_path / "thermal.pkl"
     first = run_steady_pipeline(
-        config, backend="cpu", setup_cache_path=cache,
+        config, backend="gpu_pcg", setup_cache_path=cache,
         rtol=1.0, max_delta_t_K=1.0, max_iterations=10,
     )
     assert first.cache_status == "BUILT"
@@ -70,7 +70,7 @@ def test_pipeline_reloads_fixed_setup_and_rebuilds_only_rhs(tmp_path: Path) -> N
         "thermal_power_sources": sources.model_copy(update={
             "sources": [changed_source]})})
     second = run_steady_pipeline(
-        changed, backend="cpu", setup_cache_path=cache,
+        changed, backend="gpu_pcg", setup_cache_path=cache,
         rtol=1.0, max_delta_t_K=1.0, max_iterations=10,
     )
     assert second.cache_status == "HIT"
@@ -88,14 +88,14 @@ def test_pipeline_reloads_fixed_setup_and_rebuilds_only_rhs(tmp_path: Path) -> N
         "discretization": discretization.model_copy(update={
             "max_cell_size": CellSizeConfig(x=0.004, y=0.005, z=0.005)})})
     rebuilt = run_steady_pipeline(
-        mesh_changed, backend="cpu", setup_cache_path=cache,
+        mesh_changed, backend="gpu_pcg", setup_cache_path=cache,
         rtol=1.0, max_delta_t_K=1.0, max_iterations=10,
     )
     assert rebuilt.cache_status == "REBUILT"
     assert rebuilt.setup_build_seconds > 0.0
 
     reused = run_steady_pipeline(
-        mesh_changed, backend="cpu", reusable_setup=rebuilt.reusable_setup,
+        mesh_changed, backend="gpu_pcg", reusable_setup=rebuilt.reusable_setup,
         rtol=1.0, max_delta_t_K=1.0, max_iterations=10,
     )
     assert reused.cache_status == "MEMORY_REUSE"

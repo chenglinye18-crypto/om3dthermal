@@ -94,7 +94,7 @@ def run(output_dir: Path) -> dict:
         direct_die_to_die_bytes = 0
         thermal_config, regions = compile_nmp_die_thermal_config(case, system, power_map)
         pipeline = run_steady_pipeline(
-            thermal_config, backend="gpu_pcg", alpha=0.7,
+            thermal_config, backend="gpu_pcg",
             rtol=float(case.thermal["solver"]["rtol"]), max_iterations=100_000,
             initial_temperature_K=293.15)
         if not pipeline.result.converged:

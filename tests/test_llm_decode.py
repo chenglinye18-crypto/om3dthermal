@@ -31,7 +31,7 @@ def _make_input(**overrides) -> LLMDecodeInput:
         "context_length": 131_072,
         "weight_bits": 16,
         "kv_bits": 16,
-        "runtime_bytes": 0,
+        "runtime_fixed_bytes": 0,
     }
     defaults.update(overrides)
     return LLMDecodeInput(**defaults)
@@ -220,7 +220,7 @@ def test_llama_31_8b_hand_check() -> None:
         context_length=131_072,
         weight_bits=16,
         kv_bits=16,
-        runtime_bytes=0,
+        runtime_fixed_bytes=0,
     )
 
     m = evaluate_llm_decode(inp)
@@ -278,15 +278,15 @@ def test_explicit_d_head_input_is_rejected() -> None:
 
 
 def test_runtime_bytes_may_be_zero() -> None:
-    """runtime_bytes=0 must be accepted."""
-    inp = _make_input(runtime_bytes=0)
+    """runtime_fixed_bytes=0 must be accepted."""
+    inp = _make_input(runtime_fixed_bytes=0)
     m = evaluate_llm_decode(inp)
     assert m.runtime_bytes == 0
 
 
 def test_negative_runtime_bytes_rejected() -> None:
     with pytest.raises(ValueError):
-        _make_input(runtime_bytes=-1)
+        _make_input(runtime_fixed_bytes=-1)
 
 
 def test_zero_context_length_allowed() -> None:

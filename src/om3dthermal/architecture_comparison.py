@@ -2,16 +2,10 @@
 
 from __future__ import annotations
 
-import csv
-from dataclasses import asdict, dataclass
-import json
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 
-from .architecture_capacity import resolve_architecture_capacity
-from .case_runner import run_steady_pipeline
 from .config import (
     PowerSelector,
     PowerSourceConfig,
@@ -21,14 +15,13 @@ from .config import (
 )
 from .power import (
     calculate_memory_power,
-    load_case_config,
     map_system_power_to_thermal,
     resolve_case_geometry,
     resolve_effective_bandwidth,
-    resolve_system_power,
 )
-from .power.config import CanonicalCaseConfig, find_project_root
-from .power.geometry import ResolvedGeometry
+from .power.config import (
+    CanonicalCaseConfig,
+)
 from .power.system import ResolvedSystemPower
 from .platform import (
     GPUBandwidthServiceOperatingPoint,
@@ -39,43 +32,6 @@ from .platform import (
     resolve_gpu_bandwidth_service,
     resolve_local_memory_gpu_transfer,
 )
-
-
-@dataclass(frozen=True)
-class ArchitectureMetrics:
-    architecture: str
-    access_energy_pJ_per_bit: float
-    memory_power_W: float
-    package_power_W: float
-    system_capacity_GiB: float
-    memory_plane_density_Mb_mm2: float
-    architecture_footprint_density_Gb_mm2: float
-    memory_Tmax_degC: float
-    gpu_Tmax_degC: float
-    package_Tmax_degC: float
-    instance_count: int
-    capacity_per_instance_GiB: float
-    refresh_power_W: float
-    memory_plane_area_mm2: float
-    architecture_footprint_area_mm2: float
-    resolved_package_power_W: float
-    mapped_package_power_W: float
-    power_closure_absolute_error_W: float
-    power_closure_relative_error: float
-    ambient_degC: float
-    delta_Tmax_K: float
-    converged: bool
-    iterations: int
-    final_relative_residual: float
-    cell_count: int
-    internal_edge_count: int
-
-
-def _resolved_capacity(
-        case: CanonicalCaseConfig, geometry: ResolvedGeometry,
-        system: ResolvedSystemPower) -> dict[str, float | int | str]:
-    """Compatibility mapping backed by the public capacity resolver."""
-    return resolve_architecture_capacity(case, geometry, system).as_dict()
 
 
 def _resolve_case_power_operating_points(
@@ -205,8 +161,8 @@ def _common_compact(case: CanonicalCaseConfig) -> dict[str, Any]:
                 f"{thermal['boundary']['laminate_bottom_htc_W_m2K']} W/m^2/K"),
         },
         "power": {"model": "uniform", "gpu": "1 W"},
-        "solver": {"alpha": 0.7, "rtol": thermal["solver"]["rtol"]},
-        "metadata": {"case_id": case.name, "solver": {"backend": "cpu"}},
+        "solver": {"rtol": thermal["solver"]["rtol"]},
+        "metadata": {"case_id": case.name, "solver": {"backend": "gpu_pcg"}},
     }
 
 
@@ -369,114 +325,3 @@ def compile_canonical_thermal_case(
         ))
     return compiled.model_copy(update={
         "thermal_power_sources": ThermalPowerSourcesConfig(sources=sources)})
-
-
-def _temperature_maxima(pipeline) -> tuple[float, float, float]:
-    temperatures_C = pipeline.result.temperature_K - 273.15
-    gpu = np.array([
-        cell.component == "gpu" for cell in pipeline.cells], dtype=bool)
-    memory = np.array([
-        (str(cell.component).startswith("memory_column:")
-         or str(cell.component).startswith("orthogonal_hbm:"))
-        for cell in pipeline.cells], dtype=bool)
-    if not np.any(gpu) or not np.any(memory):
-        raise RuntimeError("GPU or memory thermal region is absent")
-    return (float(np.max(temperatures_C[memory])),
-            float(np.max(temperatures_C[gpu])),
-            float(np.max(temperatures_C)))
-
-
-def run_architecture_comparison(
-        case_paths: list[Path], output_dir: Path) -> list[ArchitectureMetrics]:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    rows: list[ArchitectureMetrics] = []
-    for path in case_paths:
-        case = load_case_config(path)
-        geometry = resolve_case_geometry(case)
-        root = find_project_root(path)
-        gpu_point, transfer_point, service_point = _resolve_case_power_operating_points(
-            case, root)
-        system = resolve_system_power(
-            case, project_root=root, geometry=geometry,
-            gpu_operating_point=gpu_point,
-            transfer_operating_point=transfer_point,
-            bandwidth_service_operating_point=service_point)
-        capacity = _resolved_capacity(case, geometry, system)
-        mapping = map_system_power_to_thermal(case, system)
-        assert system.resolved_total_memory_power_W is not None
-        resolved_package = system.gpu_power_W + system.resolved_total_memory_power_W
-        error = abs(mapping.total_mapped_power_W - resolved_package)
-        relative = error / resolved_package
-        if error > 1e-10 or mapping.unresolved:
-            raise RuntimeError(
-                f"thermal power closure failed for {case.name}: {error} W")
-        thermal_config = compile_canonical_thermal_case(case, system)
-        pipeline = run_steady_pipeline(
-            thermal_config, alpha=0.7,
-            rtol=float(case.thermal["solver"]["rtol"]),
-            max_iterations=100_000, initial_temperature_K=293.15)
-        mapped_actual = float(np.sum(pipeline.power.power_W))
-        if abs(mapped_actual - resolved_package) > 1e-9:
-            raise RuntimeError("cell-level mapped thermal power does not close")
-        memory_t, gpu_t, package_t = _temperature_maxima(pipeline)
-        ambient = float(case.thermal["boundary"]["ambient_degC"])
-        result = pipeline.result
-        row = ArchitectureMetrics(
-            architecture=case.name,
-            access_energy_pJ_per_bit=system.memory_access_energy_pJ_per_bit,
-            memory_power_W=system.resolved_total_memory_power_W,
-            package_power_W=resolved_package,
-            system_capacity_GiB=float(capacity["system_capacity_GiB"]),
-            memory_plane_density_Mb_mm2=float(
-                capacity["memory_plane_density_Mb_mm2"]),
-            architecture_footprint_density_Gb_mm2=float(
-                capacity["architecture_footprint_density_Gb_mm2"]),
-            memory_Tmax_degC=memory_t, gpu_Tmax_degC=gpu_t,
-            package_Tmax_degC=package_t,
-            instance_count=int(capacity["instance_count"]),
-            capacity_per_instance_GiB=float(
-                capacity["capacity_per_instance_GiB"]),
-            refresh_power_W=system.refresh_power_W,
-            memory_plane_area_mm2=float(capacity["memory_plane_area_mm2"]),
-            architecture_footprint_area_mm2=float(
-                capacity["architecture_footprint_area_mm2"]),
-            resolved_package_power_W=resolved_package,
-            mapped_package_power_W=mapped_actual,
-            power_closure_absolute_error_W=abs(mapped_actual-resolved_package),
-            power_closure_relative_error=(
-                abs(mapped_actual-resolved_package)/resolved_package),
-            ambient_degC=ambient, delta_Tmax_K=package_t-ambient,
-            converged=result.converged, iterations=result.iterations,
-            final_relative_residual=result.final_relative_residual,
-            cell_count=pipeline.cell_count,
-            internal_edge_count=pipeline.internal_edge_count,
-        )
-        rows.append(row)
-        run_dir = output_dir / case.name
-        run_dir.mkdir(exist_ok=True)
-        run_summary = asdict(row)
-        run_summary["thermal_power_by_source_W"] = dict(
-            pipeline.power.power_by_source)
-        run_summary["thermal_memory_target_regions"] = {
-            source.name: source.target_region
-            for source in mapping.sources if source.name != "gpu"
-        }
-        (run_dir / "thermal_summary.json").write_text(
-            json.dumps(run_summary, indent=2), encoding="utf-8")
-
-    write_comparison_summary(rows, output_dir)
-    return rows
-
-
-def write_comparison_summary(
-        rows: list[ArchitectureMetrics], output_dir: Path) -> None:
-    """Write the compact comparison tables without thermal field arrays."""
-    if not rows:
-        raise ValueError("comparison summary requires at least one row")
-    data = [asdict(row) for row in rows]
-    (output_dir / "summary.json").write_text(
-        json.dumps(data, indent=2), encoding="utf-8")
-    with (output_dir / "summary.csv").open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(data[0]))
-        writer.writeheader()
-        writer.writerows(data)

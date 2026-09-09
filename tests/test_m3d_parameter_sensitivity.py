@@ -62,7 +62,7 @@ def test_m3d_interface_and_logic_sensitivities_are_separate_and_close():
         n_param=8_000_000_000, n_layers=32, n_heads_q=32, n_heads_kv=8,
         d_model=4096, d_ff=14336, vocab_size=128_256,
         batch_size=1, context_length=131_072, weight_bits=16, kv_bits=16,
-        runtime_bytes=0))
+        runtime_fixed_bytes=0))
     capacity = evaluate_architecture_capacity_feasibility(
         workload, resolve_architecture_capacity(case, geometry, system),
         reserved_capacity_bytes=0)

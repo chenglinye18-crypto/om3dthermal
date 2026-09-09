@@ -79,7 +79,7 @@ def test_operator_and_die_closure(payload):
     assert sum(x["kv_write_bytes"] for x in units) == 2*32*8*128*2
     assert sum(x["nmp_flops"] for x in units) == sum(x["nmp_flops"] for x in a["activities"])
     assert p["capacity_violations"] == 0
-    assert sum(p["resident_used_bytes_per_die"]) == pytest.approx(16e9+2*32*131072*8*128*2+payload["workload"]["runtime_bytes"])
+    assert sum(p["resident_used_bytes_per_die"]) == pytest.approx(16e9+2*32*131072*8*128*2+payload["workload"]["runtime_fixed_bytes"] + payload["workload"]["batch_size"] * payload["workload"]["runtime_per_request_bytes"])
     hw=a["hardware"]
     assert hw["macs_per_die"] == 512 and hw["clock_hz"] == 1e9
     assert hw["aggregate_peak_flops"] == 325.632e12

@@ -4,7 +4,6 @@ from .config import (
     CanonicalCaseConfig,
     MemoryPowerConfig,
     load_case_config,
-    load_power_config,
 )
 from .geometry import ResolvedGeometry, resolve_case_geometry
 from .cell_model import (
@@ -14,7 +13,6 @@ from .cell_model import (
 from .model import (
     UnresolvedMIVEnergyError,
     calculate_memory_power,
-    run_memory_power,
 )
 from .result import EnergyDecomposition, MemoryPowerResult
 from .physical_latency import (
@@ -30,13 +28,6 @@ from .physical_capacity import (
     calculate_physical_capacity_layout,
     iter_physical_slots,
 )
-from .dream_reference_service import (
-    DreamInternalStage,
-    DreamReferenceLatency,
-    DreamReferenceServiceAudit,
-    audit_dream_reference_service,
-    classify_bottleneck,
-)
 from .memory_bandwidth import (
     ArchitectureBandwidthClosure,
     EffectiveBandwidth,
@@ -44,31 +35,6 @@ from .memory_bandwidth import (
     derive_architecture_bandwidth,
     resolve_effective_bandwidth,
     resolve_internal_service_bandwidth,
-)
-from .mat_to_coil import (
-    AggregationLoadSensitivity,
-    LatencySummary,
-    MATToCoilAudit,
-    MATToCoilPath,
-    PortFanIn,
-    WireRCDelay,
-    calculate_hierarchical_mat_to_coil,
-    calculate_normalized_single_path_delay,
-    calculate_wire_rc_delay,
-)
-from .latency_decomposition_audit import (
-    DreamLatencyDecomposition,
-    FEOLResistanceSensitivityRow,
-    LatencyAuditGates,
-    LatencyModelRiskItem,
-    M3DLatencyDecomposition,
-    UnifiedStageMapping,
-    audit_dream_latency_decomposition,
-    build_m3d_latency_decomposition,
-    build_risk_ranking,
-    build_unified_taxonomy,
-    classify_gates,
-    run_feol_resistance_sensitivity,
 )
 from .system import (
     ResolvedSystemPower,
@@ -92,29 +58,6 @@ __all__ = [
     "ArchitectureBandwidthClosure",
     "EffectiveBandwidth",
     "InternalBandwidthPrefix",
-    "AggregationLoadSensitivity",
-    "LatencySummary",
-    "MATToCoilAudit",
-    "MATToCoilPath",
-    "PortFanIn",
-    "WireRCDelay",
-    "DreamInternalStage",
-    "DreamReferenceLatency",
-    "DreamReferenceServiceAudit",
-    "audit_dream_reference_service",
-    "classify_bottleneck",
-    "DreamLatencyDecomposition",
-    "FEOLResistanceSensitivityRow",
-    "LatencyAuditGates",
-    "LatencyModelRiskItem",
-    "M3DLatencyDecomposition",
-    "UnifiedStageMapping",
-    "audit_dream_latency_decomposition",
-    "build_m3d_latency_decomposition",
-    "build_risk_ranking",
-    "build_unified_taxonomy",
-    "classify_gates",
-    "run_feol_resistance_sensitivity",
     "MissingCellReplacementError",
     "UnresolvedMIVEnergyError",
     "apply_component_replacements",
@@ -125,13 +68,8 @@ __all__ = [
     "derive_architecture_bandwidth",
     "resolve_effective_bandwidth",
     "resolve_internal_service_bandwidth",
-    "calculate_hierarchical_mat_to_coil",
-    "calculate_normalized_single_path_delay",
-    "calculate_wire_rc_delay",
-    "load_power_config",
     "load_case_config",
     "resolve_case_geometry",
-    "run_memory_power",
     "ResolvedSystemPower",
     "ResolvedThermalPowerMapping",
     "resolve_system_power",

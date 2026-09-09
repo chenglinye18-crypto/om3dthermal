@@ -7,7 +7,6 @@ import pytest
 from om3dthermal.cli import build_scene
 from om3dthermal.architecture_comparison import (
     _resolve_case_power_operating_point_kwargs,
-    _resolved_capacity,
     compile_canonical_thermal_case,
 )
 from om3dthermal.power import (
@@ -16,6 +15,9 @@ from om3dthermal.power import (
     resolve_case_geometry,
     resolve_system_power,
 )
+
+
+from om3dthermal.architecture_capacity import resolve_architecture_capacity
 
 
 ROOT = Path(__file__).parents[1]
@@ -40,11 +42,11 @@ def test_system_scope_capacity_and_refresh_close():
     conventional = _resolved(NAMES[0])
     orth_si = _resolved(NAMES[1])
     m3d = _resolved(NAMES[2])
-    capacity = _resolved_capacity(*conventional)
+    capacity = resolve_architecture_capacity(*conventional).as_dict()
     assert capacity["system_capacity_GiB"] == 135.0
     assert capacity["capacity_per_instance_GiB"] == 33.75
-    assert _resolved_capacity(*orth_si)["system_capacity_GiB"] == 234.28125
-    assert _resolved_capacity(*m3d)["system_capacity_GiB"] == 1391.25
+    assert resolve_architecture_capacity(*orth_si).as_dict()["system_capacity_GiB"] == 234.28125
+    assert resolve_architecture_capacity(*m3d).as_dict()["system_capacity_GiB"] == 1391.25
     assert conventional[2].refresh_power_W == pytest.approx(
         0.9614665609424703)
     assert orth_si[2].refresh_power_W == pytest.approx(1.6685450943022453)
@@ -213,9 +215,9 @@ def test_canonical_m3d_thermal_merges_equal_k_bitcell_and_beol():
 
 
 def test_density_denominators_are_geometry_derived():
-    conventional = _resolved_capacity(*_resolved(NAMES[0]))
-    orth_si = _resolved_capacity(*_resolved(NAMES[1]))
-    m3d = _resolved_capacity(*_resolved(NAMES[2]))
+    conventional = resolve_architecture_capacity(*_resolved(NAMES[0])).as_dict()
+    orth_si = resolve_architecture_capacity(*_resolved(NAMES[1])).as_dict()
+    m3d = resolve_architecture_capacity(*_resolved(NAMES[2])).as_dict()
     assert conventional["memory_plane_area_mm2"] == 12.2 * 11.8
     assert conventional["architecture_footprint_area_mm2"] == 2 * 12.4 * 24
     assert orth_si["memory_plane_area_mm2"] == 22 * 5.5

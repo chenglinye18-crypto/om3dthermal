@@ -476,19 +476,10 @@ class HierarchicalMemoryServiceInput(StrictModel):
     internal: InternalBandwidthInput
 
 
-class GeometrySourceInput(StrictModel):
-    """Existing thermal-geometry source for memory footprint constraints."""
-
-    config: Path
-    memory_region: Literal[
-        "hbm_dram_die", "orthogonal_memory_slab", "orthogonal_m3d_slab"]
-
-
 class ArchitectureInput(StrictModel):
     name: str | None = None
     layers: int | None = Field(default=None, gt=0)
     dies: int | None = Field(default=None, gt=0)
-    geometry_source: GeometrySourceInput | None = None
     m3d_subarray: M3DSubarrayInput | None = None
     feol_route: FEOLRouteInput | None = None
     vertical: TransportInput
@@ -758,9 +749,6 @@ class CanonicalCaseConfig(MemoryPowerConfig):
 
     @model_validator(mode="after")
     def canonical_sources(self) -> "CanonicalCaseConfig":
-        if self.architecture.geometry_source is not None:
-            raise ValueError(
-                "canonical case must use its inline geometry, not geometry_source")
         is_m3d = self.architecture.m3d_subarray is not None
         if is_m3d != (self.geometry.type == "orthogonal_m3d"):
             raise ValueError("architecture and canonical geometry type disagree")
@@ -773,15 +761,6 @@ class CanonicalCaseConfig(MemoryPowerConfig):
                 and self.memory.backend != "unresolved"):
             raise ValueError("unresolved power requires unresolved memory backend")
         return self
-
-
-def load_power_config(path: str | Path) -> MemoryPowerConfig:
-    config_path = Path(path).resolve()
-    with config_path.open("r", encoding="utf-8") as stream:
-        raw = yaml.safe_load(stream)
-    if not isinstance(raw, dict):
-        raise ValueError("memory-power YAML root must be a mapping")
-    return MemoryPowerConfig.model_validate(raw)
 
 
 def load_case_config(path: str | Path) -> CanonicalCaseConfig:

@@ -21,7 +21,7 @@ def _input(**overrides) -> LLMDecodeInput:
         "context_length": 4,
         "weight_bits": 8,
         "kv_bits": 8,
-        "runtime_bytes": 0,
+        "runtime_fixed_bytes": 0,
     }
     values.update(overrides)
     return LLMDecodeInput(**values)
@@ -41,28 +41,14 @@ def test_kv_per_request_closes_exactly_over_batch() -> None:
     assert metrics.kv_footprint_bytes == 7 * metrics.kv_bytes_per_request
 
 
-def test_legacy_runtime_is_fixed_and_explicit_split_is_opt_in() -> None:
-    legacy = evaluate_llm_decode(_input(batch_size=3, runtime_bytes=11))
-    assert legacy.runtime_fixed_bytes == 11
-    assert legacy.runtime_per_request_bytes == 0
-    assert legacy.runtime_bytes == 11
-    assert legacy.runtime_capacity_semantics_status == (
-        "LEGACY_RUNTIME_BYTES_AS_FIXED_MODELING_CHOICE")
-
-    split = evaluate_llm_decode(_input(
-        batch_size=3,
-        runtime_bytes=0,
-        runtime_fixed_bytes=5,
-        runtime_per_request_bytes=2,
-    ))
-    assert split.runtime_bytes == 11
-    assert split.runtime_capacity_semantics_status == (
-        "EXPLICIT_FIXED_PLUS_PER_REQUEST_MODELING_CHOICE")
-
-
-def test_explicit_runtime_split_rejects_legacy_double_counting() -> None:
-    with pytest.raises(ValueError, match="double counting"):
-        _input(runtime_bytes=1, runtime_fixed_bytes=1)
+@pytest.mark.parametrize("fixed,per_request,total", [(11, 0, 11), (5, 2, 11)])
+def test_runtime_capacity_closes(fixed, per_request, total):
+    metrics = evaluate_llm_decode(_input(
+        batch_size=3, runtime_fixed_bytes=fixed, runtime_per_request_bytes=per_request))
+    assert metrics.runtime_fixed_bytes == fixed
+    assert metrics.runtime_per_request_bytes == per_request
+    assert metrics.runtime_bytes == total
+    assert metrics.runtime_capacity_semantics_status == "EXPLICIT_FIXED_PLUS_PER_REQUEST_MODELING_CHOICE"
 
 
 def test_exact_fit_and_one_byte_over_capacity_wall() -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..architecture_comparison import _temperature_maxima
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -21,3 +21,18 @@ def extract_temperature_observables(pipeline) -> ThermalObservables:
         gpu_Tmax_degC=gpu,
         package_Tmax_degC=package,
     )
+
+
+def _temperature_maxima(pipeline) -> tuple[float, float, float]:
+    temperatures_C = pipeline.result.temperature_K - 273.15
+    gpu = np.array([
+        cell.component == "gpu" for cell in pipeline.cells], dtype=bool)
+    memory = np.array([
+        (str(cell.component).startswith("memory_column:")
+         or str(cell.component).startswith("orthogonal_hbm:"))
+        for cell in pipeline.cells], dtype=bool)
+    if not np.any(gpu) or not np.any(memory):
+        raise RuntimeError("GPU or memory thermal region is absent")
+    return (float(np.max(temperatures_C[memory])),
+            float(np.max(temperatures_C[gpu])),
+            float(np.max(temperatures_C)))

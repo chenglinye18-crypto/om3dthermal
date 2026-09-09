@@ -1,51 +1,11 @@
-"""Thermal-resistance-network relaxation steady-state solver.
-
-The 3D thermal network is governed by the per-cell heat balance
-
-    P_i = sum_j G_ij (T_i - T_j) + sum_b G_ib (T_i - T_b)         (1)
-
-so the per-cell KCL residual ("heat imbalance") is
-
-    delta_Q_i = P_i - sum_j G_ij (T_i - T_j)
-                    - sum_b G_ib (T_i - T_b)                     (2)
-
-The effective per-cell thermal resistance is the reciprocal of the
-row sum of ``A``,
-
-    R_eff_i = 1 / ( sum_j G_ij + sum_b G_ib )                    (3)
-
-A single Jacobi-style relaxation step
-
-    delta_T_i = alpha * delta_Q_i * R_eff_i                    (4)
-    T_new_i   = T_old_i + delta_T_i                            (5)
-
-applied **simultaneously** to every cell (read-only on T_old, write
-to a separate T_new buffer, then swap) converges to the unique
-steady state of the network because the relaxation matrix
-``(1 - alpha * D^{-1} A)`` has spectral radius strictly less than
-one for any SPD network with ``alpha in (0, 1]``.
-
-Convergence is measured on two physical quantities:
-* ``max_abs_delta_T`` -- the largest per-iteration temperature update
-* ``relative_heat_flow_residual`` -- KCL heat imbalance divided by
-  the total input power
-
-Both must drop below the configured tolerance at the same
-``check_interval`` boundary for the run to be declared converged.
-
-This module owns the shared diagnostics
-(:func:`_global_power_balance`) and the matrix-free operator
-helper :class:`UnanchoredThermalComponentError`.  Both the CPU and
-GPU implementations of the relaxation live in
-:mod:`om3dthermal.thermal.thermal_relaxation` and
-:mod:`om3dthermal.thermal.gpu_relaxation` respectively; they call
-into this module for the result type only.
+"""Steady-state diagnostics: P_i = sum_j G_ij(T_i-T_j) + sum_b G_ib(T_i-T_b).
 """
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import (
+    Any,
+)
 
 import numpy as np
 
@@ -202,27 +162,9 @@ def _global_power_balance(
     return q_input, q_out, imbalance, abs(imbalance) / denom
 
 
-def _build_thermal_resistance(operator: MatrixFreeThermalOperator) -> np.ndarray:
-    """Return ``R_eff`` (= 1 / row sum of A) for the network.
-
-    The row sum of ``A`` is the sum of internal edge conductances
-    incident on a cell plus the sum of the boundary conductances
-    attached to it.  This matches ``operator.diagonal_W_K`` for the
-    matrix-free operator; we re-derive the value as a sanity check.
-    """
-    diag = np.asarray(operator.diagonal_W_K, dtype=np.float64)
-    if not np.all(diag > 0):
-        raise ValueError(
-            "thermal resistance: at least one cell has zero diagonal; "
-            "the network has a node with no neighbour and no active "
-            "boundary link")
-    return 1.0 / diag
-
-
 __all__ = [
     "SteadyStateResult",
     "UnanchoredThermalComponentError",
     "validate_anchored_components",
     "_global_power_balance",
-    "_build_thermal_resistance",
 ]

@@ -30,7 +30,7 @@ def _input() -> LLMDecodeInput:
         context_length=4,
         weight_bits=8,
         kv_bits=8,
-        runtime_bytes=0,
+        runtime_fixed_bytes=0,
     )
 
 

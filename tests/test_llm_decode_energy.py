@@ -170,7 +170,7 @@ def test_per_token_traffic_is_not_batch_scaled_again() -> None:
         context_length=4,
         weight_bits=8,
         kv_bits=8,
-        runtime_bytes=0,
+        runtime_fixed_bytes=0,
     ))
     result = _evaluate(workload, read_energy=2, write_energy=3)
     assert result.read_dynamic_energy_pj_per_token == (

@@ -61,7 +61,7 @@ def _build_workload(**overrides) -> LLMDecodeMetrics:
         context_length=131_072,
         weight_bits=16,
         kv_bits=16,
-        runtime_bytes=0,
+        runtime_fixed_bytes=0,
     )
     defaults.update(overrides)
     return evaluate_llm_decode(LLMDecodeInput(**defaults))

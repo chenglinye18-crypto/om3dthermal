@@ -73,7 +73,7 @@ def _small_workload(weight_bytes: int = 3 * MIB) -> LLMDecodeInput:
         context_length=0,
         weight_bits=8,
         kv_bits=8,
-        runtime_bytes=0,
+        runtime_fixed_bytes=0,
     )
 
 

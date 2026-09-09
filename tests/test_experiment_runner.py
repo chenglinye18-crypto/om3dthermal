@@ -18,8 +18,6 @@ ROOT = Path(__file__).parents[1]
 CONFIG = (
     ROOT / "configs" / "experiment" /
     "m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
-AUDIT_CONFIG = (
-    ROOT / "configs" / "experiment" / "m3d_semantic_boundary_audit_v0.yaml")
 
 
 def _fake_thermal(mapping):
@@ -258,7 +256,7 @@ def test_single_platform_coefficient_propagates_to_power_and_thermal(
         assert after_gpu - before_gpu == pytest.approx(expected_delta_W)
 
 
-def test_m3d_sensitivity_uses_same_reduced_gpu_power_as_main_rows(monkeypatch):
+def test_m3d_sensitivity_uses_same_reduced_gpu_power_as_main_rows(monkeypatch, sensitivity_config):
     original = runner_module.load_experiment_spec
     mappings = []
 
@@ -274,7 +272,7 @@ def test_m3d_sensitivity_uses_same_reduced_gpu_power_as_main_rows(monkeypatch):
 
     monkeypatch.setattr(runner_module, "load_experiment_spec", experiment)
     monkeypatch.setattr(runner_module, "run_llm_decode_workload_thermal", thermal)
-    result = run_experiment(AUDIT_CONFIG, project_root=ROOT, write_bundle=False)
+    result = run_experiment(sensitivity_config, project_root=ROOT, write_bundle=False)
     assert len(mappings) == 5  # nominal plus four logic-background points
     for mapping in mappings:
         gpu = next(source for source in mapping.sources if source.name == "gpu")
@@ -319,11 +317,11 @@ def test_formal_runner_rejects_nonempty_output_before_evaluation(
     assert (output / "keep.txt").read_text(encoding="utf-8") == "existing result"
 
 
-def test_runner_executes_configured_m3d_parameter_sensitivity(monkeypatch) -> None:
+def test_runner_executes_configured_m3d_parameter_sensitivity(monkeypatch, sensitivity_config) -> None:
     monkeypatch.setattr(
         runner_module, "run_llm_decode_workload_thermal", _fake_thermal)
     result = run_experiment(
-        AUDIT_CONFIG, project_root=ROOT, write_bundle=False)
+        sensitivity_config, project_root=ROOT, write_bundle=False)
     sensitivity = result.m3d_parameter_sensitivity
     assert sensitivity is not None
     assert len(result.rows) == 1
@@ -388,3 +386,21 @@ def test_capped_derivation_pins_bandwidth_below_derived_capability() -> None:
             uncapped, (resolved,)))
     assert capability == pytest.approx(4.24e13)
     assert applied == pytest.approx(4.24e13)
+
+
+@pytest.fixture
+def sensitivity_config(tmp_path):
+    import yaml
+    raw = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    raw["architecture_configs"] = ["configs/architecture/orthogonal_m3d_igzo.yaml"]
+    raw["scenario"]["rho_values"] = [1]
+    raw["scenario"]["unresolved_logic_background_policy"] = {"orthogonal_m3d_igzo": "EXISTING_PLACEHOLDER_ZERO"}
+    raw["scenario"]["m3d_parameter_sensitivity"] = {
+        "architecture_id": "orthogonal_m3d_igzo",
+        "interface_energy_pj_per_bit": [0.25, 0.5, 1.0],
+        "logic_background_w": [0, 5, 10, 20],
+        "status": "PARAMETRIC_SENSITIVITY",
+    }
+    path = tmp_path / "sensitivity.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    return path

@@ -27,386 +27,6 @@ HeatTransferCoefficient = Annotated[
 Temperature = Annotated[float, BeforeValidator(parse_temperature)]
 
 
-class UnresolvedPhysicalParametersError(ValueError):
-    """A research template is structurally valid but not solver-ready."""
-
-    def __init__(self, architecture: str, parameters: list[str]):
-        self.architecture = architecture
-        self.parameters = tuple(parameters)
-        joined = ", ".join(parameters)
-        super().__init__(
-            f"{architecture} geometry bookkeeping is valid but the config "
-            f"cannot enter thermal material/operator/solve stages; "
-            f"unresolved physical parameters: {joined}")
-
-
-UnresolvedFloat = float | Literal["unresolved"]
-
-
-class OrthogonalM3DArchitectureConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    type: Literal["orthogonal_m3d_edram"]
-
-
-class OrthogonalM3DArrayConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    slab_count: Annotated[int, Field(strict=True, gt=0)]
-    cube_length_x_mm: Annotated[float, Field(gt=0)]
-    slab_plane_y_mm: Annotated[float, Field(gt=0)]
-    slab_height_z_mm: Annotated[float, Field(gt=0)]
-    slab_pitch_x_um: Annotated[float, Field(gt=0)]
-    daa_um: Annotated[float, Field(gt=0)]
-    slab_plane: Literal["y-z"] = "y-z"
-    thickness_direction: Literal["global_x"] = "global_x"
-    placement: Literal["reuse_orthogonal_mosaic_array"] = (
-        "reuse_orthogonal_mosaic_array")
-
-
-class OrthogonalM3DSlabConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    total_pitch_um: Annotated[float, Field(gt=0)]
-    si_substrate_um: Annotated[float, Field(gt=0)]
-    feol_um: Annotated[float, Field(gt=0)]
-    region_order: tuple[str, ...] = (
-        "si_substrate", "feol", "m3d_bitcell_stack",
-        "beol_interconnect", "daa")
-
-    @field_validator("region_order")
-    @classmethod
-    def fixed_region_order(cls, value: tuple[str, ...]):
-        expected = (
-            "si_substrate", "feol", "m3d_bitcell_stack",
-            "beol_interconnect", "daa")
-        if value != expected:
-            raise ValueError(
-                "M3D slab region_order must be Si substrate -> FEOL -> "
-                "M3D bit-cell stack -> BEOL interconnect -> DAA")
-        return value
-
-
-class M3DBEOLThermalConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    model: Literal["effective_isotropic", "effective_anisotropic"]
-    k_in_plane_W_mK: UnresolvedFloat
-    k_cross_plane_W_mK: UnresolvedFloat
-
-    @field_validator("k_in_plane_W_mK", "k_cross_plane_W_mK")
-    @classmethod
-    def positive_if_resolved(cls, value: UnresolvedFloat):
-        if value != "unresolved" and value <= 0:
-            raise ValueError("resolved effective M3D-BEOL k must be positive")
-        return value
-
-
-class M3DBEOLConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    bitcell_layers: Annotated[int, Field(strict=True, gt=0)]
-    bitcell_layer_pitch_nm: Annotated[float, Field(gt=0)]
-    bitcell_stack_um: Annotated[float, Field(gt=0)]
-    interconnect_um: Annotated[float, Field(gt=0)]
-    total_um: Annotated[float, Field(gt=0)]
-    region_order: tuple[str, ...] = ("bitcell_stack", "interconnect")
-    thermal: M3DBEOLThermalConfig
-
-    @model_validator(mode="after")
-    def derived_thicknesses(self):
-        expected_stack_um = (
-            self.bitcell_layers * self.bitcell_layer_pitch_nm / 1000.0)
-        if abs(self.bitcell_stack_um - expected_stack_um) > 1e-12:
-            raise ValueError(
-                "m3d_beol.bitcell_stack_um must equal bitcell_layers * "
-                "bitcell_layer_pitch_nm")
-        if abs(self.total_um - (
-                self.bitcell_stack_um + self.interconnect_um)) > 1e-12:
-            raise ValueError(
-                "m3d_beol.total_um must equal bitcell_stack_um + "
-                "interconnect_um")
-        if self.region_order != ("bitcell_stack", "interconnect"):
-            raise ValueError(
-                "m3d_beol.region_order must be bitcell_stack -> interconnect")
-        return self
-
-
-class M3DMemoryConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    technology: Literal["CAA_IGZO_2T0C"]
-    layers: Annotated[int, Field(strict=True, gt=0)]
-    density_Mb_mm2_per_layer: Annotated[float, Field(gt=0)]
-    cell_area_um2: Annotated[float, Field(gt=0)]
-    slab_array_fill_factor: Annotated[float, Field(gt=0, le=1)]
-    placement: Literal["within_beol_above_feol"]
-    daa_between_m3d_layers: Literal[False]
-
-
-class OrthogonalM3DPowerDistributionConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    type: Literal["uniform_m3d_layers"]
-    target_region: Literal["m3d_bitcell_stack"]
-    direct_power_regions: tuple[str, ...] = ("m3d_bitcell_stack",)
-
-    @field_validator("direct_power_regions")
-    @classmethod
-    def bitcell_stack_only(cls, value: tuple[str, ...]):
-        if value != ("m3d_bitcell_stack",):
-            raise ValueError(
-                "M3D memory direct power must target only "
-                "m3d_bitcell_stack")
-        return value
-
-
-class M3DIsoTotalPowerConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    memory_total_W: Annotated[float, Field(gt=0)]
-    distribution: OrthogonalM3DPowerDistributionConfig
-    cim_metrics_used_as_memory_power: Literal[False] = False
-
-
-class M3DOperationEnergyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    read_0: Annotated[float, Field(ge=0)]
-    read_1: Annotated[float, Field(ge=0)]
-    write_0_to_0: Annotated[float, Field(ge=0)]
-    write_0_to_1: Annotated[float, Field(ge=0)]
-    write_1_to_0: Annotated[float, Field(ge=0)]
-    write_1_to_1: Annotated[float, Field(ge=0)]
-    refresh_0: Annotated[float, Field(ge=0)]
-    refresh_1: Annotated[float, Field(ge=0)]
-
-
-ProbabilityValue = float | Literal["unresolved"]
-ActivityRate = float | Literal["unresolved"]
-ActiveRows = int | Literal["unresolved"]
-
-
-def _validate_probability(value: ProbabilityValue) -> ProbabilityValue:
-    if value != "unresolved" and not 0.0 <= value <= 1.0:
-        raise ValueError("resolved probability must be within [0, 1]")
-    return value
-
-
-class M3DStateProbabilityConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    p0: ProbabilityValue
-    p1: ProbabilityValue
-
-    _probability_range = field_validator("p0", "p1")(_validate_probability)
-
-    @model_validator(mode="after")
-    def sum_if_resolved(self):
-        if self.p0 != "unresolved" and self.p1 != "unresolved":
-            if abs(float(self.p0) + float(self.p1) - 1.0) > 1e-12:
-                raise ValueError("state probabilities p0 + p1 must equal 1")
-        return self
-
-
-class M3DWriteTransitionProbabilityConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    p00: ProbabilityValue
-    p01: ProbabilityValue
-    p10: ProbabilityValue
-    p11: ProbabilityValue
-
-    _probability_range = field_validator(
-        "p00", "p01", "p10", "p11")(_validate_probability)
-
-    @model_validator(mode="after")
-    def sum_if_resolved(self):
-        values = (self.p00, self.p01, self.p10, self.p11)
-        if all(value != "unresolved" for value in values):
-            if abs(sum(float(value) for value in values) - 1.0) > 1e-12:
-                raise ValueError(
-                    "write transition probabilities must sum to 1")
-        return self
-
-
-class M3DOperationActivityConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    read_bit_rate_per_s: ActivityRate
-    write_bit_rate_per_s: ActivityRate
-    read_state_probability: M3DStateProbabilityConfig
-    write_transition_probability: M3DWriteTransitionProbabilityConfig
-    refresh_period_s: ActivityRate
-    refresh_state_probability: M3DStateProbabilityConfig
-    active_rows: ActiveRows
-
-    @field_validator(
-        "read_bit_rate_per_s", "write_bit_rate_per_s", "refresh_period_s")
-    @classmethod
-    def nonnegative_rate_positive_period(cls, value, info):
-        if value == "unresolved":
-            return value
-        if info.field_name == "refresh_period_s":
-            if value <= 0:
-                raise ValueError("refresh_period_s must be positive")
-        elif value < 0:
-            raise ValueError(f"{info.field_name} must be nonnegative")
-        return value
-
-    @field_validator("active_rows")
-    @classmethod
-    def nonnegative_active_rows(cls, value: ActiveRows):
-        if value != "unresolved" and value < 0:
-            raise ValueError("active_rows must be nonnegative")
-        return value
-
-    def unresolved_parameters(self) -> list[str]:
-        candidates = {
-            "read_bit_rate_per_s": self.read_bit_rate_per_s,
-            "write_bit_rate_per_s": self.write_bit_rate_per_s,
-            "read_state_probability.p0": self.read_state_probability.p0,
-            "read_state_probability.p1": self.read_state_probability.p1,
-            "write_transition_probability.p00": (
-                self.write_transition_probability.p00),
-            "write_transition_probability.p01": (
-                self.write_transition_probability.p01),
-            "write_transition_probability.p10": (
-                self.write_transition_probability.p10),
-            "write_transition_probability.p11": (
-                self.write_transition_probability.p11),
-            "refresh_period_s": self.refresh_period_s,
-            "refresh_state_probability.p0": (
-                self.refresh_state_probability.p0),
-            "refresh_state_probability.p1": (
-                self.refresh_state_probability.p1),
-            "active_rows": self.active_rows,
-        }
-        return [name for name, value in candidates.items()
-                if value == "unresolved"]
-
-
-class M3DOperationEnergyPowerConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    operation_energy_fJ_per_bit: M3DOperationEnergyConfig
-    hold_power_W_per_row: Annotated[float, Field(ge=0)]
-    activity: M3DOperationActivityConfig
-    nominal_workload: "M3DNominalArrayReadWorkloadConfig"
-    distribution: OrthogonalM3DPowerDistributionConfig
-    energy_provenance: Literal["PAPER_REPORTED"]
-    cim_metrics_used_as_memory_power: Literal[False] = False
-
-
-class OrthogonalM3DPowerModelsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    iso_total: M3DIsoTotalPowerConfig
-    operation_energy: M3DOperationEnergyPowerConfig
-
-
-class M3DNominalArrayReadWorkloadConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    delivered_bandwidth_bit_per_s: Annotated[float, Field(gt=0)]
-    read_fraction: Annotated[float, Field(ge=0, le=1)]
-    write_fraction: Annotated[float, Field(ge=0, le=1)]
-    read_state_probability: M3DStateProbabilityConfig
-    included_power_terms: tuple[str, ...] = ("array_read",)
-    power_scope: Literal["array_core_power_only"]
-    bandwidth_provenance: Literal["MATCHED_DELIVERED_BANDWIDTH_REFERENCE"]
-
-    @model_validator(mode="after")
-    def nominal_read_contract(self):
-        if abs(self.read_fraction + self.write_fraction - 1.0) > 1e-12:
-            raise ValueError("read_fraction + write_fraction must equal 1")
-        if self.read_fraction != 1.0 or self.write_fraction != 0.0:
-            raise ValueError(
-                "M3D-v1 nominal workload must be read_fraction=1 and "
-                "write_fraction=0")
-        probabilities = self.read_state_probability
-        if probabilities.p0 == "unresolved" or probabilities.p1 == "unresolved":
-            raise ValueError(
-                "nominal array-read state probabilities must be resolved")
-        if self.included_power_terms != ("array_read",):
-            raise ValueError(
-                "M3D-v1 nominal workload includes only array_read power")
-        return self
-
-
-class OrthogonalM3DPowerConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    default_mode: Literal["operation_energy"]
-
-
-class OrthogonalM3DPaperMetricsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    energy_efficiency_TOPS_W: Annotated[float, Field(gt=0)]
-    compute_density_TOPS_mm2: Annotated[float, Field(gt=0)]
-
-
-class OrthogonalM3DTemplateConfig(BaseModel):
-    """Paper-parameter template that is intentionally not solver-ready."""
-
-    model_config = ConfigDict(extra="forbid")
-    name: str
-    architecture: OrthogonalM3DArchitectureConfig
-    orthogonal: OrthogonalM3DArrayConfig
-    slab: OrthogonalM3DSlabConfig
-    m3d_beol: M3DBEOLConfig
-    m3d_memory: M3DMemoryConfig
-    power: OrthogonalM3DPowerConfig
-    power_models: OrthogonalM3DPowerModelsConfig
-    paper_metrics: OrthogonalM3DPaperMetricsConfig
-    provenance: dict[str, Any] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def pitch_and_layer_contract(self):
-        if abs(self.slab.total_pitch_um
-               - self.orthogonal.slab_pitch_x_um) > 1e-12:
-            raise ValueError(
-                "slab.total_pitch_um must equal orthogonal.slab_pitch_x_um")
-        array_length_mm = (
-            self.orthogonal.slab_count
-            * self.orthogonal.slab_pitch_x_um / 1000.0)
-        if array_length_mm > self.orthogonal.cube_length_x_mm + 1e-12:
-            raise ValueError(
-                "orthogonal slab array length exceeds cube_length_x_mm")
-        if self.m3d_beol.bitcell_layers != self.m3d_memory.layers:
-            raise ValueError(
-                "m3d_beol.bitcell_layers must equal m3d_memory.layers")
-        expected_si_um = (
-            self.slab.total_pitch_um - self.slab.feol_um
-            - self.m3d_beol.total_um - self.orthogonal.daa_um)
-        if abs(self.slab.si_substrate_um - expected_si_um) > 1e-9:
-            raise ValueError(
-                "slab.si_substrate_um must be derived by pitch closure")
-        closure_um = (
-            self.slab.si_substrate_um + self.slab.feol_um
-            + self.m3d_beol.bitcell_stack_um
-            + self.m3d_beol.interconnect_um + self.orthogonal.daa_um)
-        if abs(closure_um - self.slab.total_pitch_um) > 1e-9:
-            raise ValueError(
-                "Si + FEOL + bit-cell stack + interconnect + DAA must "
-                "equal slab.total_pitch_um")
-        return self
-
-    def unresolved_physical_parameters(self) -> list[str]:
-        candidates = {
-            "m3d_beol.thermal.k_in_plane_W_mK": (
-                self.m3d_beol.thermal.k_in_plane_W_mK),
-            "m3d_beol.thermal.k_cross_plane_W_mK": (
-                self.m3d_beol.thermal.k_cross_plane_W_mK),
-        }
-        return [name for name, value in candidates.items()
-                if value == "unresolved"]
-
-    def capacity_bookkeeping(self) -> dict[str, float]:
-        slab_area_mm2 = (
-            self.orthogonal.slab_plane_y_mm
-            * self.orthogonal.slab_height_z_mm)
-        capacity_per_layer_Mb = (
-            self.m3d_memory.density_Mb_mm2_per_layer
-            * slab_area_mm2 * self.m3d_memory.slab_array_fill_factor)
-        capacity_per_slab_Mb = (
-            capacity_per_layer_Mb * self.m3d_memory.layers)
-        capacity_cube_Mb = (
-            capacity_per_slab_Mb * self.orthogonal.slab_count)
-        return {
-            "slab_area_mm2": slab_area_mm2,
-            "capacity_per_layer_Mb": capacity_per_layer_Mb,
-            "capacity_per_slab_Mb": capacity_per_slab_Mb,
-            "capacity_cube_Mb": capacity_cube_Mb,
-            "capacity_cube_Gb_decimal": capacity_cube_Mb / 1000.0,
-            "capacity_cube_GB_decimal": capacity_cube_Mb / 8000.0,
-        }
-
-
 class LateralInset(BaseModel):
     """Per-edge lateral inset applied to a ``Layer``'s parent footprint.
 
@@ -982,50 +602,10 @@ class SimulationConfig(BaseModel):
         return self
 
 
-def is_orthogonal_m3d_template(data: Any) -> bool:
-    """Return whether raw YAML declares the M3D-eDRAM research template."""
-    return (
-        isinstance(data, dict)
-        and isinstance(data.get("architecture"), dict)
-        and data["architecture"].get("type") == "orthogonal_m3d_edram")
-
-
-def load_orthogonal_m3d_template(
-        path: str | Path) -> OrthogonalM3DTemplateConfig:
-    """Parse an M3D research template without claiming solver readiness."""
-    with Path(path).open("r", encoding="utf-8") as stream:
-        data = yaml.safe_load(stream)
-    if not is_orthogonal_m3d_template(data):
-        raise ValueError(
-            "config does not declare architecture.type="
-            "'orthogonal_m3d_edram'")
-    return OrthogonalM3DTemplateConfig.model_validate(data)
-
-
 def load_config(path: str | Path) -> SimulationConfig:
-    """Load and validate a benchmark YAML.
-
-    The file may be either the *legacy* form (top-level keys
-    ``materials``/``footprints``/``stack_templates``/``horizontal``/...)
-    or the *compact* form (``materials`` as a flat mapping of name to
-    scalar-or-3-list, top-level ``geometry``/``stacks``/``mesh``/
-    ``boundary``/``power``/``solver``). The compact form is expanded
-    into the legacy :class:`SimulationConfig` dict by
-    :func:`compile_user_config`; the legacy form passes through
-    unchanged. Both produce the same validated
-    :class:`SimulationConfig` instance.
-    """
+    """Load a compact geometry file or a validated SimulationConfig mapping."""
     with Path(path).open("r", encoding="utf-8") as stream:
         data = yaml.safe_load(stream)
-    if is_orthogonal_m3d_template(data):
-        template = OrthogonalM3DTemplateConfig.model_validate(data)
-        unresolved = template.unresolved_physical_parameters()
-        if unresolved:
-            raise UnresolvedPhysicalParametersError(
-                template.architecture.type, unresolved)
-        raise NotImplementedError(
-            "orthogonal_m3d_edram template parameters are resolved, but "
-            "v0 intentionally has no thermal geometry compilation path")
     expanded = compile_user_config(data)
     return SimulationConfig.model_validate(expanded)
 
@@ -1204,30 +784,7 @@ def _build_legacy_footprints(geometry: dict) -> dict:
 
 def _build_legacy_stack_templates(stacks: dict,
                                 geometry: dict | None = None) -> dict:
-    """Expand the ``stacks`` block into the legacy
-    ``stack_templates`` mapping.
-
-    The flat ``{name: {layers: [...]}}`` form is the most common
-    case. The HBM-style ``{name: {base, dram, top}}`` form
-    is recognised and compiled with the legacy HBM-12hi layer
-    naming convention (``hbm_base_si`` / ``dram_si_NN`` /
-    ``top_dram_si`` etc.) plus the role tags the legacy fixtures
-    expect (``dram_si`` / ``dram_beol`` / ``hybrid_bonding`` /
-    ``hbm_base`` / ``gpu_hbm_interface``). The resulting stack is
-    emitted under the key ``hbm_12hi`` so the column placement
-    code and the legacy tests can find it.
-
-    ``geometry`` is needed to source the DRAM lateral inset
-    which is shared by every DRAM-layer entry (the 11 repeats
-    and the top die). The compact user form expresses the DRAM
-    geometry in terms of the **DRAM die size**
-    (``geometry.hbm.dram_size``) and the **HBM column size**
-    (``geometry.hbm.size``); the per-side lateral inset is
-    computed as ``(base - dram) / 2`` and applied to every
-    DRAM-layer entry. The older ``geometry.hbm.inset`` form is
-    still accepted as a backwards-compat shortcut: when given,
-    it is used directly as the per-side inset on both axes.
-    """
+    """Compile configurable repeated layer stacks with stable physical role tags."""
     dram_inset = None
     if geometry is not None:
         hbm_block = geometry.get("hbm", {})
@@ -1264,21 +821,14 @@ def _build_legacy_stack_templates(stacks: dict,
             out[name] = {"items": items}
         elif "base" in body or "dram" in body or "top" in body:
             # HBM-style sub-template: base + repeat(dram) + top.
-            # The legacy HBM fixture expects specific layer names and
-            # role tags (``hbm_base_si`` / ``dram_si_NN`` etc.) which
-            # the generic layer compiler cannot produce from a flat
-            # ``[material, thickness]`` list. Apply the HBM-specific
-            # naming here and emit under the legacy ``hbm_12hi`` key.
+            # Stable physical names are consumed by selectors and cache signatures.
             out["hbm_12hi"] = _build_legacy_hbm_12hi_template(
                 body, dram_inset=dram_inset)
         else:
             raise ValueError(
                 f"stack '{name}' must have 'layers' or one of "
                 f"'base'/'dram'/'top'; got keys {list(body.keys())}")
-    # Rename compact user-facing stack keys to the legacy key names the
-    # rest of the codebase (and the test fixtures) expect. The compact
-    # YAML keeps the names short; the legacy form embeds the
-    # physical-semantic suffix.
+    # Preserve canonical physical stack names in the compiled scene.
     renamed: dict = {}
     for key, body in out.items():
         legacy_key = _LEGACY_STACK_KEY_ALIASES.get(key, key)
@@ -1295,11 +845,7 @@ _LEGACY_STACK_KEY_ALIASES = {
 }
 
 
-# Legacy HBM-12hi layer name + role mapping. The order matters: the
-# base layers are read positionally (1st = uBump, 2nd = base BEOL,
-# 3rd = base Si), and the DRAM repeat / top layers are matched by
-# material name. The compact YAML keeps the same material names as
-# the legacy fixture, so a small lookup table is enough.
+# Base layers are positional (uBump, BEOL, Si); repeat/top layers match material.
 _HBM_BASE_LEGACY = (
     # (compact material, legacy layer name, legacy role)
     ("GPU_HBM_uBump", "gpu_hbm_ubump", "gpu_hbm_interface"),
@@ -1322,9 +868,7 @@ _HBM_TOP_LEGACY = {
 
 def _build_legacy_hbm_12hi_template(hbm_block: dict,
                                     *, dram_inset: dict | None) -> dict:
-    """Compile the compact HBM sub-template into the legacy HBM-12hi
-    stack template with the layer names and role tags the legacy
-    fixtures expect."""
+    """Compile HBM layers with stable names used by power selectors and cache signatures."""
     items: list = []
     base_layers = hbm_block.get("base", {}).get("layers", [])
     for idx, entry in enumerate(base_layers):
@@ -1659,131 +1203,6 @@ def _build_legacy_thermal_boundary_conditions(boundary: dict) -> dict:
     }
 
 
-def _son23_component_sources(
-    power: dict,
-    hbm_columns: list[str],
-    *,
-    include_logic: bool = True,
-    source_power_model: str = "son23split",
-) -> list[dict]:
-    """Expand the Son et al. EDAPS 2023 component partition.
-
-    Functional components remain separate power sources even when two sources
-    share the same existing active-side BEOL carrier. No lateral PHY/TSV/bank
-    geometry is inferred here.
-    """
-    reference = power.get("son23_reference")
-    if not isinstance(reference, dict):
-        raise ValueError(
-            "power.model='son23split' requires power.son23_reference")
-    required = (
-        "stack_total", "logic_phy", "logic_tsv",
-        "dram_bank_per_die", "dram_tsv_per_die", "dram_die_count",
-    )
-    missing = [key for key in required if key not in reference]
-    if missing:
-        raise ValueError(
-            f"power.son23_reference is missing required keys {missing}")
-
-    reference_stack_W = parse_power(reference["stack_total"])
-    logic_phy_reference_W = parse_power(reference["logic_phy"])
-    logic_tsv_reference_W = parse_power(reference["logic_tsv"])
-    dram_bank_reference_W = parse_power(reference["dram_bank_per_die"])
-    dram_tsv_reference_W = parse_power(reference["dram_tsv_per_die"])
-    dram_die_count = int(reference["dram_die_count"])
-    if dram_die_count != 12:
-        raise ValueError(
-            "Son23 conventional 12Hi model requires dram_die_count=12")
-    accounted_reference_W = (
-        logic_phy_reference_W + logic_tsv_reference_W
-        + dram_die_count * (dram_bank_reference_W + dram_tsv_reference_W))
-    if not abs(accounted_reference_W - reference_stack_W) <= 1e-12:
-        raise ValueError(
-            "Son23 reference partition does not sum to stack_total: "
-            f"{accounted_reference_W} W != {reference_stack_W} W")
-
-    target_stack_W = parse_power(power["hbm_each"])
-    reference_dram_W = dram_die_count * (
-        dram_bank_reference_W + dram_tsv_reference_W)
-    scaling_reference_W = (
-        reference_stack_W if include_logic else reference_dram_W)
-    scale = target_stack_W / scaling_reference_W
-    component_power_W = {
-        "logic_phy": logic_phy_reference_W * scale,
-        "logic_tsv": logic_tsv_reference_W * scale,
-        "dram_bank": dram_bank_reference_W * scale,
-        "dram_tsv": dram_tsv_reference_W * scale,
-    }
-    scaled_total_W = (
-        (component_power_W["logic_phy"] + component_power_W["logic_tsv"]
-         if include_logic else 0.0)
-        + dram_die_count * (
-            component_power_W["dram_bank"] + component_power_W["dram_tsv"]))
-    if not abs(scaled_total_W - target_stack_W) <= max(
-            1e-12, 1e-12 * target_stack_W):
-        raise ValueError(
-            "scaled Son23 partition does not sum to hbm_each: "
-            f"{scaled_total_W} W != {target_stack_W} W")
-
-    common_metadata = {
-        "power_model": source_power_model,
-        "partition_provenance": "PAPER_REPORTED",
-        "scaling_provenance": "DERIVED_FROM_REFERENCE",
-        "placement_provenance": "MODELING_CHOICE",
-        "placement": "existing active-side BEOL carrier",
-        "reference_stack_power_W": reference_stack_W,
-        "scaling_reference_power_W": scaling_reference_W,
-        "scale_from_reference": scale,
-    }
-    sources: list[dict] = []
-    for stack_name in hbm_columns:
-        component = f"memory_column:{stack_name}"
-        if include_logic:
-            for function, power_W in (
-                    ("phy", component_power_W["logic_phy"]),
-                    ("tsv", component_power_W["logic_tsv"])):
-                sources.append({
-                    "name": f"hbm_{stack_name}_logic_{function}",
-                    "total_power": power_W,
-                    "selector": {
-                        "component": component,
-                        "material": "HBM_Base_BEOL",
-                        "tags": {"role": "hbm_base"},
-                    },
-                    "distribution": "uniform_volume",
-                    "metadata": {
-                        **common_metadata,
-                        "stack": stack_name,
-                        "component_class": "logic",
-                        "functional_component": function,
-                    },
-                })
-        for die_index in range(1, dram_die_count + 1):
-            layer_name = (
-                f"dram_beol_{die_index:02d}"
-                if die_index < dram_die_count else "top_dram_beol")
-            for function, power_W in (
-                    ("bank", component_power_W["dram_bank"]),
-                    ("tsv", component_power_W["dram_tsv"])):
-                sources.append({
-                    "name": f"hbm_{stack_name}_dram{die_index:02d}_{function}",
-                    "total_power": power_W,
-                    "selector": {
-                        "component": component,
-                        "layer": f"{component}.{layer_name}",
-                    },
-                    "distribution": "uniform_volume",
-                    "metadata": {
-                        **common_metadata,
-                        "stack": stack_name,
-                        "component_class": "dram",
-                        "functional_component": function,
-                        "dram_die_index": die_index,
-                    },
-                })
-    return sources
-
-
 def _build_legacy_thermal_power_sources(power: dict,
                                           geometry: dict) -> dict:
     """Build the ``thermal_power_sources.sources`` list from the
@@ -1791,13 +1210,8 @@ def _build_legacy_thermal_power_sources(power: dict,
     HBM power goes to the dram_beol layer of each HBM column.
     """
     power_model = str(power.get("model", "uniform"))
-    if power_model not in {
-            "uniform", "son23split", "son23_dram_only",
-            "m3d_operation_energy"}:
-        raise ValueError(
-            f"unsupported power.model {power_model!r}; expected "
-            "'uniform', 'son23split', 'son23_dram_only', or "
-            "'m3d_operation_energy'")
+    if power_model != "uniform":
+        raise ValueError(f"unsupported power.model {power_model!r}; expected 'uniform'")
     sources: list = []
     if "gpu" in power:
         sources.append({
@@ -1813,54 +1227,27 @@ def _build_legacy_thermal_power_sources(power: dict,
         })
     hbm_columns = list(geometry.get("hbm", {}).get("centers", {}).keys())
     if "hbm_each" in power:
-        if power_model in {"son23split", "son23_dram_only"}:
-            sources.extend(_son23_component_sources(
-                power, hbm_columns,
-                include_logic=(power_model == "son23split"),
-                source_power_model=power_model,
-            ))
-        else:
-            for col in hbm_columns:
-                sources.append({
-                    "name": col,
-                    "total_power": power["hbm_each"],
-                    "selector": {
-                        "component": f"memory_column:{col}",
-                        "tags": {"role": "dram_beol"},
-                    },
-                    "distribution": "uniform_volume",
-                    "metadata": {
-                        "status": "PAPER_REPORTED",
-                        "power_model": "uniform",
-                        "component_class": "dram",
-                        "stack": col,
-                    },
-                })
+        for col in hbm_columns:
+            sources.append({
+                "name": col,
+                "total_power": power["hbm_each"],
+                "selector": {
+                    "component": f"memory_column:{col}",
+                    "tags": {"role": "dram_beol"},
+                },
+                "distribution": "uniform_volume",
+                "metadata": {
+                    "status": "PAPER_REPORTED",
+                    "power_model": "uniform",
+                    "component_class": "dram",
+                    "stack": col,
+                },
+            })
     orthogonal = geometry.get("orthogonal_hbm")
     if orthogonal is not None:
         die = orthogonal["memory_die"]
-        if power_model == "m3d_operation_energy":
-            from .thermal.m3d_power import calculate_array_read_power
-            read_probability = power["read_state_probability"]
-            memory_total_W = calculate_array_read_power(
-                delivered_bandwidth_bit_per_s=float(
-                    power["delivered_bandwidth_bit_per_s"]),
-                read_fraction=float(power["read_fraction"]),
-                state_0_probability=float(read_probability["p0"]),
-                state_1_probability=float(read_probability["p1"]),
-                read_0_energy_fJ_per_bit=float(
-                    power["operation_energy_fJ_per_bit"]["read_0"]),
-                read_1_energy_fJ_per_bit=float(
-                    power["operation_energy_fJ_per_bit"]["read_1"]),
-            )
-            if float(power["write_fraction"]) != 0.0:
-                raise ValueError(
-                    "M3D-v1 array-core nominal requires write_fraction=0")
-            per_die_power = memory_total_W / int(die["count"])
-            target_role = "m3d_bitcell_stack"
-        else:
-            per_die_power = die["power_per_die"]
-            target_role = "active_beol"
+        per_die_power = die["power_per_die"]
+        target_role = "active_beol"
         for index in range(1, int(die["count"]) + 1):
             die_name = f"die_{index:03d}"
             sources.append({
@@ -1872,25 +1259,18 @@ def _build_legacy_thermal_power_sources(power: dict,
                 },
                 "distribution": "uniform_volume",
                 "metadata": {
-                    "status": (
-                        "DERIVED_FROM_OPERATION_ENERGY"
-                        if power_model == "m3d_operation_energy"
-                        else "PAPER_REPORTED"),
+                    "status": "PAPER_REPORTED",
                     "power_model": power_model,
                     "component_class": "dram",
                     "stack": die_name,
-                    "modeling_choice": (
-                        "uniform within homogenized 8-layer M3D bit-cell stack"
-                        if power_model == "m3d_operation_energy"
-                        else "uniform within die BEOL"),
+                    "modeling_choice": "uniform within die BEOL",
                 },
             })
     return {"sources": sources}
 
 
 def _build_legacy_metadata(solver: dict, supplied: dict | None = None) -> dict:
-    """Build a minimal ``metadata`` block (no paper text; that lives
-    in ``docs/benchmarks/``)."""
+    """Retain caller-supplied metadata and solver settings."""
     md: dict = dict(supplied or {})
     if solver:
         md["solver"] = dict(solver)
@@ -1898,14 +1278,7 @@ def _build_legacy_metadata(solver: dict, supplied: dict | None = None) -> dict:
 
 
 def compile_user_config(data: dict) -> dict:
-    """Expand the compact user-facing YAML into the legacy
-    :class:`SimulationConfig` dict.
-
-    The legacy form is detected by the absence of any of the
-    compact markers (:data:`_COMPACT_MARKERS`); it is returned
-    unchanged so older configs keep working as fixtures / for
-    reference.
-    """
+    """Compile compact geometry into SimulationConfig, preserving physical layer names."""
     if not is_compact_user_config(data):
         return data
     out: dict = {"name": data.get("name", "untitled")}
@@ -1941,17 +1314,5 @@ def compile_user_config(data: dict) -> dict:
         out["thermal_power_sources"] = thermal_power_sources
     metadata = _build_legacy_metadata(
         data.get("solver", {}), data.get("metadata"))
-    if (thermal_power_sources is not None
-            and data.get("power", {}).get("model")
-            == "m3d_operation_energy"):
-        derived_memory_W = sum(
-            float(source["total_power"])
-            for source in thermal_power_sources["sources"]
-            if source.get("metadata", {}).get("power_model")
-            == "m3d_operation_energy")
-        bookkeeping = metadata.setdefault("architecture_bookkeeping", {})
-        bookkeeping["array_read_power_W"] = derived_memory_W
-        bookkeeping["memory_power_derivation"] = (
-            "delivered_bandwidth_bit_per_s * read_1_energy_fJ_per_bit * 1e-15")
     out["metadata"] = metadata
     return out

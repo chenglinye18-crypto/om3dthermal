@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-import yaml
 
 from .backends import DreamRAMBackend, OperationTableCellModel
 from .cell_model import (
@@ -15,14 +14,9 @@ from .cell_model import (
 )
 from .config import (
     MemoryPowerConfig,
-    find_project_root,
-    load_case_config,
-    load_power_config,
 )
 from .geometry import (
     ResolvedGeometry,
-    resolve_case_geometry,
-    resolve_legacy_geometry,
 )
 from .feol_route import calculate_feol_route
 from .m3d_subarray import calculate_m3d_subarray
@@ -191,11 +185,7 @@ def calculate_memory_power(
             or read_bandwidth_gbps < 0.0):
         raise ValueError("read_bandwidth_gbps must be finite and non-negative")
     if geometry is None:
-        source = config.architecture.geometry_source
-        if source is None:
-            raise ValueError(
-                "canonical case requires its resolved geometry object")
-        geometry = resolve_legacy_geometry(project_root, source)
+        raise ValueError("canonical case requires its resolved geometry object")
     m3d_subarray = None
     m3d_geometry = geometry.m3d
     if config.architecture.m3d_subarray is not None:
@@ -454,33 +444,4 @@ def calculate_memory_power(
             "read_power_bandwidth_gbps": float(read_bandwidth_gbps),
             "read_power_bandwidth_source": "EXPLICIT_OPERATING_POINT",
         },
-    )
-
-
-def run_memory_power(config_path: str | Path) -> MemoryPowerResult:
-    path = Path(config_path).resolve()
-    with path.open("r", encoding="utf-8") as stream:
-        raw = yaml.safe_load(stream)
-    if isinstance(raw, dict) and "geometry" in raw:
-        case = load_case_config(path)
-        if (case.geometry.type == "orthogonal_m3d"
-                and case.power.memory.model == "analytical"):
-            raise ValueError(
-                "standalone analytical M3D power requires an explicit shared "
-                "memory-to-GPU transfer; use resolve_system_power")
-        return calculate_memory_power(
-            case,
-            project_root=find_project_root(path),
-            read_bandwidth_gbps=case.workload.read_bandwidth_gbps,
-            geometry=resolve_case_geometry(case),
-        )
-    config = load_power_config(path)
-    if config.architecture.memory_service is not None:
-        raise ValueError(
-            "standalone analytical M3D power requires an explicit transfer "
-            "bandwidth passed to calculate_memory_power")
-    return calculate_memory_power(
-        config,
-        project_root=find_project_root(path),
-        read_bandwidth_gbps=config.workload.read_bandwidth_gbps,
     )

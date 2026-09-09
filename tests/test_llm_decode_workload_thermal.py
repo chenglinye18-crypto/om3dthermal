@@ -49,7 +49,7 @@ def frozen():
         n_param=8_000_000_000, n_layers=32, n_heads_q=32, n_heads_kv=8,
         d_model=4096, d_ff=14336, vocab_size=128_256,
         batch_size=1, context_length=131_072, weight_bits=16, kv_bits=16,
-        runtime_bytes=0))
+        runtime_fixed_bytes=0))
     data = {}
     for name in ARCHITECTURES:
         case = load_case_config(CASES / f"{name}.yaml")
