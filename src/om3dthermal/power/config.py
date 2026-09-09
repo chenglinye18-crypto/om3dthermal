@@ -302,11 +302,38 @@ class MIVResistanceProvenance(StrictModel):
     note: str
 
 
+class HBMNominalReadEnergyInput(StrictModel):
+    full_row_pj_per_bit: float = Field(ge=0.0)
+    closed_row_pj_per_bit: float = Field(ge=0.0)
+    aggregation: Literal["ARITHMETIC_MEAN"]
+    memory_internal_pj_per_bit: float = Field(ge=0.0)
+    vertical_pj_per_bit: float = Field(ge=0.0)
+    base_route_pj_per_bit: float = Field(ge=0.0)
+    interface_pj_per_bit: float = Field(ge=0.0)
+
+    @property
+    def nominal_pj_per_bit(self) -> float:
+        return 0.5 * (
+            self.full_row_pj_per_bit + self.closed_row_pj_per_bit)
+
+    @model_validator(mode="after")
+    def component_closure(self) -> "HBMNominalReadEnergyInput":
+        components = (
+            self.memory_internal_pj_per_bit + self.vertical_pj_per_bit
+            + self.base_route_pj_per_bit + self.interface_pj_per_bit)
+        if not math.isclose(
+                components, self.nominal_pj_per_bit,
+                rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError("HBM nominal read-energy components do not close")
+        return self
+
+
 class MemoryInput(StrictModel):
     technology: str
     backend: Literal["dreamram", "unresolved"]
     dreamram: DreamRAMInput | None = None
     cell_model: CellModelInput = Field(default_factory=CellModelInput)
+    nominal_read_energy: HBMNominalReadEnergyInput | None = None
 
     @model_validator(mode="after")
     def backend_inputs(self) -> "MemoryInput":
@@ -314,6 +341,8 @@ class MemoryInput(StrictModel):
             raise ValueError("dreamram backend requires memory.dreamram")
         if self.backend == "unresolved" and self.dreamram is not None:
             raise ValueError("unresolved memory must not select DreamRAM")
+        if self.backend != "dreamram" and self.nominal_read_energy is not None:
+            raise ValueError("nominal read energy requires DreamRAM")
         return self
 
 

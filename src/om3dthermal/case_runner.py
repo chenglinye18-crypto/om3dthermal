@@ -65,6 +65,7 @@ class PipelineResult:
     boundary_table: BoundaryLinkTable
     power: PowerVector
     operator: MatrixFreeThermalOperator
+    reusable_setup: ThermalSetupArtifacts
     # Per-stage wall time (seconds).
     discretization_seconds: float
     conductance_seconds: float
@@ -173,6 +174,7 @@ def run_steady_pipeline(
     initial_temperature_K: float = 293.15,
     backend: str = "cpu",
     setup_cache_path: str | Path | None = None,
+    reusable_setup: ThermalSetupArtifacts | None = None,
 ) -> PipelineResult:
     """Run the full steady-state pipeline and return all artifacts.
 
@@ -217,13 +219,16 @@ def run_steady_pipeline(
         config = _override_discretization(config, max_cell_size_m)
 
     pipeline_started = time.perf_counter()
-    boxes, physical_signature = build_scene_and_signature(config)
+    boxes = []
+    physical_signature = None
     cache_path = Path(setup_cache_path) if setup_cache_path is not None else None
-    artifacts = None
+    artifacts = reusable_setup
     cache_load_seconds = 0.0
     cache_serialization_seconds = 0.0
-    cache_status = "DISABLED"
-    if cache_path is not None:
+    cache_status = "MEMORY_REUSE" if artifacts is not None else "DISABLED"
+    if artifacts is None:
+        boxes, physical_signature = build_scene_and_signature(config)
+    if artifacts is None and cache_path is not None:
         artifacts, cache_load_seconds, cache_status = load_setup_cache(
             cache_path, physical_signature)
 
@@ -358,6 +363,7 @@ def run_steady_pipeline(
         boundary_table=boundary_table,
         power=power,
         operator=operator,
+        reusable_setup=artifacts,
         discretization_seconds=discretization_seconds,
         conductance_seconds=conductance_seconds,
         operator_seconds=operator_seconds,

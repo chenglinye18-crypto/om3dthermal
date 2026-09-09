@@ -602,6 +602,12 @@ def main(argv: list[str] | None = None) -> int:
     sweep_parser.add_argument(
         "--output-dir", type=Path, default=None,
         help="override the sweep output directory")
+    bandwidth_thermal_parser = subparsers.add_parser(
+        "bandwidth-thermal-sweep",
+        help="run the frozen No-NMP HBM/M3D bandwidth thermal sweep")
+    bandwidth_thermal_parser.add_argument(
+        "--output-dir", type=Path,
+        default=Path("runs/no_nmp_bandwidth_thermal_sweep"))
     experiment_parser = subparsers.add_parser(
         "experiment",
         help="run a formal workload-aware experiment and write a result bundle")
@@ -641,10 +647,8 @@ def main(argv: list[str] | None = None) -> int:
         bandwidth = resolve_gpu_bandwidth_service(
             transfer_ceiling_bytes_per_s=(
                 platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s),
-            gpu_bandwidth_utilization=(
-                platform.gpu_bandwidth_service.nominal_utilization),
-            utilization_status=platform.gpu_bandwidth_service.utilization_status,
-            utilization_provenance=platform.gpu_bandwidth_service.provenance)
+            service_status=platform.gpu_bandwidth_service.service_status,
+            provenance=platform.gpu_bandwidth_service.provenance)
         metrics = evaluate_llm_prefill(workload_spec.prefill)
         compute = platform.gpu_compute_power
         prefill_compute = platform.gpu_prefill_compute
@@ -777,6 +781,13 @@ def main(argv: list[str] | None = None) -> int:
             f"[experiment] rows:       {len(result.rows)}\n"
             f"[experiment] output_dir: {result.output_dir}\n"
             f"[experiment] manifest:   {result.output_dir / 'manifest.json'}")
+    elif args.command == "bandwidth-thermal-sweep":
+        from .bandwidth_thermal_sweep import (
+            run_no_nmp_bandwidth_thermal_sweep,
+        )
+        result = run_no_nmp_bandwidth_thermal_sweep(
+            args.output_dir, project_root=Path.cwd())
+        print(json.dumps(result, indent=2))
     return 0
 
 

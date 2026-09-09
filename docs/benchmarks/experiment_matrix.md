@@ -39,5 +39,5 @@ working point. Frozen numerical anchors and source records are listed in
 
 The former multi-layout thermal tables and figures are excluded from current
 DAC evaluation. Historical records reside in `docs/archive/`; configurations
-under `configs/legacy/` remain only for compatibility tests and provenance.
+needed by regression tests are isolated under `tests/fixtures/legacy/`.
 A successful historical test does not make its result a current paper baseline.

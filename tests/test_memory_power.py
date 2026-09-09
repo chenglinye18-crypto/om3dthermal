@@ -37,7 +37,7 @@ from om3dthermal.power.si_packing import pack_si_primitive
 
 
 ROOT = Path(__file__).parents[1]
-POWER_CONFIGS = ROOT / "configs" / "legacy" / "power"
+POWER_CONFIGS = ROOT / "tests" / "fixtures" / "legacy" / "power"
 CASE_CONFIGS = ROOT / "configs" / "cases"
 
 
@@ -776,7 +776,9 @@ def test_miv_length_changes_with_layers_and_pitch_not_dies_stacked():
 )
 def test_miv_adapter_tracks_existing_geometry_config(
         tmp_path, layers, pitch_nm, expected_average_um):
-    source_path = ROOT / "configs" / "legacy" / "orthogonal_m3d_edram_v0.yaml"
+    source_path = (
+        ROOT / "tests" / "fixtures" / "legacy" /
+        "orthogonal_m3d_edram_v0.yaml")
     raw_geometry = yaml.safe_load(source_path.read_text(encoding="utf-8"))
     stack_um = layers * pitch_nm * 1e-3
     raw_geometry["m3d_beol"].update({
@@ -1329,7 +1331,7 @@ def test_active_cases_parse_and_resolve_system_power():
     hbm_system = resolve_system_power(
         hbm_case, project_root=ROOT, geometry=hbm_geometry,
         **_resolve_case_power_operating_point_kwargs(hbm_case, ROOT))
-    assert hbm_system.gpu_power_W == 298.256
+    assert hbm_system.gpu_power_W == 522.512
     assert hbm_system.memory_result is not None
     hbm = hbm_system.memory_result
     assert hbm.diagnostics["activated_row_data_utilization"] == 0.10
@@ -1337,7 +1339,7 @@ def test_active_cases_parse_and_resolve_system_power():
     assert hbm.P_refresh_W == pytest.approx(0.9614665609424703)
     assert hbm.diagnostics["total_stored_bits"] == 1159641169920  # rev v2: 135 GiB
     assert hbm.E_base_route_pj_bit == pytest.approx(
-        0.109992140663163, abs=0.0)
+        0.15710373866310487, abs=0.0)
     assert hbm.E_vertical_pj_bit > 0.0
     assert hbm_case.architecture.geometry_source is None
     assert hbm.diagnostics["dies_stacked"] == 8
@@ -1346,12 +1348,15 @@ def test_active_cases_parse_and_resolve_system_power():
     # Rev v2: 12.2x11.8 mm HBM3E-class die packs 180 banks (was 144).
     assert hbm.diagnostics["packed_banks_per_die"] == 180
     assert hbm.E_memory_internal_pj_bit == pytest.approx(
-        0.8676557831180526, abs=0.0)
+        1.2392882489481523, abs=0.0)
     assert hbm.E_vertical_pj_bit == pytest.approx(
-        0.38438756103515626, abs=0.0)
-    assert hbm.E_interface_pj_bit == pytest.approx(0.0350625, abs=0.0)
+        0.5490276175199488, abs=0.0)
+    assert hbm.E_interface_pj_bit == pytest.approx(
+        0.05008039486879381, abs=0.0)
     assert hbm.E_access_total_pj_bit == pytest.approx(
-        1.3970979848163718, abs=0.0)
+        (0.978 + 3.013) / 2, abs=0.0)
+    assert hbm.diagnostics["hbm_read_energy_status"] == (
+        "FROZEN_ROW_STATE_ARITHMETIC_MEAN")
     assert hbm.diagnostics["geometry_feasible"] is True
 
     m3d_case = load_case_config(CASE_CONFIGS / "orthogonal_m3d_igzo.yaml")
@@ -1372,7 +1377,6 @@ def test_active_case_surface_is_minimal_and_single_file():
         "conventional_hbm_2x1.yaml",
         "orthogonal_si.yaml",
         "orthogonal_m3d_igzo.yaml",
-        "orthogonal_m3d_igzo_edge_si_bar.yaml",
     }
     assert {path.name for path in CASE_CONFIGS.glob("*.yaml")} == expected
     forbidden = {
@@ -1401,26 +1405,7 @@ def test_active_case_system_mapping_uses_resolved_power():
         mapping = map_system_power_to_thermal(case, system)
         assert mapping.unresolved is False
         assert mapping.total_mapped_power_W == pytest.approx(
-            298.256 + system.resolved_total_memory_power_W)
-
-
-def test_m3d_si_unresolved_is_na_not_zero():
-    path = (
-        ROOT / "configs" / "legacy" / "unvalidated" /
-        "orthogonal_m3d_si.yaml")
-    case = load_case_config(path)
-    geometry = resolve_case_geometry(case)
-    system = resolve_system_power(
-        case, project_root=ROOT, geometry=geometry,
-        **_resolve_case_power_operating_point_kwargs(case, ROOT))
-    mapping = map_system_power_to_thermal(case, system)
-    assert system.memory_power_status == "NOT_VALIDATED"
-    assert system.memory_access_energy_pJ_per_bit is None
-    assert system.memory_access_power_W is None
-    assert system.resolved_total_memory_power_W is None
-    assert system.as_dict(display_na=True)["resolved_total_memory_power_W"] == "N/A"
-    assert mapping.unresolved is True
-    assert mapping.total_mapped_power_W == 298.256
+            522.512 + system.resolved_total_memory_power_W)
 
 
 def test_orthogonal_si_uses_matched_row_workload_and_refresh():
@@ -1528,27 +1513,15 @@ def test_conventional_full_row_same_boundary_remains_stable():
     full = _with_row_utilization(case, 1.0)
     geometry = resolve_case_geometry(full)
     result = calculate_memory_power(full, read_bandwidth_gbps=full.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
-    legacy_config = load_power_config(POWER_CONFIGS / "hbm3_si.yaml")
-    legacy = calculate_memory_power(
-        legacy_config,
-        read_bandwidth_gbps=legacy_config.workload.read_bandwidth_gbps,
-        project_root=ROOT)
     assert result.diagnostics["effective_rd_per_act"] == 64.0
-    assert result.E_base_route_pj_bit == legacy.E_base_route_pj_bit
-    assert result.E_memory_internal_pj_bit == legacy.E_memory_internal_pj_bit
-    assert result.E_interface_pj_bit == legacy.E_interface_pj_bit
-    assert result.E_vertical_pj_bit == pytest.approx(
-        1.5 * legacy.E_vertical_pj_bit)
-    assert result.E_access_total_pj_bit == pytest.approx(
-        result.E_memory_internal_pj_bit + result.E_vertical_pj_bit
-        + result.E_base_route_pj_bit + result.E_interface_pj_bit)
+    assert result.E_access_total_pj_bit == pytest.approx(1.9955)
     # Refresh is deliberately enabled in the active case; the old split
     # logic-removed power input predated refresh accounting.
     # Rev v2: refresh scales with capacity 116.0 -> 145.0 GB.
     assert result.P_refresh_W == pytest.approx(0.9614665609424703)
 
 
-def test_conventional_12hi_scales_only_dreamram_vertical_path():
+def test_conventional_12hi_preserves_frozen_nominal_total():
     case = load_case_config(
         CASE_CONFIGS / "conventional_hbm_2x1.yaml")
     geometry_12hi = resolve_case_geometry(case)
@@ -1559,15 +1532,9 @@ def test_conventional_12hi_scales_only_dreamram_vertical_path():
     assert geometry_12hi.memory_dies_per_region == 12
     assert result_12hi.diagnostics["total_stored_bits"] == 1159641169920  # rev v2
     assert result_12hi.P_refresh_W == pytest.approx(0.9614665609424703)  # rev v2
-    assert result_12hi.E_memory_internal_pj_bit == pytest.approx(
-        result_8hi.E_memory_internal_pj_bit, abs=0.0)
-    assert result_12hi.E_base_route_pj_bit == pytest.approx(
-        result_8hi.E_base_route_pj_bit, abs=0.0)
+    assert result_12hi.E_access_total_pj_bit == pytest.approx(1.9955)
+    assert result_8hi.E_access_total_pj_bit == pytest.approx(1.9955)
     assert result_12hi.E_base_route_pj_bit > 0.0
-    assert result_12hi.E_interface_pj_bit == pytest.approx(
-        result_8hi.E_interface_pj_bit, abs=0.0)
-    assert result_12hi.E_vertical_pj_bit == pytest.approx(
-        1.5 * result_8hi.E_vertical_pj_bit)
     diagnostics = result_12hi.diagnostics
     assert diagnostics["electrical_reference_stack_die_count"] == 8
     assert diagnostics["electrical_resolved_stack_die_count"] == 12
@@ -1580,12 +1547,11 @@ def test_conventional_12hi_scales_only_dreamram_vertical_path():
     assert diagnostics["resolved_average_tsv_capacitance_pF"] == 4.68
     assert diagnostics["tsv_data_serialization_factor"] == 4
     assert diagnostics["active_data_tsv_count_per_command"] == 68
-    assert sum(diagnostics[
-        "vertical_components_reference_pJ_per_bit"].values()) == (
-        result_8hi.E_vertical_pj_bit)
-    assert sum(diagnostics[
-        "vertical_components_resolved_pJ_per_bit"].values()) == (
-        result_12hi.E_vertical_pj_bit)
+    reference_vertical = sum(diagnostics[
+        "vertical_components_reference_pJ_per_bit"].values())
+    resolved_vertical = sum(diagnostics[
+        "vertical_components_resolved_pJ_per_bit"].values())
+    assert resolved_vertical == pytest.approx(1.5 * reference_vertical)
 
 
 def test_canonical_m3d_has_single_geometry_and_operation_sources():

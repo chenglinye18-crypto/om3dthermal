@@ -179,7 +179,7 @@ def test_capacity_path_does_not_invoke_thermal(
         raise AssertionError("thermal path must not be invoked")
 
     monkeypatch.setattr(
-        architecture_comparison, "compile_case_thermal", forbidden)
+        architecture_comparison, "compile_canonical_thermal_case", forbidden)
     monkeypatch.setattr(
         architecture_comparison, "run_steady_pipeline", forbidden)
     monkeypatch.setattr(case_runner, "run_steady_pipeline", forbidden)

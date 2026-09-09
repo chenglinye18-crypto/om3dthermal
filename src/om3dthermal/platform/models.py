@@ -20,20 +20,18 @@ from .gpu_power import (
 
 
 class GPUBandwidthServiceSpec(BaseModel):
-    """Independent platform choice for achieved GPU-side memory service."""
+    """GPU service consumes the resolved transfer ceiling directly."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    model: Literal["SUSTAINED_FRACTION_OF_TRANSFER_CEILING"]
-    nominal_utilization: float = Field(gt=0.0, le=1.0)
-    utilization_status: Literal[
-        "MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION"]
+    model: Literal["DIRECT_TRANSFER_CEILING"]
+    service_status: Literal["DIRECT_TRANSFER_CEILING"]
     provenance: tuple[ProvenanceRecord, ...]
 
     @model_validator(mode="after")
     def _provenance_required(self) -> "GPUBandwidthServiceSpec":
         if not self.provenance:
-            raise ValueError("GPU bandwidth service spec requires provenance")
+            raise ValueError("GPU bandwidth service requires provenance")
         return self
 
 

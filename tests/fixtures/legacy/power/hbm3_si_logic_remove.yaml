@@ -1,5 +1,4 @@
-﻿# LEGACY SPLIT POWER CONFIG. Active case: configs/cases/conventional_hbm_2x1.yaml.
-memory:
+﻿memory:
   technology: si_dram
   backend: dreamram
   dreamram:
@@ -7,27 +6,23 @@ memory:
     technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
 
 architecture:
-  name: conventional_hbm3
+  name: conventional_hbm3_logic_removed
   layers: 8
   geometry_source:
-    config: configs/legacy/exp_conv_2x2_g414_m160.yaml
+    config: tests/fixtures/legacy/exp_conv_2x2_nobase_g414_m128.yaml
     memory_region: hbm_dram_die
   vertical: {type: tsv, source: dreamram}
-  base_route: {enabled: true, source: dreamram}
+  base_route: {enabled: false, source: none}
+  # MODELING_CHOICE: retain the existing HBM DQ interface after base removal.
   interface: {type: hbm_dq, source: dreamram}
-  logic_background_w: null
+  logic_background_w: 0
 
 workload:
   read_bandwidth_gbps: 39200
   read_bandwidth_semantics: REQUESTED_SCENARIO_BANDWIDTH_DEMAND
   write_bandwidth_gbps: 0
-  # Fraction of an activated DRAM row consumed before PRE closes the row.
   row_policy: {activated_row_data_utilization: 1.0}
 
 power:
-  refresh:
-    enabled: true
-    model: dreamram_internal_refresh
-    refresh_window_s: 0.032
-    refresh_window_provenance: EXPLICIT_EXTERNAL_BASELINE_REQUIRES_DOCUMENTED_SOURCE
+  refresh: {enabled: false}
   background: {enabled: false}

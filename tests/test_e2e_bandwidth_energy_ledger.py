@@ -85,15 +85,15 @@ def test_host_bandwidth_and_energy_closure(rows) -> None:
     assert rows["HOST_OFFLOAD_DYNAMIC_PATH"].energy_nominal_pJ_per_bit == pytest.approx(5.3)
 
 
-def test_gpu_range_and_nominal_match_canonical_sources(rows) -> None:
+def test_gpu_energy_and_direct_service_match_canonical_sources(rows) -> None:
     gpu = rows["GPU_DECODE_DYNAMIC"]
-    assert gpu.energy_min_pJ_per_bit == 12.56
-    assert gpu.energy_nominal_pJ_per_bit == pytest.approx(15.29)
-    assert gpu.energy_max_pJ_per_bit == 18.02
+    assert gpu.energy_min_pJ_per_bit is None
+    assert gpu.energy_nominal_pJ_per_bit == pytest.approx(11.68)
+    assert gpu.energy_max_pJ_per_bit is None
     service = rows["GPU_SUSTAINED_BANDWIDTH_SERVICE"]
     assert service.bandwidth_max_GBps == pytest.approx(4800.0)
-    assert service.bandwidth_efficiency == pytest.approx(0.5)
-    assert service.bandwidth_nominal_GBps == pytest.approx(2400.0)
+    assert service.bandwidth_efficiency == pytest.approx(1.0)
+    assert service.bandwidth_nominal_GBps == pytest.approx(4800.0)
 
 
 def test_blank_is_not_zero_and_hbm_is_resolver_derived(rows) -> None:
@@ -119,8 +119,8 @@ def test_generator_contains_no_handwritten_physics_values() -> None:
     source = (ROOT / "scripts/generate_e2e_bandwidth_energy_ledger.py").read_text(
         encoding="utf-8")
     for forbidden in (
-        "5300", "4800", "0.855260", "15.29", "167.9", "24.7093",
-        "56.2", "12.56", "18.02",
+        "5300", "4800", "0.855260", "11.68", "167.9", "24.7093",
+        "56.2",
     ):
         assert forbidden not in source
 

@@ -127,9 +127,8 @@ def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDema
     service_spec=platform.gpu_bandwidth_service
     gpu_bw=resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=gpu.peak_memory_bandwidth_bytes_per_s,
-        gpu_bandwidth_utilization=service_spec.nominal_utilization,
-        utilization_status=service_spec.utilization_status,
-        utilization_provenance=service_spec.provenance).sustained_bandwidth_bytes_per_s
+        service_status=service_spec.service_status,
+        provenance=service_spec.provenance).sustained_bandwidth_bytes_per_s
     transfer=resolve_local_memory_gpu_transfer(
         bandwidth_demand_bytes_per_s=bandwidth_demand_bytes_per_s,
         memory_capability_bytes_per_s=bandwidth.coil_bandwidth_bytes_per_s,

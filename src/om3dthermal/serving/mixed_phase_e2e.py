@@ -187,9 +187,8 @@ def resolve_conventional_hbm_backend(
         raise ValueError("canonical HBM read energy and refresh must resolve")
     bandwidth = resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=gpu_spec.peak_memory_bandwidth_bytes_per_s,
-        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
-        utilization_status=platform.gpu_bandwidth_service.utilization_status,
-        utilization_provenance=platform.gpu_bandwidth_service.provenance,
+        service_status=platform.gpu_bandwidth_service.service_status,
+        provenance=platform.gpu_bandwidth_service.provenance,
     )
     return ConventionalHBMBackend(
         architecture=case.name,
@@ -205,7 +204,7 @@ def resolve_conventional_hbm_backend(
             "DreamRAM canonical backend exposes PRE/ACT/RD read-access energy; "
             "it has no WR command or documented symmetric read/write semantics"),
         capacity_source_status=capacity.source_status,
-        bandwidth_source_status=bandwidth.utilization_status,
+        bandwidth_source_status=bandwidth.service_status,
         host_offload=platform.host_offload,
     )
 
@@ -577,9 +576,8 @@ def evaluate_orthogonal_m3d_igzo_memory_only_mixed_phase(
         gpu_compute, gpu_prefill)
     gpu_service = resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=gpu_decode_spec.peak_memory_bandwidth_bytes_per_s,
-        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
-        utilization_status=platform.gpu_bandwidth_service.utilization_status,
-        utilization_provenance=platform.gpu_bandwidth_service.provenance)
+        service_status=platform.gpu_bandwidth_service.service_status,
+        provenance=platform.gpu_bandwidth_service.provenance)
     roofline = evaluate_gpu_prefill_roofline(
         prefill_metrics,
         peak_compute_flops_per_s=gpu_compute.peak_compute_BF16_dense_flops_per_s,
@@ -610,9 +608,8 @@ def evaluate_orthogonal_m3d_igzo_memory_only_mixed_phase(
         gpu_peak_bandwidth_bytes_per_s=gpu_decode_spec.peak_memory_bandwidth_bytes_per_s)
     boundary_service = resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=boundary.bandwidth_actual_bytes_per_s,
-        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
-        utilization_status=platform.gpu_bandwidth_service.utilization_status,
-        utilization_provenance=platform.gpu_bandwidth_service.provenance)
+        service_status=platform.gpu_bandwidth_service.service_status,
+        provenance=platform.gpu_bandwidth_service.provenance)
     effective_bw = min(internal_bw, boundary_service.sustained_bandwidth_bytes_per_s)
     decode = AnalyticalRooflineGPUModel(
         matched_payload_bandwidth_bits_per_second=8.0 * effective_bw,
@@ -697,9 +694,8 @@ def evaluate_iom3d_feol_nmp_mixed_phase(
         gpu_compute, gpu_prefill)
     bandwidth = resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=gpu_decode.peak_memory_bandwidth_bytes_per_s,
-        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
-        utilization_status=platform.gpu_bandwidth_service.utilization_status,
-        utilization_provenance=platform.gpu_bandwidth_service.provenance,
+        service_status=platform.gpu_bandwidth_service.service_status,
+        provenance=platform.gpu_bandwidth_service.provenance,
     )
     roofline = evaluate_gpu_prefill_roofline(
         prefill_metrics,

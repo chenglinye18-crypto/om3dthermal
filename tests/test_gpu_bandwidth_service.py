@@ -22,25 +22,23 @@ PLATFORM_PATH = ROOT / "configs/platform/gpu_package_h200_reference.yaml"
 M3D_CASE_PATH = ROOT / "configs/cases/orthogonal_m3d_igzo.yaml"
 
 
-def _service(*, utilization: float = 0.5, ceiling: float = 4.8e12):
+def _service(*, ceiling: float = 4.8e12):
     spec = load_platform_spec_file(PLATFORM_PATH).gpu_bandwidth_service
     return resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=ceiling,
-        gpu_bandwidth_utilization=utilization,
-        utilization_status=spec.utilization_status,
-        utilization_provenance=spec.provenance,
+        service_status=spec.service_status,
+        provenance=spec.provenance,
     )
 
 
-def test_canonical_nominal_utilization_loads_from_platform() -> None:
+def test_canonical_direct_service_loads_from_platform() -> None:
     spec = load_platform_spec_file(PLATFORM_PATH).gpu_bandwidth_service
-    assert spec.nominal_utilization == pytest.approx(0.5)
-    assert spec.utilization_status == (
-        "MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION")
+    assert spec.model == "DIRECT_TRANSFER_CEILING"
+    assert spec.service_status == "DIRECT_TRANSFER_CEILING"
     assert spec.provenance
 
 
-def test_service_resolver_applies_utilization_after_transfer_ceiling() -> None:
+def test_service_resolver_uses_transfer_ceiling_directly() -> None:
     transfer = resolve_local_memory_gpu_transfer(
         bandwidth_demand_bytes_per_s=4.9e12,
         memory_capability_bytes_per_s=5.3e12,
@@ -50,13 +48,13 @@ def test_service_resolver_applies_utilization_after_transfer_ceiling() -> None:
     assert transfer.bandwidth_actual_bytes_per_s == pytest.approx(4.8e12)
     assert transfer.bottleneck == "GPU"
     assert service.transfer_ceiling_bytes_per_s == pytest.approx(4.8e12)
-    assert service.sustained_bandwidth_bytes_per_s == pytest.approx(2.4e12)
+    assert service.sustained_bandwidth_bytes_per_s == pytest.approx(4.8e12)
 
 
-@pytest.mark.parametrize("utilization", [0.0, -0.1, 1.01, float("nan"), float("inf"), True])
-def test_service_resolver_rejects_invalid_utilization(utilization) -> None:
+@pytest.mark.parametrize("ceiling", [0.0, -0.1, float("nan"), float("inf"), True])
+def test_service_resolver_rejects_invalid_ceiling(ceiling) -> None:
     with pytest.raises((TypeError, ValueError)):
-        _service(utilization=utilization)
+        _service(ceiling=ceiling)
 
 
 def test_service_layer_does_not_change_m3d_intrinsic_bandwidth_or_energy() -> None:
@@ -92,10 +90,10 @@ def test_service_layer_is_not_a_gpu_power_model() -> None:
         peak_bandwidth_bytes_per_s=decode.peak_memory_bandwidth_bytes_per_s,
     )
     assert decode.e_decode_J_per_bit == pytest.approx(11.68e-12)
-    assert achieved_bandwidth_model.gpu_power_W == pytest.approx(298.256)
+    assert achieved_bandwidth_model.gpu_power_W == pytest.approx(522.512)
 
 
-def test_nmp_placement_does_not_consume_gpu_service_utilization() -> None:
+def test_nmp_placement_does_not_consume_gpu_service() -> None:
     placement_root = ROOT / "src/om3dthermal/placement"
     source = "\n".join(
         path.read_text(encoding="utf-8") for path in placement_root.rglob("*.py")

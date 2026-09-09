@@ -52,14 +52,14 @@ def test_nominal_attention_boundary_and_softmax(payload):
     assert a["partial_bytes"] == expected_partial
     assert a["attention_boundary_bytes"] == a["score_bytes"]+a["probability_bytes"]+a["partial_bytes"]
     assert a["softmax_local_bytes"] == a["score_bytes"]+a["probability_bytes"]
-    assert a["softmax_time_ms"] == pytest.approx(a["softmax_local_bytes"]/2.4e12*1e3)
-    assert a["softmax_dynamic_energy_j"] == pytest.approx(8*a["softmax_local_bytes"]*15.29e-12)
+    assert a["softmax_time_ms"] == pytest.approx(a["softmax_local_bytes"]/4.8e12*1e3)
+    assert a["softmax_dynamic_energy_j"] == pytest.approx(8*a["softmax_local_bytes"]*11.68e-12)
     transfer=a["transfer"]
     assert transfer["memory_capability_bytes_per_s"] == 15.9e12
-    assert transfer["bandwidth_actual_bytes_per_s"] == 2.4e12
+    assert transfer["bandwidth_actual_bytes_per_s"] == 4.8e12
     assert transfer["bandwidth_actual_bytes_per_s"] == min(transfer[k] for k in (
         "bandwidth_demand_bytes_per_s","memory_capability_bytes_per_s","gpu_peak_bandwidth_bytes_per_s"))
-    assert a["boundary_time_ms"] == pytest.approx(a["residual_boundary_bytes"]/2.4e12*1e3)
+    assert a["boundary_time_ms"] == pytest.approx(a["residual_boundary_bytes"]/4.8e12*1e3)
 
 
 def test_operator_and_die_closure(payload):
@@ -82,7 +82,7 @@ def test_operator_and_die_closure(payload):
     assert sum(p["resident_used_bytes_per_die"]) == pytest.approx(16e9+2*32*131072*8*128*2+payload["workload"]["runtime_bytes"])
     hw=a["hardware"]
     assert hw["macs_per_die"] == 512 and hw["clock_hz"] == 1e9
-    assert hw["aggregate_peak_flops"] == 108.544e12
+    assert hw["aggregate_peak_flops"] == 325.632e12
     assert hw["mac_energy_pj"] == .604
     for row in a["activities"]:
         assert row["memory_service_time_ms"] == pytest.approx(row["total_local_memory_bytes"]/a["local_bandwidth_per_die_bytes_per_s"]*1e3)
@@ -123,7 +123,7 @@ def test_stage_parallelism_regression_gates(payload):
     flops=load["nmp_flops"]
     atomic=load["unit"]["atomic_count"]
     times=[]
-    for span in (1,2,4,8,16,32,64,106):
+    for span in (1,2,4,8,16,32,64,318):
         q,r=divmod(atomic,span)
         fraction=(q+(r>0))/atomic
         times.append(max(total*fraction/payload["activity"]["local_bandwidth_per_die_bytes_per_s"],
@@ -180,11 +180,11 @@ def test_small_op_dimensions_and_energy(payload):
     assert total("ROPE")==655_360
     assert total("SWIGLU")==2_752_512
     assert total("RESIDUAL_ADD")==1_572_864
-    assert total("AV_REDUCTION")==55_836_672
+    assert total("AV_REDUCTION")==166_985_728
     assert total("SAMPLING")==256_516
-    assert a["gpu_remaining_local_bytes"]==62_671_364
-    assert a["gpu_remaining_time_ms"]==pytest.approx(a["gpu_remaining_local_bytes"]/2.4e12*1e3)
-    assert a["gpu_remaining_dynamic_energy_j"]==pytest.approx(8*a["gpu_remaining_local_bytes"]*15.29e-12)
+    assert a["gpu_remaining_local_bytes"]==173_820_420
+    assert a["gpu_remaining_time_ms"]==pytest.approx(a["gpu_remaining_local_bytes"]/4.8e12*1e3)
+    assert a["gpu_remaining_dynamic_energy_j"]==pytest.approx(8*a["gpu_remaining_local_bytes"]*11.68e-12)
     assert a["embedding_local_read_bytes"]==8192
 
 
@@ -196,7 +196,7 @@ def test_explicit_handoffs_are_unique_and_rope_is_closed(payload):
     layer0=[x for x in handoffs if x["layer_id"]==0]
     assert sum(x["bytes"] for x in layer0 if x["producer"]=="Q" and x["consumer"]=="ROPE")==8192
     assert sum(x["bytes"] for x in layer0 if x["producer"]=="K" and x["consumer"]=="ROPE")==2048
-    assert sum(x["bytes"] for x in layer0 if x["producer"]=="ROPE_Q")==106*8192
+    assert sum(x["bytes"] for x in layer0 if x["producer"]=="ROPE_Q")==318*8192
     assert sum(x["bytes"] for x in layer0 if x["producer"]=="ROPE_K")==2048
     assert not any(x["producer"]=="V" and x["consumer"]=="ROPE" for x in handoffs)
     assert any(x["producer"]=="V" and "not RoPE" in x["reason"] for x in handoffs)
@@ -227,7 +227,7 @@ def test_local_service_is_independent_of_external_gpu_bandwidth(payload):
         activity.local_bandwidth_per_die_bytes_per_s)
     assert changed.global_nmp_stage_time_ms == pytest.approx(
         activity.global_nmp_stage_time_ms)
-    assert changed.boundary_time_ms == pytest.approx(2 * activity.boundary_time_ms)
+    assert changed.boundary_time_ms == pytest.approx(4 * activity.boundary_time_ms)
 
 
 def test_external_boundary_uses_canonical_transfer_resolver(payload, monkeypatch):

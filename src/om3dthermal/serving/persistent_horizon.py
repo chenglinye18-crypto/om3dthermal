@@ -222,9 +222,8 @@ def _m3d_gpu_bandwidth(root: Path) -> float:
         gpu_peak_bandwidth_bytes_per_s=gpu.peak_memory_bandwidth_bytes_per_s)
     service = resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=boundary.bandwidth_actual_bytes_per_s,
-        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
-        utilization_status=platform.gpu_bandwidth_service.utilization_status,
-        utilization_provenance=platform.gpu_bandwidth_service.provenance)
+        service_status=platform.gpu_bandwidth_service.service_status,
+        provenance=platform.gpu_bandwidth_service.provenance)
     return min(internal, service.sustained_bandwidth_bytes_per_s)
 
 

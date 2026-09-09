@@ -10,7 +10,7 @@ The framework is intentionally thin: it never re-implements physics. For each
      a per-point JSON written under the sweep's own ``point_configs/``
      directory, leaving the pinned DreamRAM config untouched);
   3. calls the existing ``architecture_comparison.run_architecture_comparison``
-     pipeline (case -> power -> thermal mapping -> compile_case_thermal ->
+     pipeline (case -> power -> thermal mapping -> canonical thermal compile ->
      run_steady_pipeline);
   4. writes a ``metrics.json`` and a ``resolved_case.yaml`` so the run is
      self-describing and re-runnable.
@@ -40,7 +40,7 @@ from .architecture_comparison import (
     _resolve_case_power_operating_points,
     _resolved_capacity,
     _temperature_maxima,
-    compile_case_thermal,
+    compile_canonical_thermal_case,
     resolve_system_power,
 )
 from .case_runner import run_steady_pipeline
@@ -460,7 +460,7 @@ def _thermal_metrics(
         gpu_operating_point=gpu_point,
         transfer_operating_point=transfer_point,
         bandwidth_service_operating_point=service_point)
-    sim = compile_case_thermal(case, sys_pow)
+    sim = compile_canonical_thermal_case(case, sys_pow)
     pipeline = run_steady_pipeline(
         sim, alpha=0.7, rtol=1e-3, max_delta_t_K=1e-2,
         max_iterations=1_000_000,

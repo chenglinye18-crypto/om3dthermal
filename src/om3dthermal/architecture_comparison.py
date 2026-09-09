@@ -133,9 +133,8 @@ def _resolve_case_power_operating_points(
     service_spec = platform.gpu_bandwidth_service
     service = resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=ceiling.bandwidth_actual_bytes_per_s,
-        gpu_bandwidth_utilization=service_spec.nominal_utilization,
-        utilization_status=service_spec.utilization_status,
-        utilization_provenance=service_spec.provenance,
+        service_status=service_spec.service_status,
+        provenance=service_spec.provenance,
     )
     gpu = resolve_gpu_decode_power(
         static_power_W=spec.static_power_W,
@@ -211,7 +210,7 @@ def _common_compact(case: CanonicalCaseConfig) -> dict[str, Any]:
     }
 
 
-def compile_case_thermal(
+def compile_canonical_thermal_case(
         case: CanonicalCaseConfig, system: ResolvedSystemPower,
         ) -> SimulationConfig:
     """Compile thermal geometry from the same canonical case object."""
@@ -302,8 +301,7 @@ def compile_case_thermal(
                 "power_per_die": "0 W",
             },
         }
-        # Rev v2 dual-arm ablation: optional 1 mm y-edge strips between the
-        # cube and the GPU die (A arm Mold, B arm Thermal_Silicon).
+        # Optional sidebars occupy the exposed y edges beside the memory cube.
         edge_strip_material = case.thermal.get("edge_strip_material")
         if edge_strip_material is not None:
             raw["orthogonal_hbm"]["edge_strip_material"] = str(
@@ -412,7 +410,7 @@ def run_architecture_comparison(
         if error > 1e-10 or mapping.unresolved:
             raise RuntimeError(
                 f"thermal power closure failed for {case.name}: {error} W")
-        thermal_config = compile_case_thermal(case, system)
+        thermal_config = compile_canonical_thermal_case(case, system)
         pipeline = run_steady_pipeline(
             thermal_config, alpha=0.7,
             rtol=float(case.thermal["solver"]["rtol"]),

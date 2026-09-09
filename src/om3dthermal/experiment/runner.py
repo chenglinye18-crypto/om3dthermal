@@ -282,10 +282,8 @@ def run_experiment(
         bandwidth_service = resolve_gpu_bandwidth_service(
             transfer_ceiling_bytes_per_s=(
                 ceiling_point.bandwidth_actual_bytes_per_s),
-            gpu_bandwidth_utilization=(
-                bandwidth_service_spec.nominal_utilization),
-            utilization_status=bandwidth_service_spec.utilization_status,
-            utilization_provenance=bandwidth_service_spec.provenance,
+            service_status=bandwidth_service_spec.service_status,
+            provenance=bandwidth_service_spec.provenance,
         )
         gpu_point = resolve_gpu_decode_power(
             static_power_W=decode_spec.static_power_W,

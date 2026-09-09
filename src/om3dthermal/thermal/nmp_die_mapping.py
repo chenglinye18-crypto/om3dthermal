@@ -7,7 +7,7 @@ from typing import Sequence
 
 import numpy as np
 
-from ..architecture_comparison import compile_case_thermal
+from ..architecture_comparison import compile_canonical_thermal_case
 from ..config import PowerSelector, PowerSourceConfig, ThermalPowerSourcesConfig
 from ..power.config import CanonicalCaseConfig
 from ..power.nmp_die_power import NMPDiePowerMap
@@ -93,7 +93,7 @@ def compile_nmp_die_thermal_config(
     die's FEOL.  This is a deterministic coarse interface-side proxy because
     the current geometry has no separately resolved per-die interface box.
     """
-    config = compile_case_thermal(case, system)
+    config = compile_canonical_thermal_case(case, system)
     regions = physical_nmp_die_regions(case)
     rows = sorted(power_map.die_powers, key=lambda row: row.die_id)
     if len(rows) != len(regions) or tuple(row.die_id for row in rows) != tuple(range(len(regions))):

@@ -21,6 +21,14 @@ memory:
   dreamram:
     memory_config: third_party/DreamRAM/configs/mem/baseline/hbm3_baseline.json
     technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
+  nominal_read_energy:
+    full_row_pj_per_bit: 0.978
+    closed_row_pj_per_bit: 3.013
+    aggregation: ARITHMETIC_MEAN
+    memory_internal_pj_per_bit: 1.2392882489481523
+    vertical_pj_per_bit: 0.5490276175199488
+    base_route_pj_per_bit: 0.15710373866310487
+    interface_pj_per_bit: 0.05008039486879381
 
 architecture:
   vertical: {type: tsv, source: dreamram}
@@ -90,21 +98,7 @@ thermal:
   solver: {alpha: 0.7, rtol: 1.0e-6}
 
 provenance:
-  geometry_starting_reference: configs/legacy/exp_conv_2x1_g300_m160.yaml
+  geometry_source: FROZEN_CANONICAL_HBM_2X1
   platform_revision: REV_V2_H200_ANCHORED_2026_09_06
-  two_by_one_semantics: TWO_VISIBLE_12P4X24_GROUPS_FOUR_PHYSICAL_STACK_EQUIVALENTS
-  capacity_instance_footprint_mm: [12.2, 11.8]
-  capacity_instance_footprint_provenance: HBM3E_36GB_CLASS_STACK_DIE_REV_V2
-  physical_stack_organization: CANONICAL_12HI_GEOMETRY
-  base_present_geometry: INHERITED_EXISTING_PAPER_ALIGNED_BASE_STACK
-  access_energy_organization: DREAMRAM_HBM3_REFERENCE_ANALYTICAL
-  electrical_stack_height_model: DREAMRAM_AVERAGE_CROSSED_LAYER_SCALING
-  electrical_stack_height_provenance: DERIVED_FROM_REFERENCE
   capacity_model: GEOMETRY_DRIVEN_INTEGER_BANK_PACKING
-  paper_capacity_sanity_reference_GB: 144.0
-  paper_capacity_sanity_role: REFERENCE_ONLY_NOT_A_FITTING_TARGET
-  analytical_power_scope: WHOLE_CASE_AT_CONFIGURED_AGGREGATE_BANDWIDTH
-  base_logic_feol_power_W: 0.0
-  base_logic_feol_power_status: NOT_SEPARATELY_MODELED
-  base_logic_feol_power_provenance: PLACEHOLDER_ZERO_FOR_FUTURE_LOGIC_MODEL
-  bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
+  power_parameters: docs/research/frozen_model_parameters.md

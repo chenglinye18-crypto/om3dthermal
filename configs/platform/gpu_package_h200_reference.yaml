@@ -1,25 +1,17 @@
 schema_version: 1
 platform_id: gpu_package_h200_reference
-# Canonical H200 GPU platform inputs. Runtime decode power is resolved from
-# these independent parameters; no fixed or peak-power input exists.
+# Canonical H200 GPU platform inputs.
 package_profile_status: EXISTING_CANONICAL_CASE_THERMAL_PACKAGE
 gpu_bandwidth_service:
-  model: SUSTAINED_FRACTION_OF_TRANSFER_CEILING
-  nominal_utilization: 0.5
-  utilization_status: MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION
+  model: DIRECT_TRANSFER_CEILING
+  service_status: DIRECT_TRANSFER_CEILING
   provenance:
-    - record_id: gpu_sustained_bandwidth_utilization_nominal_v0
-      classification: MODELING_CHOICE
+    - record_id: gpu_direct_transfer_service_v1
+      classification: SOFTWARE_DERIVED
       source: configs/platform/gpu_package_h200_reference.yaml
-      source_location: GPU-side sustained-bandwidth nominal modeling choice
-      status: MODELING_CHOICE_NOMINAL_GPU_BANDWIDTH_UTILIZATION
-      transformation: sustained bandwidth = nominal utilization * physical transfer ceiling
-      notes: >-
-        The nominal utilization is not measured or paper-reported. It applies
-        only after resolving the memory-to-GPU transfer ceiling; it does not
-        derate intrinsic M3D bandwidth or NMP-local traffic. Performance,
-        M3D dynamic power, and GPU bandwidth-bound dynamic power consume the
-        resulting sustained bandwidth.
+      source_location: GPU bandwidth service
+      status: DIRECT_TRANSFER_CEILING
+      transformation: sustained bandwidth = physical transfer ceiling
 gpu_decode_power:
   model: AFFINE_UTILIZATION_MODEL
   static_power_W: 74.0
@@ -31,64 +23,16 @@ gpu_decode_power:
   coefficient_nominal_status: USER_SPECIFIED_MODELING_CHOICE
   model_form_status: MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING
   provenance:
-    - record_id: ml_energy_llama31_8b_h100_v0
-      classification: MATCHED_REFERENCE
-      source: https://ml.energy/blog/measurement/energy/llm-inference-energy-a-longitudinal-analysis/
-      source_location: Llama 3.1 8B on H100, energy per token vs batch size
-      status: MEASURED_REFERENCE_GPU_UTILIZATION_POWER_CORRELATION
-      notes: >-
-        Measured evidence that GPU power draw tracks utilization during LLM
-        inference and that static power dominates at small batch; anchors the
-        affine model form, not the nominal parameter values.
-    - record_id: tokenpowerbench_decode_phase_v0
-      classification: MATCHED_REFERENCE
-      source: https://arxiv.org/abs/2512.03024
-      source_location: Phase-aligned prefill/decode GPU power measurement
-      status: MEASURED_REFERENCE_DECODE_PHASE_STEADY_LOWER_POWER
-      notes: >-
-        Decode-phase GPU power is steady and below the prefill peak (reported
-        ~90 W lower on H100-class nodes); supports a single-utilization
-        parameterization of the decode phase.
-    - record_id: from_words_to_watts_hpec2023_v0
-      classification: MATCHED_REFERENCE
-      source: https://arxiv.org/abs/2310.03003
-      source_location: GPU power-cap and energy-per-token methodology
-      status: MEASURED_REFERENCE_MEMORY_BOUND_DECODE_POWER_INSENSITIVITY
-      notes: >-
-        250 W to 175 W power cap reduces energy by ~23% while increasing
-        inference time by only ~6.7%, evidencing memory-bound decode.
     - record_id: h200_sxm_platform_spec_v0
       classification: MATCHED_REFERENCE
-      source: NVIDIA H200 SXM datasheet (catalogued in docs/research/HBM_benchmark_landscape_2026-08-25.md)
-      source_location: TDP 700 W; HBM3e 141 GB; peak bandwidth 4.8 TB/s; BF16 dense 989.5 TFLOPS
+      source: docs/research/frozen_model_parameters.md
+      source_location: H200 static power and peak bandwidth
       status: VENDOR_SPEC_PLATFORM_ANCHOR
-      notes: >-
-        Project GPU is H200 SXM-class silicon; TDP, peak bandwidth, and peak
-        compute are vendor specifications.
-    - record_id: h200_sxm_idle_floor_v0
-      classification: MATCHED_REFERENCE
-      source: ai-gpu-energy-optimizer whitepaper (72+ hardware tests)
-      source_location: H200 SXM idle floor measurement
-      status: MEASURED_REFERENCE_IDLE_FLOOR_74W
-      notes: >-
-        H200 SXM measured idle floor ~74 W (post-load HBM3e ghost power
-        +79-136 W; H200 NVL measured idle ~121 W retained as sensitivity
-        upper bound).  P_static = 74 W is applied to H200, baseline, and
-        proposed rows identically.  See
-        docs/research/gpu_platform_table_2026-09-06.csv (idle_power_anchor
-        section).
     - record_id: e_decode_dynamic_rev_v3_v0
       classification: MODELING_CHOICE
-      source: user-specified DAC 2026 operating point
+      source: docs/research/frozen_model_parameters.md
       source_location: GPU Decode dynamic-energy coefficient
       status: USER_SPECIFIED_MODELING_CHOICE
-      notes: >-
-        Use 11.68 pJ per actual transferred bit for GPU Decode dynamic power.
-        With the retained 74 W static floor, P_GPU_dynamic = bandwidth x 8 x
-        11.68 pJ/bit. This is a user-specified modeling choice, not a
-        paper-reported measurement. Memory dynamic energy remains independently
-        modeled; memory static power is disabled in the canonical HBM and M3D
-        case configurations.
 gpu_compute_power:
   model: AFFINE_COMPUTE_RATE_MODEL
   static_power_W: 74.0
@@ -104,7 +48,7 @@ gpu_compute_power:
   provenance:
     - record_id: h200_compute_power_range_v0
       classification: SOFTWARE_DERIVED
-      source: docs/research/gpu_platform_table_2026-09-06.csv
+      source: docs/research/frozen_model_parameters.md
       source_location: H200 SXM compute-bound power range and BF16 dense peak
       status: VENDOR_PEAK_DERIVED_DYNAMIC_ENERGY_REFERENCE
       transformation: >-
@@ -236,5 +180,5 @@ host_offload:
 provenance:
   - record_id: h200_anchored_rev_v2
     classification: MATCHED_REFERENCE
-    source: docs/research/platform_revision_v2_spec_2026-09-06.md
+    source: docs/research/frozen_model_parameters.md
     status: H200_ANCHORED_PLATFORM_REV_V2

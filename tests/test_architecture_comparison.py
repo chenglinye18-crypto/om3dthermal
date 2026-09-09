@@ -8,7 +8,7 @@ from om3dthermal.cli import build_scene
 from om3dthermal.architecture_comparison import (
     _resolve_case_power_operating_point_kwargs,
     _resolved_capacity,
-    compile_case_thermal,
+    compile_canonical_thermal_case,
 )
 from om3dthermal.power import (
     load_case_config,
@@ -53,13 +53,13 @@ def test_system_scope_capacity_and_refresh_close():
 
 
 def test_access_energy_regressions_and_system_bandwidth_are_frozen():
-    expected = (1.3970979848163718, 1.3676557831180527,
+    expected = (1.9955, 1.3676557831180527,
                 0.8552605756733209)
     for name, energy in zip(NAMES, expected):
         _, _, system = _resolved(name)
-        expected_bandwidth = 19200.0
+        expected_bandwidth = 38400.0
         assert system.read_bandwidth_gbps == expected_bandwidth
-        assert system.memory_access_energy_pJ_per_bit == energy
+        assert system.memory_access_energy_pJ_per_bit == pytest.approx(energy)
         assert system.memory_access_power_W == pytest.approx(
             energy * expected_bandwidth * 1e-3)
 
@@ -71,7 +71,7 @@ def test_resolved_to_thermal_source_closure_and_same_case_compile():
         expected = system.gpu_power_W + system.resolved_total_memory_power_W
         assert mapping.total_mapped_power_W == pytest.approx(expected)
         assert mapping.unresolved is False
-        thermal = compile_case_thermal(case, system)
+        thermal = compile_canonical_thermal_case(case, system)
         assert sum(source.total_power for source in
                    thermal.thermal_power_sources.sources) == pytest.approx(expected)
         assert thermal.metadata["case_id"] == case.name
@@ -80,7 +80,7 @@ def test_resolved_to_thermal_source_closure_and_same_case_compile():
 @pytest.mark.parametrize("name", NAMES[1:])
 def test_orthogonal_adhesive_thickness_comes_from_canonical_case(name):
     case, _, system = _resolved(name)
-    thermal = compile_case_thermal(case, system)
+    thermal = compile_canonical_thermal_case(case, system)
     assert case.thermal["adhesive"]["thickness_um"] == 1.0
     assert thermal.orthogonal_hbm.adhesive.thickness == pytest.approx(1e-6)
 
@@ -96,7 +96,7 @@ def test_conventional_physical_geometry_drives_capacity_and_thermal_stack():
     assert diagnostics["rotated_90_deg"] is False
     assert diagnostics["bits_per_stack"] == diagnostics["bits_per_die"] * 12
     assert diagnostics["total_stored_bits"] == diagnostics["bits_per_stack"] * 4
-    thermal = compile_case_thermal(case, system)
+    thermal = compile_canonical_thermal_case(case, system)
     hbm = thermal.stack_templates["hbm_12hi"].model_dump()
     repeated = next(item for item in hbm["items"] if item["kind"] == "repeat")
     assert repeated["count"] == 11
@@ -122,7 +122,7 @@ def test_conventional_base_route_maps_only_to_physical_base_beol():
     assert sum(source.power_W for source in base) == pytest.approx(expected_base_W)
     assert sum(source.power_W for source in dram) == pytest.approx(
         system.resolved_total_memory_power_W - expected_base_W)
-    thermal = compile_case_thermal(case, system)
+    thermal = compile_canonical_thermal_case(case, system)
     sources = {source.name: source for source in
                thermal.thermal_power_sources.sources}
     assert all(sources[source.name].selector.material == "HBM_Base_BEOL"
@@ -137,7 +137,7 @@ def test_conventional_base_route_maps_only_to_physical_base_beol():
 
 def test_conventional_has_two_physical_base_dies_and_775um_stack():
     case, _, system = _resolved(NAMES[0])
-    thermal = compile_case_thermal(case, system)
+    thermal = compile_canonical_thermal_case(case, system)
     scene = build_scene(thermal)
     base_beol = [box for box in scene.boxes
                  if box.material == "HBM_Base_BEOL"]
@@ -161,7 +161,7 @@ def test_unified_memory_mapping_targets_complete_beol_only():
             system.resolved_total_memory_power_W)
         assert all(source.power_W > 0.0 for source in memory)
         assert all(source.target_region != "M3D_FEOL" for source in memory)
-        thermal = compile_case_thermal(case, system)
+        thermal = compile_canonical_thermal_case(case, system)
         selectors = [source.selector for source in
                      thermal.thermal_power_sources.sources
                      if source.name != "gpu"]
@@ -178,7 +178,7 @@ def test_unified_memory_mapping_targets_complete_beol_only():
 
 def test_canonical_m3d_thermal_merges_equal_k_bitcell_and_beol():
     case, _, system = _resolved(NAMES[2])
-    thermal = compile_case_thermal(case, system)
+    thermal = compile_canonical_thermal_case(case, system)
     die = thermal.orthogonal_hbm.memory_die
     assert [layer.role for layer in die.layers] == [
         "si_substrate", "feol", "m3d_bitcell_beol_stack", "daa"]

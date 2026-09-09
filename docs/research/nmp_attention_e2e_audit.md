@@ -61,11 +61,11 @@ and multiplied by B exactly once by consumers.
 - `D_residual = D_attention + D_weight_operator_boundary`.
 - The existing transfer resolver computes
   `BW_actual = min(BW_demand, BW_M3D_external, BW_GPU_sustained)`.
-  GPU sustained bandwidth comes from the existing service resolver and canonical
-  H200 YAML: `0.5 * 4.8 TB/s = 2.4 TB/s`, with no second derating.
+  GPU sustained bandwidth is the transfer ceiling resolved from the scenario,
+  memory capability, and GPU peak; no additional utilization factor is applied.
 - `t_boundary = D_residual / BW_actual`.
 - `D_softmax = D_score + D_probability`; `t_softmax = D_softmax / BW_GPU_sustained`.
-- `E_softmax = 8 D_softmax * e_GPU_decode`, with the canonical `15.29 pJ/actual-bit`.
+- `E_softmax = 8 D_softmax * e_GPU_decode`, with the frozen `11.68 pJ/bit`.
 - `t_stage = max_die(max(D_die/BW_local_die, F_die/F_peak_die))`;
   `t_token = sum(t_stage) + t_boundary + t_softmax` for B=1.
 - `E_total = P_NMP_map * t_token + E_softmax + 74 W * t_token`.

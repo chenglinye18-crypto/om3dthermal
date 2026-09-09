@@ -17,20 +17,13 @@ from om3dthermal.config import (
 )
 from om3dthermal.power.config import CanonicalCaseConfig
 from om3dthermal.power.system import ResolvedSystemPower
-from om3dthermal.thermal.case_adapter import (
-    compile_canonical_thermal_case,
-    extract_temperature_observables,
-)
+from om3dthermal.architecture_comparison import compile_canonical_thermal_case
+from om3dthermal.thermal.observables import extract_temperature_observables
 
 from .llm_decode_workload_power import (
     GPU_WORKLOAD_POWER_STATUS,
     LLMDecodeWorkloadPowerMetrics,
 )
-
-
-# Backward-compatible public name retained for existing tests/callers while
-# the implementation is now owned by the explicit thermal adapter boundary.
-compile_case_thermal = compile_canonical_thermal_case
 
 
 WRITE_SPATIAL_STATUS = (
@@ -188,7 +181,7 @@ def map_workload_power_to_thermal(
     expected = _finite_nonnegative(
         "package_workload_total_W", power.package_workload_total_W)
 
-    compiled = compile_case_thermal(case, system)
+    compiled = compile_canonical_thermal_case(case, system)
     new_sources: list[PowerSourceConfig] = []
     audit_sources: list[WorkloadThermalSource] = []
 

@@ -101,7 +101,7 @@ def test_three_architecture_source_selection_and_gpu_once(frozen) -> None:
         assert set(names) == expected[name]
         assert names.count("gpu") == 1
         assert next(source for source in mapping.sources
-                    if source.name == "gpu").power_W == 298.256
+                    if source.name == "gpu").power_W == 522.512
 
 
 def test_hbm_dynamic_decomposition_and_visible_group_split_close(frozen) -> None:
@@ -137,7 +137,7 @@ def test_m3d_uses_merged_region_and_preserves_lower_bound(frozen) -> None:
 
 def test_every_old_source_power_is_replaced_and_selectors_reused(frozen) -> None:
     for case, system, powers in frozen.values():
-        old = thermal_module.compile_case_thermal(case, system)
+        old = thermal_module.compile_canonical_thermal_case(case, system)
         mapping = map_workload_power_to_thermal(case, system, powers[0])
         old_by_name = {source.name: source for source in
                        old.thermal_power_sources.sources}
@@ -175,7 +175,8 @@ def test_blocked_e5_does_not_compile_or_run_thermal(frozen, monkeypatch) -> None
     })
     def forbidden(*args, **kwargs):
         raise AssertionError("thermal construction must not run")
-    monkeypatch.setattr(thermal_module, "compile_case_thermal", forbidden)
+    monkeypatch.setattr(
+        thermal_module, "compile_canonical_thermal_case", forbidden)
     with pytest.raises(WorkloadPowerBlockedError):
         map_workload_power_to_thermal(case, system, blocked)
 

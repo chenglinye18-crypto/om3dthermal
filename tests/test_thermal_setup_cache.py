@@ -93,3 +93,11 @@ def test_pipeline_reloads_fixed_setup_and_rebuilds_only_rhs(tmp_path: Path) -> N
     )
     assert rebuilt.cache_status == "REBUILT"
     assert rebuilt.setup_build_seconds > 0.0
+
+    reused = run_steady_pipeline(
+        mesh_changed, backend="cpu", reusable_setup=rebuilt.reusable_setup,
+        rtol=1.0, max_delta_t_K=1.0, max_iterations=10,
+    )
+    assert reused.cache_status == "MEMORY_REUSE"
+    assert reused.setup_build_seconds == 0.0
+    assert reused.cache_load_seconds == 0.0

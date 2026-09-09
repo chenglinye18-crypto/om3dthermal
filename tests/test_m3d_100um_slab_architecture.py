@@ -114,13 +114,12 @@ def test_gpu_backend_caps_raw_interface_growth(revisions) -> None:
         gpu_peak_bandwidth_bytes_per_s=gpu.peak_memory_bandwidth_bytes_per_s)
     sustained = resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=transfer.bandwidth_actual_bytes_per_s,
-        gpu_bandwidth_utilization=service.nominal_utilization,
-        utilization_status=service.utilization_status,
-        utilization_provenance=service.provenance)
+        service_status=service.service_status,
+        provenance=service.provenance)
     assert raw.effective_bandwidth_bytes_per_s == pytest.approx(15.9e12)
     assert transfer.bottleneck == "GPU"
     assert transfer.bandwidth_actual_bytes_per_s == pytest.approx(4.8e12)
-    assert sustained.sustained_bandwidth_bytes_per_s == pytest.approx(2.4e12)
+    assert sustained.sustained_bandwidth_bytes_per_s == pytest.approx(4.8e12)
 
 
 def test_thinning_does_not_change_latency_or_energy_primitives(revisions) -> None:

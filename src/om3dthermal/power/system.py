@@ -40,9 +40,8 @@ class ResolvedSystemPower:
     resolved_total_memory_power_W: float | None
     memory_result: MemoryPowerResult | None
     diagnostics: dict[str, Any]
-    gpu_bandwidth_utilization: float | None = None
     gpu_sustained_bandwidth_bytes_per_s: float | None = None
-    gpu_bandwidth_utilization_status: str | None = None
+    gpu_bandwidth_service_status: str | None = None
 
     def as_dict(self, *, display_na: bool = False) -> dict[str, Any]:
         data = asdict(self)
@@ -190,16 +189,13 @@ def resolve_system_power(
         "memory_gpu_transfer_bottleneck": (
             None if transfer_operating_point is None
             else transfer_operating_point.bottleneck),
-        "gpu_bandwidth_utilization": (
-            None if bandwidth_service_operating_point is None
-            else bandwidth_service_operating_point.gpu_bandwidth_utilization),
         "gpu_sustained_bandwidth_bytes_per_s": (
             None if bandwidth_service_operating_point is None
             else bandwidth_service_operating_point
             .sustained_bandwidth_bytes_per_s),
-        "gpu_bandwidth_utilization_status": (
+        "gpu_bandwidth_service_status": (
             None if bandwidth_service_operating_point is None
-            else bandwidth_service_operating_point.utilization_status),
+            else bandwidth_service_operating_point.service_status),
         "memory_dynamic_power_bandwidth_source": bandwidth_source,
     }
     if mode.model == "unresolved":

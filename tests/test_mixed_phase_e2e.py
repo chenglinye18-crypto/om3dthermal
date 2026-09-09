@@ -104,9 +104,9 @@ def test_prefill_read_write_direction_closes_frozen_total(registry):
 
 def test_conventional_hbm_backend_resolves_only_evidenced_terms(backend):
     assert backend.capacity_bytes == 144_955_146_240.0
-    assert backend.read_energy_pJ_per_bit == pytest.approx(1.3970979848163718)
+    assert backend.read_energy_pJ_per_bit == pytest.approx(1.9955)
     assert backend.refresh_power_W == pytest.approx(0.9614665609424703)
-    assert backend.sustained_bandwidth_bytes_per_s == pytest.approx(2.4e12)
+    assert backend.sustained_bandwidth_bytes_per_s == pytest.approx(4.8e12)
     assert backend.write_energy_pJ_per_bit is None
     assert backend.hbm_write_energy_status == "UNRESOLVED"
     assert "no WR command" in backend.hbm_write_energy_reason

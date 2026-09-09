@@ -9,7 +9,7 @@ scenario:
   matched_bandwidth_derivation:
     derivation: ORTHOGONAL_SLAB_IO
     architecture_id: orthogonal_m3d_igzo
-    cap_bits_per_second: 3.92e13
+    cap_bits_per_second: 1.92e13
   bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
   effective_compute_flops_per_second: 1.0e14
   compute_status: NUMERICAL_CHOICE_NOT_HARDWARE_VALIDATED

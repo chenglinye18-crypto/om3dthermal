@@ -41,9 +41,8 @@ def _canonical_roofline(metrics):
     bandwidth = resolve_gpu_bandwidth_service(
         transfer_ceiling_bytes_per_s=(
             platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s),
-        gpu_bandwidth_utilization=platform.gpu_bandwidth_service.nominal_utilization,
-        utilization_status=platform.gpu_bandwidth_service.utilization_status,
-        utilization_provenance=platform.gpu_bandwidth_service.provenance)
+        service_status=platform.gpu_bandwidth_service.service_status,
+        provenance=platform.gpu_bandwidth_service.provenance)
     compute = platform.gpu_compute_power
     prefill_compute = platform.gpu_prefill_compute
     energy = resolve_gpu_prefill_compute_energy_calibration(
@@ -214,7 +213,7 @@ def test_nominal_roofline_and_compute_energy_use_canonical_platform() -> None:
         "VENDOR_REPORTED_BF16_DENSE_PEAK")
     assert roofline.large_gemm_effective_flops_per_s == 700e12
     assert roofline.causal_attention_effective_flops_per_s == 700e12
-    assert roofline.sustained_memory_bandwidth_bytes_per_s == 2.4e12
+    assert roofline.sustained_memory_bandwidth_bytes_per_s == 4.8e12
     assert roofline.peak_roofline_lower_bound_s == max(
         roofline.peak_compute_lower_bound_s, roofline.memory_lower_bound_s)
     assert roofline.linear_nominal_compute_s == pytest.approx(

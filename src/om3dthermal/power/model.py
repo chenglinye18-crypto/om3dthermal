@@ -290,6 +290,26 @@ def calculate_memory_power(
         )
     read_total = (
         memory_internal + vertical + feol_route + base_route + interface)
+    nominal_read = config.memory.nominal_read_energy
+    nominal_diagnostics: dict[str, object] = {}
+    if nominal_read is not None:
+        if m3d_subarray is not None:
+            raise ValueError("HBM nominal read energy is invalid for M3D")
+        target = nominal_read.nominal_pj_per_bit
+        memory_internal = nominal_read.memory_internal_pj_per_bit
+        vertical = nominal_read.vertical_pj_per_bit
+        feol_route = 0.0
+        base_route = nominal_read.base_route_pj_per_bit
+        interface = nominal_read.interface_pj_per_bit
+        read_total = target
+        nominal_diagnostics = {
+            "hbm_read_energy_status": "FROZEN_ROW_STATE_ARITHMETIC_MEAN",
+            "hbm_full_row_energy_pj_per_bit": (
+                nominal_read.full_row_pj_per_bit),
+            "hbm_closed_row_energy_pj_per_bit": (
+                nominal_read.closed_row_pj_per_bit),
+            "hbm_nominal_read_energy_pj_per_bit": target,
+        }
 
     if config.workload.write_bandwidth_gbps > 0:
         raise ValueError(
@@ -395,6 +415,7 @@ def calculate_memory_power(
         architecture_bandwidth_closure=architecture_bandwidth_closure,
         diagnostics={
             **backend.metadata,
+            **nominal_diagnostics,
             **({} if m3d_subarray is None else m3d_subarray.as_dict()),
             **({} if feol_route_result is None else feol_route_result.as_dict()),
             **({} if physical_latency_result is None
