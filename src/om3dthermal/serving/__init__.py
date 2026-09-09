@@ -122,6 +122,11 @@ from .formal_workload import (
     evaluate_formal_inference_workload,
     formal_capacity_limits,
 )
+from .cached_prefix_diagnostic import (
+    CachedPrefixDiagnosticResult,
+    CachedPrefixDiagnosticWorkload,
+    evaluate_cached_prefix_diagnostic,
+)
 
 __all__ = [
     "AnalyticalRooflineGPUModel",
@@ -216,4 +221,7 @@ __all__ = [
     "FormalPolicy",
     "evaluate_formal_inference_workload",
     "formal_capacity_limits",
+    "CachedPrefixDiagnosticResult",
+    "CachedPrefixDiagnosticWorkload",
+    "evaluate_cached_prefix_diagnostic",
 ]

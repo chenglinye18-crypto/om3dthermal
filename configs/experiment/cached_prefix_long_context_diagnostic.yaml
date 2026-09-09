@@ -1,0 +1,27 @@
+schema_version: 1
+diagnostic_id: cached125k_prefill1k_decode2k
+model_registry_dir: configs/workload/models
+model_id: llama31_8b
+cached_history_tokens: 128000
+new_prompt_tokens: 1024
+generation_tokens: 2048
+final_context_tokens: 131072
+total_requests: 128
+arrival_policy: ALL_REQUESTS_AT_T0
+cached_kv_backing_store: HOST
+systems:
+  - {system: CONVENTIONAL_HBM_GPU, policy: RESIDENT_ONLY_QUEUE_TO_FIT}
+  - {system: ORTHOGONAL_M3D_IGZO_MEMORY_ONLY, policy: FULLY_LOCAL_RESIDENT_ONLY}
+admission:
+  model: HOST_BACKING_STORE_TO_LOCAL_ONCE_PER_WAVE
+  bandwidth_source: CANONICAL_H200_HOST_OFFLOAD_EFFECTIVE_LINK
+  provenance_status: MODELING_CHOICE
+workspace:
+  prefill_chunk_tokens: 2048
+  attention_tile_tokens: 128
+  activation_bytes: 2
+  attention_accumulator_bytes: 4
+  provenance_status: MODELING_CHOICE_UNIFORM_CHUNKED_FUSED_ATTENTION
+  provenance: >-
+    Reuse the formal workspace model. Incremental Prefill has only 1024 new
+    query tokens while tiled attention accesses the 128000-token cached KV.

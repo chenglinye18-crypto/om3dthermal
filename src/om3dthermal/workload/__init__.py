@@ -22,6 +22,10 @@ from om3dthermal.workload.llm_prefill import (
     evaluate_gpu_prefill_roofline,
     evaluate_llm_prefill,
 )
+from om3dthermal.workload.cached_prefix_prefill import (
+    CachedPrefixIncrementalPrefillMetrics,
+    evaluate_cached_prefix_incremental_prefill,
+)
 from om3dthermal.workload.model_registry import (
     DenseLLMModelSpec,
     load_dense_model_registry,
@@ -103,6 +107,8 @@ __all__ = [
     "evaluate_llm_decode",
     "evaluate_llm_prefill",
     "evaluate_gpu_prefill_roofline",
+    "CachedPrefixIncrementalPrefillMetrics",
+    "evaluate_cached_prefix_incremental_prefill",
     "load_dense_model_registry",
     "load_dense_model_spec",
     "evaluate_moe_decode",
