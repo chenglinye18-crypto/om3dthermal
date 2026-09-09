@@ -1363,7 +1363,8 @@ def test_active_cases_parse_and_resolve_system_power():
     assert m3d.E_vertical_pj_bit == 0.002445862111816407
     assert m3d.E_feol_route_pj_bit == 0.16705631334524151
     assert m3d.E_interface_pj_bit == 0.5
-    assert m3d.P_refresh_W == 106 * 0.0003484694872064  # rev v2: 106 slabs
+    assert m3d.P_refresh_W == pytest.approx(
+        318 * 0.0003484694872064)  # rev v3: 318 slabs
     assert m3d.diagnostics["geometry_source_config"] == (
         "canonical_case:orthogonal_m3d_igzo")
 
@@ -1616,7 +1617,7 @@ def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
     assert baseline.diagnostics["clusters_per_layer"] == 280
     assert baseline.diagnostics["subarrays_per_layer"] == 17920
     assert baseline.diagnostics["bits_per_layer"] == 4697620480
-    assert baseline.diagnostics["total_stored_bits"] == 106 * 37580963840  # rev v2
+    assert baseline.diagnostics["total_stored_bits"] == 318 * 37580963840  # rev v3
     assert baseline.diagnostics["placed_width_um"] == pytest.approx(
         21794.548876360117)
     assert baseline.diagnostics["placed_height_um"] == pytest.approx(
@@ -1624,7 +1625,7 @@ def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
 
     raw = case.model_dump(mode="json")
     raw["geometry"]["m3d_stack"]["bitcell_layers"] = 16
-    raw["geometry"]["m3d_stack"]["si_substrate_um"] = 290.242
+    raw["geometry"]["m3d_stack"]["si_substrate_um"] = 90.242
     doubled_case = type(case).model_validate(raw)
     doubled_geometry = resolve_case_geometry(doubled_case)
     doubled = calculate_memory_power(doubled_case, read_bandwidth_gbps=doubled_case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=doubled_geometry)
@@ -1636,7 +1637,7 @@ def test_canonical_geometry_drives_capacity_and_miv_without_second_yaml():
 
     raw = case.model_dump(mode="json")
     raw["geometry"]["m3d_stack"]["bitcell_layer_pitch_nm"] = 300.0
-    raw["geometry"]["m3d_stack"]["si_substrate_um"] = 292.45
+    raw["geometry"]["m3d_stack"]["si_substrate_um"] = 92.45
     wider_pitch_case = type(case).model_validate(raw)
     wider_geometry = resolve_case_geometry(wider_pitch_case)
     wider = calculate_memory_power(wider_pitch_case, read_bandwidth_gbps=wider_pitch_case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=wider_geometry)

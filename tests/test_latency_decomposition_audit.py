@@ -226,8 +226,8 @@ def test_bandwidth_model_unchanged(m3d_pipeline) -> None:
         layout,
         topology,
     )
-    assert closure.coil_bandwidth_bits_per_s == 106 * 50 * 8.0 * 1e9  # rev v2
-    assert closure.total_parallel_service_units == 106 * 50
+    assert closure.coil_bandwidth_bits_per_s == 318 * 50 * 8.0 * 1e9  # rev v3
+    assert closure.total_parallel_service_units == 318 * 50
     dream_service = audit_dream_reference_service(ROOT)
     assert dream_service.bottleneck == "BALANCED"
     assert dream_service.ratio_internal_over_interface == pytest.approx(1.0)

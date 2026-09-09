@@ -79,21 +79,19 @@ def test_architecture_organization_and_die_count_reuse(canonical) -> None:
     assert topology.clusters_per_layer == 280
     assert layout.layers_per_cluster == 8
     assert closure.slab_count == layout.slab_count == (
-        geometry.memory_region_count) == 106  # rev v2: 106 slabs
+        geometry.memory_region_count) == 318  # rev v3: 100 um slabs
     assert closure.slab_count_source == "GEOMETRY_MEMORY_REGION_COUNT"
 
 
 def test_coil_bandwidth_unit_closure(canonical) -> None:
     _, _, _, _, closure, _ = canonical
-    # Rev v2: slab IO capability scales to 106 slabs (scenario matched
-    # bandwidth stays capped at 39.2 Tb/s elsewhere).
-    expected_bits = 106 * 50 * 8.0 * 1e9
-    assert closure.coil_bandwidth_bits_per_s == expected_bits == 42.4e12
+    # Rev v3 raw slab IO capability scales to 318 physical slabs; the
+    # downstream GPU/service model remains separately capped.
+    expected_bits = 318 * 50 * 8.0 * 1e9
+    assert closure.coil_bandwidth_bits_per_s == expected_bits == 127.2e12
     assert closure.coil_bandwidth_bytes_per_s == expected_bits / 8
-    # Rev v2: 106-slab capability is 5.3 TB/s; the 4.9 TB/s figure is the
-    # scenario matched bandwidth (capped), not the slab IO capability.
-    assert closure.coil_bandwidth_bytes_per_s / 1e9 == 5300.0
-    assert closure.coil_bandwidth_bytes_per_s / 1e12 == 5.3
+    assert closure.coil_bandwidth_bytes_per_s / 1e9 == 15900.0
+    assert closure.coil_bandwidth_bytes_per_s / 1e12 == 15.9
 
 
 def test_contactless_inputs_are_single_source_and_drive_feol_lanes(
@@ -113,7 +111,7 @@ def test_contactless_inputs_are_single_source_and_drive_feol_lanes(
     assert closure.total_parallel_service_units == (
         layout.slab_count * coil.links_per_slab)
     assert layout.layers_per_cluster == 8
-    assert closure.total_parallel_service_units == 106 * 50
+    assert closure.total_parallel_service_units == 318 * 50
 
 
 def test_m3d_bandwidth_api_has_no_gpu_candidate() -> None:
@@ -148,7 +146,7 @@ def test_coil_parameters_scale_derived_bandwidth(
 
 def test_internal_bandwidth_is_spatial_and_prefix_monotonic(canonical) -> None:
     _, _, _, _, closure, _ = canonical
-    assert closure.total_parallel_service_units == 106 * 50
+    assert closure.total_parallel_service_units == 318 * 50
     assert closure.clusters_per_service == 4
     assert closure.subarrays_per_service == 256
     assert closure.delivered_bits_per_service == 256

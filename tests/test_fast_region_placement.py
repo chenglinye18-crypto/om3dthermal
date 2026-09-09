@@ -130,14 +130,13 @@ def test_canonical_workloads_fit_and_fast_pack_beats_random(
 
 @pytest.mark.parametrize(
     ("requests", "expected"),
-    # REBASE_REASON =
-    # ACTIVE_OPERATOR_WEIGHT_TRAFFIC_REPLACED_FULL_WEIGHT_FOOTPRINT_TRAFFIC
+    # REBASE_REASON = REV_V3_100UM_SLAB_REPLICATES_UNCHANGED_LATENCY_CLASSES
     # PHYSICAL_LATENCY_MODEL_CHANGED = NO
     # FASTEST_SLOT_SELECTION_POLICY_CHANGED = NO
-    # PAGE_DEMAND_WEIGHTING_SEMANTICS_CHANGED = YES
-    ((1, 10.070407952302427),
-     (8, 10.37557673136668),
-     (16, 11.11421552606883)),
+    # PAGE_DEMAND_WEIGHTING_SEMANTICS_CHANGED = NO
+    ((1, 10.059296697217434),
+     (8, 10.080705446241037),
+     (16, 10.191508245663108)),
 )
 def test_fast_pack_canonical_latency_regression(canonical, requests, expected) -> None:
     layout, workload = canonical
@@ -192,7 +191,7 @@ def test_compact_multiplicity_closes_to_expanded_slots(canonical) -> None:
     assert sum(slot.multiplicity for slot in layout.slot_classes) == (
         layout.physical_slot_count)
     assert len(tuple(iter_physical_slots(layout))) == layout.physical_slot_count
-    assert layout.physical_slot_count == 237_440  # rev v2: 2240/slab x 106
+    assert layout.physical_slot_count == 712_320  # rev v3: 2240/slab x 318
 
 
 def test_fast_capacity_cutoff_closure(canonical) -> None:

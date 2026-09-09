@@ -1,9 +1,18 @@
 schema_version: 1
 architecture_id: orthogonal_m3d_igzo
-display_name: Orthogonal M3D-IGZO
+display_name: Orthogonal M3D-IGZO 100um Slab
 role: proposed
 canonical_case: configs/cases/orthogonal_m3d_igzo.yaml
 provenance:
+  - record_id: orthogonal_m3d_100um_slab_revision
+    classification: MODELING_CHOICE
+    source: configs/cases/orthogonal_m3d_igzo.yaml
+    status: REV_V3_100UM_THINNED_SLAB
+    transformation: >-
+      Reduce total slab pitch from 300 um to 100 um while retaining the
+      8-layer bitcell stack and all per-slab interface/NMP primitives; derive
+      92.546 um Si substrate by thickness closure and 318 physical slabs from
+      the 31.8 mm package width.
   - record_id: orthogonal_m3d_canonical_case
     classification: SOFTWARE_DERIVED
     source: configs/cases/orthogonal_m3d_igzo.yaml

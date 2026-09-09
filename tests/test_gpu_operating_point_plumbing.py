@@ -138,7 +138,7 @@ def _resolve_m3d_system(
 def test_nominal_m3d_gpu_transfer_and_power_close() -> None:
     case, raw, transfer, gpu, system = _resolve_m3d_system()
     assert case.workload.read_bandwidth_gbps == 39_200
-    assert raw.effective_bandwidth_bytes_per_s == pytest.approx(5.3e12)
+    assert raw.effective_bandwidth_bytes_per_s == pytest.approx(15.9e12)
     assert transfer.bandwidth_actual_bytes_per_s == 4.8e12
     assert transfer.bottleneck == "GPU"
     assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(2.4e12)
@@ -163,15 +163,18 @@ def test_gpu_peak_override_propagates_to_both_dynamic_powers() -> None:
     assert lower_system.memory_result.P_read_W < nominal_system.memory_result.P_read_W
 
 
-def test_m3d_link_capability_override_propagates_to_both_sides() -> None:
+def test_m3d_link_capability_override_is_hidden_by_gpu_cap() -> None:
     _, _, _, nominal_gpu, nominal_system = _resolve_m3d_system()
     _, raw, transfer, gpu, system = _resolve_m3d_system(links_per_slab=40)
-    assert raw.effective_bandwidth_bytes_per_s == pytest.approx(4.24e12)
-    assert transfer.bottleneck == "MEMORY"
-    assert transfer.bandwidth_actual_bytes_per_s == pytest.approx(4.24e12)
-    assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(2.12e12)
-    assert gpu.gpu_dynamic_power_W < nominal_gpu.gpu_dynamic_power_W
-    assert system.memory_result.P_read_W < nominal_system.memory_result.P_read_W
+    assert raw.effective_bandwidth_bytes_per_s == pytest.approx(12.72e12)
+    assert transfer.bottleneck == "GPU"
+    assert transfer.bandwidth_actual_bytes_per_s == pytest.approx(4.8e12)
+    assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(2.4e12)
+    assert gpu.gpu_dynamic_power_W == nominal_gpu.gpu_dynamic_power_W
+    assert system.read_bandwidth_gbps == nominal_system.read_bandwidth_gbps
+    # Fewer per-slab IO lanes do not lower the GPU-capped rate, but they do
+    # change the explicit FEOL route-energy topology in this sensitivity.
+    assert system.memory_result.P_read_W > nominal_system.memory_result.P_read_W
 
 
 def test_bandwidth_bound_m3d_system_rejects_missing_transfer() -> None:

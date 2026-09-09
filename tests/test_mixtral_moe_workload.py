@@ -178,7 +178,7 @@ def test_weights_only_page_rounded_capacity(workload, physical_layout) -> None:
     assert result.kv_logical_bytes == 0
     assert result.page_layout.page_count == 44_540
     assert result.page_rounded_allocated_bytes / GIB == 86.9921875
-    assert result.occupancy_fraction == pytest.approx(44_540 / 237_440)  # rev v2: 106 slabs
+    assert result.occupancy_fraction == pytest.approx(44_540 / 712_320)  # rev v3
 
 
 @pytest.mark.parametrize(
@@ -193,7 +193,7 @@ def test_n1_n8_n16_m3d_capacity_closure(
     resolved = workload.model_copy(update={"batch_size": requests})
     result = build_m3d_moe_capacity_layout(resolved, physical_layout)
     metrics = evaluate_moe_decode(resolved)
-    assert physical_layout.total_capacity_gib == 463.75  # rev v2: 106 slabs
+    assert physical_layout.total_capacity_gib == 1391.25  # rev v3
     assert physical_layout.slot_capacity_bytes == 2 * MIB
     assert physical_layout.physical_slot_count == 237_440  # rev v2
     assert result.expert_object_count == 256

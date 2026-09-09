@@ -206,9 +206,9 @@ def test_slab_io_bandwidth_derivation_scales_with_slab_count() -> None:
 
     derived = derive_orthogonal_slab_io_bandwidth_bits_per_second(
         orthogonal, coil, architecture_id=case.name)
-    # Rev v2: slab_count 98 -> 106 on the 32 mm GPU die.
-    assert derived == pytest.approx(106 * 50 * 8.0e9)
-    assert derived == pytest.approx(4.24e13)
+    # Rev v3: 318 physical 100 um slabs span the 31.8 mm cube width.
+    assert derived == pytest.approx(318 * 50 * 8.0e9)
+    assert derived == pytest.approx(1.272e14)
 
     more_slabs = orthogonal.model_copy(update={"slab_count": 112})
     assert derive_orthogonal_slab_io_bandwidth_bits_per_second(

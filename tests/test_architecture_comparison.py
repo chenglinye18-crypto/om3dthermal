@@ -44,11 +44,12 @@ def test_system_scope_capacity_and_refresh_close():
     assert capacity["system_capacity_GiB"] == 135.0
     assert capacity["capacity_per_instance_GiB"] == 33.75
     assert _resolved_capacity(*orth_si)["system_capacity_GiB"] == 234.28125
-    assert _resolved_capacity(*m3d)["system_capacity_GiB"] == 463.75
+    assert _resolved_capacity(*m3d)["system_capacity_GiB"] == 1391.25
     assert conventional[2].refresh_power_W == pytest.approx(
         0.9614665609424703)
     assert orth_si[2].refresh_power_W == pytest.approx(1.6685450943022453)
-    assert m3d[2].refresh_power_W == 106 * 0.0003484694872064
+    assert m3d[2].refresh_power_W == pytest.approx(
+        318 * 0.0003484694872064)
 
 
 def test_access_energy_regressions_and_system_bandwidth_are_frozen():
@@ -192,7 +193,7 @@ def test_canonical_m3d_thermal_merges_equal_k_bitcell_and_beol():
         box.tags.get("component") for box in scene.boxes
         if str(box.tags.get("component", "")).startswith(
             "orthogonal_hbm:die_")})
-    assert len(slabs) == 106
+    assert len(slabs) == 318
     for component in slabs:
         boxes = scene.filter(component=component)
         assert len(boxes) == 4

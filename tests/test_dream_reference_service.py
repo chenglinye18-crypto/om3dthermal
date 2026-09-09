@@ -207,18 +207,18 @@ def test_no_hardcoded_m3d_comparison_numbers_in_dream_audit() -> None:
 
 def test_m3d_coil_derivation_unchanged(m3d) -> None:
     _, _, layout, closure = m3d
-    # Rev v2: 106 slabs on the 32 mm GPU die.
-    expected_bits = 106 * 50 * 8.0 * 1e9
-    assert closure.slab_count == layout.slab_count == 106
+    # Rev v3: 318 physical 100 um slabs span the 31.8 mm cube width.
+    expected_bits = 318 * 50 * 8.0 * 1e9
+    assert closure.slab_count == layout.slab_count == 318
     assert closure.links_per_slab == 50
     assert closure.rate_gbps_per_link == 8.0
-    assert closure.coil_bandwidth_bits_per_s == expected_bits == 42.4e12
+    assert closure.coil_bandwidth_bits_per_s == expected_bits == 127.2e12
     assert closure.coil_bandwidth_bytes_per_s == expected_bits / 8
 
 
 def test_m3d_internal_bandwidth_regression_unchanged(m3d) -> None:
     _, _, _, closure = m3d
-    assert closure.total_parallel_service_units == 106 * 50
+    assert closure.total_parallel_service_units == 318 * 50
     assert closure.clusters_per_service == 4
     assert closure.subarrays_per_service == 256
     assert closure.delivered_bits_per_service == 256

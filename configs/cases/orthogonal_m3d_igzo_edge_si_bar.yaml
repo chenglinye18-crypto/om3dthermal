@@ -3,15 +3,15 @@ name: orthogonal_m3d_igzo_edge_si_bar
 geometry:
   type: orthogonal_m3d
   orthogonal:
-    slab_count: 106
+    slab_count: 318
     cube_length_x_mm: 31.8
     slab_plane_y_mm: 22.0
     slab_height_z_mm: 5.5
-    slab_pitch_x_um: 300.0
+    slab_pitch_x_um: 100.0
     slab_plane: y-z
     thickness_direction: global_x
   m3d_stack:
-    si_substrate_um: 292.546
+    si_substrate_um: 92.546
     feol_um: 0.150
     bitcell_layers: 8
     bitcell_layer_pitch_nm: 288.0
@@ -227,7 +227,7 @@ thermal:
   geometry_source: canonical_case_geometry
   package_size_mm: [65.0, 65.0]
   gpu_footprint_mm: [32.0, 24.0]
-  # Rev v2 B-arm (ablation control): identical to the A-arm main case
+  # Rev v3 retains the B-arm ablation control: identical to the A-arm main case
   # (orthogonal_m3d_igzo.yaml) except the 1 mm y-edge strips between the
   # 22 mm cube and the 24 mm GPU die are Thermal_Silicon bars instead of
   # mold resin.  The A/B Tmax difference isolates the Si-bar conduction
@@ -270,12 +270,27 @@ thermal:
   solver: {alpha: 0.7, rtol: 1.0e-6}
 
 provenance:
-  platform_revision: REV_V2_H200_ANCHORED_2026_09_06
+  platform_revision: REV_V3_100UM_THINNED_SLAB
   geometry:
     cell_area_um2: PAPER_REPORTED
     bitcell_layer_pitch_nm: DERIVED_FROM_PAPER_FIGURE
     bitcell_layers: PAPER_SUPPORTED_MODELING_CHOICE
-    slab_and_pitch: INHERITED_ORTHOGONAL_MOSAIC_MODEL
+    total_slab_thickness_um:
+      value: 100.0
+      classification: MODELING_CHOICE
+      purpose: THINNED_ORTHOGONAL_DIE_CAPACITY_SCALING
+    si_substrate_um:
+      value: 92.546
+      classification: DERIVED_FROM_GEOMETRY_CLOSURE
+    slab_count:
+      value: 318
+      classification: DERIVED_FROM_PACKAGE_WIDTH_AND_SLAB_PITCH
+    legacy_reference_geometry:
+      slab_pitch_x_um: 300.0
+      slab_count: 106
+      si_substrate_um: 292.546
+      status: LEGACY_REFERENCE_GEOMETRY
+    slab_and_pitch: MODELING_CHOICE_THINNED_ORTHOGONAL_DIE
     slab_thickness_closure: DERIVED_FROM_GEOMETRY_CLOSURE
   architecture:
     subarray_cluster: MODELING_CHOICE

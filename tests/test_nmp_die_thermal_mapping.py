@@ -24,12 +24,12 @@ def test_die_identity_is_complete_deterministic_and_unique(frozen_n8):
     first = physical_nmp_die_regions(case)
     second = physical_nmp_die_regions(case)
     assert first == second
-    assert len(first) == len(power_map.die_powers) == 106  # rev v2
-    assert [row.die_id for row in first] == list(range(106))  # rev v2
-    assert [row.geometry_die_index for row in first] == list(range(1, 107))  # rev v2
-    assert len({row.region_id for row in first}) == 106  # rev v2
+    assert len(first) == len(power_map.die_powers) == 318  # rev v3
+    assert [row.die_id for row in first] == list(range(318))  # rev v3
+    assert [row.geometry_die_index for row in first] == list(range(1, 319))  # rev v3
+    assert len({row.region_id for row in first}) == 318  # rev v3
     assert first[0].region_id == "orthogonal_hbm:die_001"
-    assert first[-1].region_id == "orthogonal_hbm:die_106"  # rev v2
+    assert first[-1].region_id == "orthogonal_hbm:die_318"  # rev v3
 
 
 def test_each_identity_resolves_one_memory_and_one_feol_box(frozen_n8):
@@ -46,8 +46,8 @@ def test_all_per_die_carriers_and_package_power_close(frozen_n8):
     case, system, power_map, gain, placement = frozen_n8
     config, regions = compile_nmp_die_thermal_config(case, system, power_map)
     sources = config.thermal_power_sources.sources
-    assert len(regions) == 106  # rev v2
-    assert len(sources) == 1 + 3 * 106  # rev v2
+    assert len(regions) == 318  # rev v3
+    assert len(sources) == 1 + 3 * 318  # rev v3
     activity=system.diagnostics["nmp_activity"]
     expected_gpu=(activity["softmax_dynamic_energy_j"]+activity["gpu_static_energy_j"])/(activity["decode_step_interval_ms"]*1e-3)
     assert system.gpu_power_W == pytest.approx(expected_gpu)
@@ -77,7 +77,7 @@ def test_residual_external_mapping_is_explicit_coarse_feol(frozen_n8):
     config, _ = compile_nmp_die_thermal_config(case, system, power_map)
     external = [source for source in config.thermal_power_sources.sources
                 if source.metadata.get("component_class") == "residual_external"]
-    assert len(external) == 106  # rev v2
+    assert len(external) == 318  # rev v3
     assert all(source.selector.tags == {"role": "feol"} for source in external)
     assert all(source.metadata["mapping_provenance"]
                == "RESIDUAL_EXTERNAL_THERMAL_MAPPING_APPROXIMATION"
@@ -115,10 +115,10 @@ def test_baseline_observables_are_finite_and_have_valid_maxima(frozen_n8):
     result = analyze_nmp_die_thermal_pipeline(
         requests=8, power_map=power_map, regions=regions, pipeline=pipeline,
         solver_backend="gpu_pcg")
-    assert len(result.dies) == 106  # rev v2
+    assert len(result.dies) == 318  # rev v3
     assert all(math.isfinite(row.die_temperature_degC) for row in result.dies)
     assert result.global_Tmax_degC >= 20.0
-    assert result.hottest_m3d_die_id == 105  # rev v2: last of 106 dies
-    assert 0 <= result.max_power_die_id < 106  # rev v2
+    assert result.hottest_m3d_die_id == 317  # rev v3: last of 318 dies
+    assert 0 <= result.max_power_die_id < 318  # rev v3
     assert math.isfinite(result.power_temperature_correlation)
     assert result.thermal_power_mapping_closure == "PASS"

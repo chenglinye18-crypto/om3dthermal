@@ -340,11 +340,11 @@ def test_runner_records_derived_matched_bandwidth_provenance(formal_run) -> None
     assert environment["matched_bandwidth_bits_per_second"] == (
         pytest.approx(3.92e13))
     assert environment["matched_bandwidth_capability_bits_per_second"] == (
-        pytest.approx(4.24e13))
+        pytest.approx(1.272e14))
     transfer = environment["memory_gpu_transfer_operating_points"][
         "orthogonal_m3d_igzo"]
     assert transfer["bandwidth_demand_bytes_per_s"] == pytest.approx(4.9e12)
-    assert transfer["memory_capability_bytes_per_s"] == pytest.approx(5.3e12)
+    assert transfer["memory_capability_bytes_per_s"] == pytest.approx(15.9e12)
     assert transfer["gpu_peak_bandwidth_bytes_per_s"] == pytest.approx(4.8e12)
     assert transfer["bandwidth_actual_bytes_per_s"] == pytest.approx(4.8e12)
     assert transfer["bottleneck"] == "GPU"

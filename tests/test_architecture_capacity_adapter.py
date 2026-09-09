@@ -32,14 +32,12 @@ ARCHITECTURES = (
     "orthogonal_si",
     "orthogonal_m3d_igzo",
 )
-# Rev v2 (2026-09-06) re-frozen capacities: conventional 108.0 -> 135.0 GiB
-# (4x 36.24 GB HBM3E-class stacks = 145.0 GB), M3D 428.75 -> 463.75 GiB
-# (106 slabs x 22x5.5 mm plane = 497.9 GB).  Drift cause: platform revision
-# v2 geometry (docs/research/platform_revision_v2_spec_2026-09-06.md).
+# Rev v3 keeps per-slab organization fixed and instantiates 318 100 um slabs,
+# giving exactly 3x the rev-v2 M3D capacity.
 EXPECTED_GIB = {
     "conventional_hbm_2x1": 135.0,
     "orthogonal_si": 234.28125,
-    "orthogonal_m3d_igzo": 463.75,
+    "orthogonal_m3d_igzo": 1391.25,
 }
 
 

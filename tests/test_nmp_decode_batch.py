@@ -80,7 +80,7 @@ def test_resident_and_active_weight_and_locality_boundaries_are_distinct(results
     assert row.kv_bulk_external_bytes_per_step == 0
     assert row.direct_die_to_die_bytes_per_step == 0
     assert row.boundary_bandwidth_bytes_per_s == 2.4e12
-    assert row.local_bandwidth_per_die_bytes_per_s > 2.4e12 / 106
+    assert row.local_bandwidth_per_die_bytes_per_s > 2.4e12 / 318
 
 
 def test_aggregate_timing_static_and_energy_closure(results):

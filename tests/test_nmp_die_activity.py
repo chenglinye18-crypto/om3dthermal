@@ -55,7 +55,7 @@ def test_nominal_attention_boundary_and_softmax(payload):
     assert a["softmax_time_ms"] == pytest.approx(a["softmax_local_bytes"]/2.4e12*1e3)
     assert a["softmax_dynamic_energy_j"] == pytest.approx(8*a["softmax_local_bytes"]*15.29e-12)
     transfer=a["transfer"]
-    assert transfer["memory_capability_bytes_per_s"] == 5.3e12
+    assert transfer["memory_capability_bytes_per_s"] == 15.9e12
     assert transfer["bandwidth_actual_bytes_per_s"] == 2.4e12
     assert transfer["bandwidth_actual_bytes_per_s"] == min(transfer[k] for k in (
         "bandwidth_demand_bytes_per_s","memory_capability_bytes_per_s","gpu_peak_bandwidth_bytes_per_s"))
