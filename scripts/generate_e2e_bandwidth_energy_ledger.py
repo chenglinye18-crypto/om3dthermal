@@ -149,19 +149,15 @@ def _validate_rows(rows: tuple[LedgerRow, ...]) -> None:
         rel_tol=1e-13,
     ):
         raise ValueError("GPU sustained service bandwidth does not close")
-    if not math.isclose(
-        float(by_id["HOST_OFFLOAD_EFFECTIVE"].bandwidth_nominal_GBps),
-        min(
-            float(by_id["HOST_DDR"].bandwidth_nominal_GBps),
-            float(by_id["HOST_PCIE_LINK"].bandwidth_nominal_GBps),
-        ) * float(by_id["HOST_OFFLOAD_EFFECTIVE"].bandwidth_efficiency),
-        rel_tol=1e-13,
+    if float(by_id["HOST_OFFLOAD_EFFECTIVE"].bandwidth_nominal_GBps) > min(
+        float(by_id["HOST_MEMORY_SUBSYSTEM"].bandwidth_nominal_GBps),
+        float(by_id["HOST_COHERENT_LINK"].bandwidth_nominal_GBps),
     ):
-        raise ValueError("host effective bandwidth does not close")
+        raise ValueError("GH200 effective bandwidth exceeds a capability bound")
     if not math.isclose(
         float(by_id["HOST_OFFLOAD_DYNAMIC_PATH"].energy_nominal_pJ_per_bit),
-        float(by_id["HOST_DDR"].energy_nominal_pJ_per_bit)
-        + float(by_id["HOST_PCIE_LINK"].energy_nominal_pJ_per_bit),
+        float(by_id["HOST_MEMORY_SUBSYSTEM"].energy_nominal_pJ_per_bit)
+        + float(by_id["HOST_COHERENT_LINK"].energy_nominal_pJ_per_bit),
         rel_tol=1e-13,
     ):
         raise ValueError("host dynamic aggregate energy does not close")
@@ -179,12 +175,10 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
     if (
         host.effective_bandwidth_bytes_per_second is None
         or host.e_host_offload_dynamic_J_per_bit is None
-        or host.host_memory_bandwidth_GBps is None
-        or host.host_device_link_bandwidth_GBps is None
-        or host.host_offload_efficiency is None
-        or host.e_pcie_dynamic_J_per_bit is None
-        or host.e_pcie_dynamic_uncertainty_J_per_bit is None
-        or host.e_ddr_dynamic_J_per_bit is None
+        or host.memory_bandwidth_upper_bound_bytes_per_second is None
+        or host.link_bandwidth_upper_bound_bytes_per_second is None
+        or host.host_link_dynamic_J_per_bit is None
+        or host.host_memory_dynamic_J_per_bit is None
     ):
         raise ValueError("canonical host offload parameters are unresolved")
     host_point = resolve_host_offload_power(
@@ -192,8 +186,8 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
             host.effective_bandwidth_bytes_per_second),
         host_effective_bandwidth_bytes_per_second=(
             host.effective_bandwidth_bytes_per_second),
-        e_pcie_dynamic_J_per_bit=host.e_pcie_dynamic_J_per_bit,
-        e_ddr_dynamic_J_per_bit=host.e_ddr_dynamic_J_per_bit,
+        e_pcie_dynamic_J_per_bit=host.host_link_dynamic_J_per_bit,
+        e_ddr_dynamic_J_per_bit=host.host_memory_dynamic_J_per_bit,
     )
     host_actual_bit_rate = 8.0 * host_point.host_bandwidth_actual_bytes_per_second
     resolved_pcie_pJ_per_bit = (
@@ -227,11 +221,11 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
         utilization_provenance=platform.gpu_bandwidth_service.provenance,
     )
 
-    host_ddr = _record(host, "amd_epyc_9654_ddr5_capability_v0")
-    host_link = _record(host, "nvidia_h100_pcie5_single_direction_link_v0")
-    host_eff = _record(host, "tyan_h100_pinned_h2d_56_2_gbps_v0")
-    pcie_energy = _record(host, "perlmutter_pcie_dynamic_energy_v0")
-    ddr_energy = _record(host, "perlmutter_h2d_ddr_dynamic_derivation_v0")
+    host_memory = _record(host, "grace_lpddr5x_subsystem_energy_v0")
+    host_link = _record(host, "nvlink_c2c_energy_per_bit_v0")
+    host_link_bw = _record(host, "nvlink_c2c_sensitivity_v0")
+    host_eff = _record(host, "gh200_grace_hopper_h2d_416_34_gbps_v0")
+    host_total = _record(host, "gh200_host_path_dynamic_energy_v0")
     gpu_min, gpu_max, gpu_range_source = _gpu_reference_range(
         root, gpu.e_decode_J_per_bit * 1e12)
     replacements = m3d.diagnostics["replacement_components_pj_bit"]
@@ -251,45 +245,42 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
     )
     rows = (
         LedgerRow(
-            "HOST_DDR", "host", "physical host-memory capability",
-            host.host_memory_bandwidth_GBps,
-            bandwidth_semantics="DDR capability; not measured end-to-end host transfer",
-            bandwidth_status=host_ddr.status,
-            bandwidth_provenance=host_ddr.classification,
+            "HOST_MEMORY_SUBSYSTEM", "host", "Grace LPDDR5X memory subsystem",
+            host.memory_bandwidth_upper_bound_bytes_per_second/1e9,
+            bandwidth_semantics="Grace memory subsystem capability upper bound",
+            bandwidth_status=host_memory.status,
+            bandwidth_provenance=host_memory.classification,
             energy_nominal_pJ_per_bit=resolved_ddr_pJ_per_bit,
-            energy_semantics="host DDR dynamic data-movement coefficient",
-            energy_status=ddr_energy.status,
-            energy_provenance=ddr_energy.classification,
+            energy_semantics="first-order average Grace memory-subsystem energy per transferred bit",
+            energy_status=host_memory.status,
+            energy_provenance=host_memory.classification,
             included_in_system_bandwidth_min=True,
             parent_aggregate="HOST_OFFLOAD_DYNAMIC_PATH",
             double_counting_note="Use this component only when not using HOST_OFFLOAD_DYNAMIC_PATH.",
             runtime_source=platform_runtime,
-            source_reference=f"{host_ddr.source}; {ddr_energy.source}",
-            notes="Cross-platform reference-derived DDR dynamic energy; not a local H200-system measurement.",
+            source_reference=host_memory.source,
+            notes="Derived from 16 W / (500 GB/s x 8); not isolated LPDDR dynamic-read energy.",
         ),
         LedgerRow(
-            "HOST_PCIE_LINK", "host", "one-direction GPU-host link",
-            host.host_device_link_bandwidth_GBps,
-            bandwidth_semantics="one-direction PCIe link capability",
-            bandwidth_status=host_link.status,
-            bandwidth_provenance=host_link.classification,
+            "HOST_COHERENT_LINK", "host", "one-direction NVLink-C2C link",
+            host.link_bandwidth_upper_bound_bytes_per_second/1e9,
+            bandwidth_semantics="ideal one-direction NVLink-C2C upper bound",
+            bandwidth_status=host_link_bw.status,
+            bandwidth_provenance=host_link_bw.classification,
             energy_nominal_pJ_per_bit=resolved_pcie_pJ_per_bit,
-            energy_min_pJ_per_bit=(host.e_pcie_dynamic_J_per_bit - host.e_pcie_dynamic_uncertainty_J_per_bit) * 1e12,
-            energy_max_pJ_per_bit=(host.e_pcie_dynamic_J_per_bit + host.e_pcie_dynamic_uncertainty_J_per_bit) * 1e12,
-            energy_semantics="isolated PCIe dynamic/interface energy",
-            energy_status=pcie_energy.status,
-            energy_provenance=pcie_energy.classification,
+            energy_semantics="vendor-reported NVLink-C2C link energy",
+            energy_status=host_link.status,
+            energy_provenance=host_link.classification,
             included_in_system_bandwidth_min=True,
             parent_aggregate="HOST_OFFLOAD_DYNAMIC_PATH",
             double_counting_note="Use this component only when not using HOST_OFFLOAD_DYNAMIC_PATH.",
             runtime_source=platform_runtime,
-            source_reference=f"{host_link.source}; {pcie_energy.source}",
+            source_reference=host_link.source,
         ),
         LedgerRow(
             "HOST_OFFLOAD_EFFECTIVE", "host", "end-to-end host-to-device transport ceiling",
             host.effective_bandwidth_bytes_per_second / 1e9,
-            bandwidth_efficiency=host.host_offload_efficiency,
-            bandwidth_semantics="efficiency * min(DDR capability, one-direction PCIe capability)",
+            bandwidth_semantics="direct measured Grace-memory-to-Hopper H2D effective bandwidth",
             bandwidth_status=host_eff.status,
             bandwidth_provenance=host_eff.classification,
             included_in_system_bandwidth_min=True,
@@ -298,17 +289,15 @@ def build_ledger_rows(project_root: Path) -> tuple[LedgerRow, ...]:
             notes="Rate aggregate only; its energy field is intentionally blank.",
         ),
         LedgerRow(
-            "HOST_OFFLOAD_DYNAMIC_PATH", "host", "additive DDR plus PCIe dynamic path",
+            "HOST_OFFLOAD_DYNAMIC_PATH", "host", "additive Grace memory plus NVLink-C2C dynamic path",
             energy_nominal_pJ_per_bit=resolved_host_pJ_per_bit,
-            energy_min_pJ_per_bit=(host.e_ddr_dynamic_J_per_bit + host.e_pcie_dynamic_J_per_bit - host.e_pcie_dynamic_uncertainty_J_per_bit) * 1e12,
-            energy_max_pJ_per_bit=(host.e_ddr_dynamic_J_per_bit + host.e_pcie_dynamic_J_per_bit + host.e_pcie_dynamic_uncertainty_J_per_bit) * 1e12,
-            energy_semantics="additive dynamic aggregate = HOST_DDR + HOST_PCIE_LINK",
-            energy_status="SOFTWARE_DERIVED",
-            energy_provenance="CANONICAL_HOST_OFFLOAD_SPEC_PROPERTY",
+            energy_semantics="additive dynamic aggregate = HOST_MEMORY_SUBSYSTEM + HOST_COHERENT_LINK",
+            energy_status=host_total.status,
+            energy_provenance=host_total.classification,
             included_in_system_energy=True,
-            double_counting_note="When this aggregate is used, do not add HOST_DDR or HOST_PCIE_LINK again.",
+            double_counting_note="When this aggregate is used, do not add host memory or coherent-link components again.",
             runtime_source=platform_runtime,
-            source_reference=f"{pcie_energy.source}; {ddr_energy.source}",
+            source_reference=host_total.source,
         ),
         LedgerRow(
             "CONVENTIONAL_HBM_READ", "memory", "GPU-local HBM service / platform interface boundary",

@@ -315,8 +315,8 @@ def _host_power_fields(
         }
     effective = host_offload.effective_bandwidth_bytes_per_second
     assert effective is not None
-    assert host_offload.e_pcie_dynamic_J_per_bit is not None
-    assert host_offload.e_ddr_dynamic_J_per_bit is not None
+    assert host_offload.host_link_dynamic_J_per_bit is not None
+    assert host_offload.host_memory_dynamic_J_per_bit is not None
     if host_transfer_bytes_per_step == 0.0:
         demand = 0.0
     else:
@@ -328,8 +328,8 @@ def _host_power_fields(
     point = resolve_host_offload_power(
         host_transfer_demand_bytes_per_second=demand,
         host_effective_bandwidth_bytes_per_second=effective,
-        e_pcie_dynamic_J_per_bit=host_offload.e_pcie_dynamic_J_per_bit,
-        e_ddr_dynamic_J_per_bit=host_offload.e_ddr_dynamic_J_per_bit,
+        e_pcie_dynamic_J_per_bit=host_offload.host_link_dynamic_J_per_bit,
+        e_ddr_dynamic_J_per_bit=host_offload.host_memory_dynamic_J_per_bit,
     )
     return {
         "host_bandwidth_demand_bytes_per_second": (

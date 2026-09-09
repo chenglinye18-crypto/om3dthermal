@@ -283,9 +283,8 @@ def evaluate_conventional_overflow_policy(
     total_host_write = append_write+migration
     total_host_bytes = total_host_read+total_host_write
     host_bits = 8.0*total_host_bytes
-    ddr_pcie_J = host_bits*(
-        float(host.e_pcie_dynamic_J_per_bit or 0.0)
-        + float(host.e_ddr_dynamic_J_per_bit or 0.0))
+    ddr_pcie_J = host_bits*float(
+        host.e_host_offload_dynamic_J_per_bit or 0.0)
     known = ddr_pcie_J
     if total is not None:
         known += gpu.static_power_W*total

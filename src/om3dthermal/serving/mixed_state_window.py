@@ -95,8 +95,8 @@ def evaluate_conventional_prefill_first_state_window(
             kv_bytes_per_token=kv_bytes_per_token,
             destination=("LOCAL" if index < resident_prefill else "HOST"),
             transfer_bandwidth_bytes_per_s=host_bw,
-            e_pcie_J_per_bit=host.e_pcie_dynamic_J_per_bit,
-            e_ddr_J_per_bit=host.e_ddr_dynamic_J_per_bit)
+            e_pcie_J_per_bit=host.host_link_dynamic_J_per_bit,
+            e_ddr_J_per_bit=host.host_memory_dynamic_J_per_bit)
         events.append(event); states.append(event.after)
     host_bytes = sum(event.bytes for event in events
                      if event.direction.startswith("GPU_TO_HOST"))

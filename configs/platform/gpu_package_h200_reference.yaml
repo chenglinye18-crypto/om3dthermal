@@ -141,15 +141,52 @@ gpu_prefill_compute:
         future sensitivity study; this configuration selects 700/700 TFLOP/s.
 host_offload:
   status: RESOLVED
-  host_memory_bandwidth_GBps: 460.8
-  host_device_link_bandwidth_GBps: 64.0
-  host_offload_efficiency: 0.878125
+  host_path_id: GH200_GRACE_NVLINK_C2C
+  path_role: PRIMARY_HOST_OFFLOAD_BASELINE
+  direct_effective_bandwidth_bytes_per_second: 416.34e9
+  effective_bandwidth_status: MEASURED_REFERENCE_GH200_H2D_EFFECTIVE_BANDWIDTH
+  memory_bandwidth_upper_bound_bytes_per_second: 500.0e9
+  link_bandwidth_upper_bound_bytes_per_second: 450.0e9
   power_model_status: INCREMENTAL_DYNAMIC_OFFLOAD_POWER
   host_static_power_status: UNRESOLVED
-  e_pcie_dynamic_J_per_bit: 167.9e-12
-  e_pcie_dynamic_uncertainty_J_per_bit: 10.5e-12
-  e_ddr_dynamic_J_per_bit: 2.4709302325581393e-11
+  memory_dynamic_J_per_bit: 4.0e-12
+  link_dynamic_J_per_bit: 1.3e-12
+  total_dynamic_J_per_bit: 5.3e-12
+  memory_energy_status: SOFTWARE_DERIVED_FROM_VENDOR_REPORTED_GRACE_MEMORY_POWER_AND_BANDWIDTH
+  link_energy_status: VENDOR_REPORTED_NVLINK_C2C_ENERGY_PER_BIT
+  total_energy_status: SOFTWARE_DERIVED_GH200_HOST_PATH_DYNAMIC_ENERGY
   provenance:
+    - record_id: gh200_grace_hopper_h2d_416_34_gbps_v0
+      classification: MATCHED_REFERENCE
+      source: task-specified GH200-class Grace-memory-to-Hopper H2D measurement
+      source_location: measured effective single-GPU H2D bandwidth
+      status: MEASURED_REFERENCE_GH200_H2D_EFFECTIVE_BANDWIDTH
+      transformation: direct nominal primitive = 416.34e9 byte/s; no additional efficiency factor
+      notes: Single Grace CPU plus single Hopper GPU; not a multi-GPU aggregate.
+    - record_id: grace_lpddr5x_subsystem_energy_v0
+      classification: SOFTWARE_DERIVED
+      source: NVIDIA Grace CPU memory subsystem specifications
+      source_location: 16 W LPDDR5X subsystem power and 500 GB/s bandwidth
+      status: SOFTWARE_DERIVED_FROM_VENDOR_REPORTED_GRACE_MEMORY_POWER_AND_BANDWIDTH
+      transformation: 16 W / (500e9 byte/s x 8 bit/byte) = 4.0e-12 J/bit
+      notes: >-
+        First-order average memory-subsystem energy per transferred bit; not
+        an isolated measured LPDDR dynamic-read energy.
+    - record_id: nvlink_c2c_energy_per_bit_v0
+      classification: MATCHED_REFERENCE
+      source: NVIDIA Grace Hopper Architecture In-Depth / GH200 whitepaper
+      source_location: NVLink-C2C energy efficiency
+      status: VENDOR_REPORTED_NVLINK_C2C_ENERGY_PER_BIT
+      transformation: direct link-energy primitive = 1.3e-12 J/bit
+    - record_id: gh200_host_path_dynamic_energy_v0
+      classification: SOFTWARE_DERIVED
+      source: grace_lpddr5x_subsystem_energy_v0 + nvlink_c2c_energy_per_bit_v0
+      source_location: single-GPU coherent host-memory path
+      status: SOFTWARE_DERIVED_GH200_HOST_PATH_DYNAMIC_ENERGY
+      transformation: 4.0 pJ/bit + 1.3 pJ/bit = 5.3 pJ/bit
+      parent_record_ids:
+        - grace_lpddr5x_subsystem_energy_v0
+        - nvlink_c2c_energy_per_bit_v0
     - record_id: amd_epyc_9654_ddr5_capability_v0
       classification: MATCHED_REFERENCE
       source: https://www.amd.com/en/products/processors/server/epyc/4th-generation-9004-and-8004-series/amd-epyc-9654.html
@@ -166,18 +203,20 @@ host_offload:
       classification: MATCHED_REFERENCE
       source: https://mitaccomputing.com/cn/industryinsight/Redefining_Server_Performance_Introducing_TYAN_Transport_HX_FT65TB8050_equipped_with_NVIDIA_H100_GPU
       source_location: Host to Device Bandwidth
-      status: VENDOR_REPORTED_MEASURED_PINNED_H2D_NOMINAL_ANCHOR
+      status: PCIE_CLASS_H2D_SENSITIVITY_NOT_PRIMARY
       transformation: eta = 56.2 / min(460.8, 64.0) = 0.878125
-      notes: End-to-end H2D measurement on an H100 server with a single-socket AMD EPYC 9004 platform; not an om3dthermal local measurement.
+      notes: >-
+        End-to-end H2D measurement on an H100 server with a single-socket AMD
+        EPYC 9004 platform; retained only as the explicit 56.2 GB/s PCIe-class
+        sensitivity, not the primary host-offload baseline.
     - record_id: nvlink_c2c_sensitivity_v0
       classification: MATCHED_REFERENCE
       source: NVIDIA Grace Hopper Architecture In-Depth / GH200 whitepaper
       source_location: NVLink-C2C 900 GB/s bidirectional, 450 GB/s per direction
-      status: VENDOR_SPEC_ROBUSTNESS_SENSITIVITY_ONLY
+      status: IDEAL_NVLINK_C2C_ONE_DIRECTION_UPPER_BOUND
       notes: >-
-        C2C 450 GB/s per direction is a robustness sensitivity, not the main
-        baseline; even at 450 GB/s the host link stays ~11x below the 4.9 TB/s
-        scenario HBM bandwidth so the capacity-bottleneck conclusion holds.
+        C2C 450 GB/s per direction is an ideal capability upper-bound
+        sensitivity, not the measured-effective 416.34 GB/s nominal baseline.
     - record_id: perlmutter_pcie_dynamic_energy_v0
       classification: PAPER_REPORTED
       source: https://escholarship.org/uc/item/67z0d2wn

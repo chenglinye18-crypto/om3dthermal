@@ -23,7 +23,7 @@ from scripts.generate_e2e_bandwidth_energy_ledger import (
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER = ROOT / "docs/research" / LEDGER_FILENAME
 REQUIRED = {
-    "HOST_DDR", "HOST_PCIE_LINK", "HOST_OFFLOAD_EFFECTIVE",
+    "HOST_MEMORY_SUBSYSTEM", "HOST_COHERENT_LINK", "HOST_OFFLOAD_EFFECTIVE",
     "HOST_OFFLOAD_DYNAMIC_PATH", "CONVENTIONAL_HBM_READ", "M3D_INTERNAL",
     "M3D_MAT_LOCAL_READ", "M3D_GLOBAL_ROUTING", "M3D_MIV",
     "M3D_FEOL_ROUTE", "M3D_CONTACTLESS_INTERFACE", "M3D_TOTAL_READ",
@@ -74,14 +74,15 @@ def test_shared_transfer_closure(rows) -> None:
 
 def test_host_bandwidth_and_energy_closure(rows) -> None:
     effective = rows["HOST_OFFLOAD_EFFECTIVE"]
-    assert effective.bandwidth_nominal_GBps == pytest.approx(
-        effective.bandwidth_efficiency * min(
-            rows["HOST_DDR"].bandwidth_nominal_GBps,
-            rows["HOST_PCIE_LINK"].bandwidth_nominal_GBps,
-        ))
+    assert effective.bandwidth_nominal_GBps == pytest.approx(416.34)
+    assert effective.bandwidth_efficiency is None
+    assert effective.bandwidth_nominal_GBps < min(
+        rows["HOST_MEMORY_SUBSYSTEM"].bandwidth_nominal_GBps,
+        rows["HOST_COHERENT_LINK"].bandwidth_nominal_GBps)
     assert rows["HOST_OFFLOAD_DYNAMIC_PATH"].energy_nominal_pJ_per_bit == pytest.approx(
-        rows["HOST_DDR"].energy_nominal_pJ_per_bit
-        + rows["HOST_PCIE_LINK"].energy_nominal_pJ_per_bit)
+        rows["HOST_MEMORY_SUBSYSTEM"].energy_nominal_pJ_per_bit
+        + rows["HOST_COHERENT_LINK"].energy_nominal_pJ_per_bit)
+    assert rows["HOST_OFFLOAD_DYNAMIC_PATH"].energy_nominal_pJ_per_bit == pytest.approx(5.3)
 
 
 def test_gpu_range_and_nominal_match_canonical_sources(rows) -> None:

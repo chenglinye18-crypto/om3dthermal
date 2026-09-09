@@ -88,14 +88,14 @@ def test_host_traffic_and_swap_overhead_are_excluded(registry):
     assert result.thermal is None
 
 
-def test_existing_host_offload_baseline_is_unchanged(registry):
+def test_primary_host_offload_uses_gh200_rebaseline(registry):
     case = MixedPhaseServingCase(
         model_id="llama31_8b", context_length=131072,
         batch_size=28, prefill_requests=1, decode_requests=27)
     result = evaluate_conventional_hbm_mixed_phase(
         project_root=ROOT, model=registry["llama31_8b"], case=case)
-    assert result.decode_tokens_per_s == pytest.approx(4.276612519457736)
-    assert result.decode_service_time_ms == pytest.approx(6313.408071728589)
+    assert result.decode_tokens_per_s == pytest.approx(26.34619250755985)
+    assert result.decode_service_time_ms == pytest.approx(1024.8160143919297)
     assert result.host_read_GB == pytest.approx(343.59738368)
     assert result.residency_policy == "DECODE_FIRST_LOCAL_RESIDENCY"
 

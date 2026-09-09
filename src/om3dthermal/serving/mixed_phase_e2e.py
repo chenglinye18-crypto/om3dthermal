@@ -334,16 +334,16 @@ def _host_dynamic_energies(
 ) -> tuple[float | None, float | None]:
     """Integrate the existing canonical host dynamic-power primitive."""
     effective = host.effective_bandwidth_bytes_per_second
-    if (effective is None or host.e_pcie_dynamic_J_per_bit is None
-            or host.e_ddr_dynamic_J_per_bit is None):
+    if (effective is None or host.host_link_dynamic_J_per_bit is None
+            or host.host_memory_dynamic_J_per_bit is None):
         return None, None
     duration_s = 0.0 if bytes_ == 0.0 else bytes_ / effective
     point = resolve_host_offload_power(
         host_transfer_demand_bytes_per_second=(
             0.0 if bytes_ == 0.0 else effective),
         host_effective_bandwidth_bytes_per_second=effective,
-        e_pcie_dynamic_J_per_bit=host.e_pcie_dynamic_J_per_bit,
-        e_ddr_dynamic_J_per_bit=host.e_ddr_dynamic_J_per_bit,
+        e_pcie_dynamic_J_per_bit=host.host_link_dynamic_J_per_bit,
+        e_ddr_dynamic_J_per_bit=host.host_memory_dynamic_J_per_bit,
     )
     return point.ddr_dynamic_power_W * duration_s, point.pcie_dynamic_power_W * duration_s
 

@@ -164,9 +164,11 @@ def test_host_bytes_energy_and_transfer_time_close(
     assert spill_result.host_read_GB * 1e9 == decode_read
     assert spill_result.host_write_GB * 1e9 == prefill_write + decode_write
     assert spill_result.decode_host_ddr_J == pytest.approx(
-        8 * total_host_decode * backend.host_offload.e_ddr_dynamic_J_per_bit)
+        8 * total_host_decode
+        * backend.host_offload.host_memory_dynamic_J_per_bit)
     assert spill_result.decode_host_pcie_J == pytest.approx(
-        8 * total_host_decode * backend.host_offload.e_pcie_dynamic_J_per_bit)
+        8 * total_host_decode
+        * backend.host_offload.host_link_dynamic_J_per_bit)
     host_ms = total_host_decode / backend.host_offload.effective_bandwidth_bytes_per_second * 1e3
     gpu = AnalyticalRooflineGPUModel(
         matched_payload_bandwidth_bits_per_second=(

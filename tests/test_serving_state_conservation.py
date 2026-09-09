@@ -44,7 +44,10 @@ def test_qwen_14_14_decode_only_and_mixed_window_are_distinct(registry):
     assert result.resident_prefill_requests==3
     assert result.host_prefill_requests==11
     assert result.host_prefill_kv_write_GB==pytest.approx(82.678120448)
-    assert result.host_prefill_transfer_time_ms==pytest.approx(1471.1409332384342)
+    host = resolve_conventional_hbm_backend(ROOT).host_offload
+    assert result.host_prefill_transfer_time_ms == pytest.approx(
+        result.host_prefill_kv_write_GB*1e9
+        / host.effective_bandwidth_bytes_per_second*1e3)
     assert sum(event.bytes for event in result.events)==pytest.approx(82.678120448e9)
 
 
@@ -63,18 +66,18 @@ def test_initial_host_admission_dirty_suffix_writeback_and_legal_free(registry):
     state=initial_decode_state("D0",10,local=False)
     admission=transfer_host_to_local(state,kv_bytes_per_token=kv_per_token,
         bandwidth_bytes_per_s=host.effective_bandwidth_bytes_per_second,
-        e_pcie_J_per_bit=host.e_pcie_dynamic_J_per_bit,
-        e_ddr_J_per_bit=host.e_ddr_dynamic_J_per_bit)
+        e_pcie_J_per_bit=host.host_link_dynamic_J_per_bit,
+        e_ddr_J_per_bit=host.host_memory_dynamic_J_per_bit)
     step=decode_step(admission.after,kv_append_bytes=kv_per_token)
     writeback=transfer_local_to_host(step.after,kv_bytes_per_token=kv_per_token,
         bandwidth_bytes_per_s=host.effective_bandwidth_bytes_per_second,
-        e_pcie_J_per_bit=host.e_pcie_dynamic_J_per_bit,
-        e_ddr_J_per_bit=host.e_ddr_dynamic_J_per_bit)
+        e_pcie_J_per_bit=host.host_link_dynamic_J_per_bit,
+        e_ddr_J_per_bit=host.host_memory_dynamic_J_per_bit)
     assert writeback.bytes==kv_per_token
     repeated=transfer_local_to_host(writeback.after,kv_bytes_per_token=kv_per_token,
         bandwidth_bytes_per_s=host.effective_bandwidth_bytes_per_second,
-        e_pcie_J_per_bit=host.e_pcie_dynamic_J_per_bit,
-        e_ddr_J_per_bit=host.e_ddr_dynamic_J_per_bit)
+        e_pcie_J_per_bit=host.host_link_dynamic_J_per_bit,
+        e_ddr_J_per_bit=host.host_memory_dynamic_J_per_bit)
     assert repeated.bytes==0.0
     finished=repeated.after.model_copy(update={"phase":"FINISHED","completed":True})
     released=free_local(finished)

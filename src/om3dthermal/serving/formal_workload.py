@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from om3dthermal.platform import load_platform_spec_file
+from om3dthermal.platform import HostOffloadSpec, load_platform_spec_file
 from om3dthermal.power.nmp_die_power import resolve_orthogonal_m3d_write_energy_pj_per_bit
 from om3dthermal.workload import DenseLLMModelSpec, evaluate_llm_decode
 
@@ -174,6 +174,7 @@ def evaluate_formal_inference_workload(
     *, project_root: str | Path, model: DenseLLMModelSpec,
     workload: FormalInferenceWorkload, system: SystemId, policy: FormalPolicy,
     workspace_config: WorkspaceExecutionConfig,
+    host_offload_spec: HostOffloadSpec | None = None,
 ) -> FormalE2EResult:
     if model.model_id != workload.model_id:
         raise ValueError("model and formal workload mismatch")
@@ -187,7 +188,7 @@ def evaluate_formal_inference_workload(
     platform = load_platform_spec_file(root/"configs/platform/gpu_package_h200_reference.yaml")
     gpu = platform.gpu_decode_power
     compute = platform.gpu_compute_power
-    host = hbm.host_offload
+    host = host_offload_spec or hbm.host_offload
     if gpu is None or compute is None or host.effective_bandwidth_bytes_per_second is None:
         raise ValueError("canonical platform data is incomplete")
     B, S, G = workload.batch_size, workload.prompt_tokens, workload.generation_tokens
@@ -323,9 +324,12 @@ def evaluate_formal_inference_workload(
         known["gpu_decode_dynamic_J"] = 8.0*traffic[2]*gpu.e_decode_J_per_bit
         known["hbm_read_dynamic_J"] = 8.0*traffic[0]*hbm.read_energy_pJ_per_bit*1e-12
         host_bits = 8.0*(historical+append_host+migration)
-        known["host_DDR_PCIe_dynamic_J"] = host_bits*(
-            float(host.e_ddr_dynamic_J_per_bit or 0.0)
-            + float(host.e_pcie_dynamic_J_per_bit or 0.0))
+        known["host_memory_dynamic_J"] = host_bits*float(
+            host.host_memory_dynamic_J_per_bit or 0.0)
+        known["host_link_dynamic_J"] = host_bits*float(
+            host.host_link_dynamic_J_per_bit or 0.0)
+        known["host_total_dynamic_J"] = (
+            known["host_memory_dynamic_J"]+known["host_link_dynamic_J"])
         unresolved["CONVENTIONAL_HBM_WRITE"] = int(
             traffic[1]+historical)
         local_end = min(B*(kv_s+G*kv_token), local_budget)
@@ -438,7 +442,10 @@ def evaluate_formal_inference_workload(
         total_host_transfer_bytes=host_total,
         host_bytes_per_generated_token=host_total/(B*G),
         host_transfer_time_fraction=(None if makespan is None else critical_host/makespan),
-        known_energy_J=sum(known.values()), known_energy_components=known,
+        known_energy_J=sum(
+            value for key, value in known.items()
+            if key != "host_total_dynamic_J"),
+        known_energy_components=known,
         energy_status=("INCOMPLETE_CONVENTIONAL_HBM_WRITE_ENERGY_UNRESOLVED"
                        if system == "CONVENTIONAL_HBM_GPU" else
                        "INCOMPLETE_PREFILL_GPU_DYNAMIC_RANGE_NO_SINGLE_NOMINAL"),

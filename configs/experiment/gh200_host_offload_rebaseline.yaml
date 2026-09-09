@@ -1,0 +1,73 @@
+schema_version: 1
+experiment_id: gh200_host_offload_rebaseline
+model_registry_dir: configs/workload/models
+context_length: 131072
+generation_tokens: 512
+cases:
+  - {model_id: llama31_8b, batch_size: 27}
+  - {model_id: qwen25_7b, batch_size: 28}
+  - {model_id: llama2_7b, batch_size: 7}
+workspace:
+  prefill_chunk_tokens: 2048
+  attention_tile_tokens: 128
+  activation_bytes: 2
+  attention_accumulator_bytes: 4
+  provenance_status: MODELING_CHOICE_UNIFORM_CHUNKED_FUSED_ATTENTION
+  provenance: Reuse the frozen formal benchmark workspace without modification.
+host_paths:
+  - host_path_id: PCIE_DDR_LEGACY_56_2_GBPS
+    path_role: SENSITIVITY_ONLY
+    status: RESOLVED
+    host_memory_bandwidth_GBps: 460.8
+    host_device_link_bandwidth_GBps: 64.0
+    host_offload_efficiency: 0.878125
+    effective_bandwidth_status: PCIE_CLASS_H2D_SENSITIVITY
+    power_model_status: INCREMENTAL_DYNAMIC_OFFLOAD_POWER
+    host_static_power_status: UNRESOLVED
+    e_ddr_dynamic_J_per_bit: 2.4709302325581393e-11
+    e_pcie_dynamic_J_per_bit: 167.9e-12
+    e_pcie_dynamic_uncertainty_J_per_bit: 10.5e-12
+    memory_energy_status: SOFTWARE_DERIVED_FROM_PAPER_REPRESENTATIVE_RUN
+    link_energy_status: PAPER_REPORTED_PCIE_DYNAMIC
+    total_energy_status: LEGACY_PCIE_DDR_REFERENCE
+    provenance:
+      - record_id: legacy_pcie_ddr_sensitivity_v0
+        classification: MATCHED_REFERENCE
+        source: existing canonical PCIe/DDR baseline provenance
+        status: LEGACY_PCIE_DDR_REFERENCE_SENSITIVITY_ONLY
+  - host_path_id: GH200_GRACE_NVLINK_C2C
+    path_role: PRIMARY_HOST_OFFLOAD_BASELINE
+    status: RESOLVED
+    direct_effective_bandwidth_bytes_per_second: 416.34e9
+    effective_bandwidth_status: MEASURED_REFERENCE_GH200_H2D_EFFECTIVE_BANDWIDTH
+    power_model_status: INCREMENTAL_DYNAMIC_OFFLOAD_POWER
+    host_static_power_status: UNRESOLVED
+    memory_dynamic_J_per_bit: 4.0e-12
+    link_dynamic_J_per_bit: 1.3e-12
+    total_dynamic_J_per_bit: 5.3e-12
+    memory_energy_status: SOFTWARE_DERIVED_FROM_VENDOR_REPORTED_GRACE_MEMORY_POWER_AND_BANDWIDTH
+    link_energy_status: VENDOR_REPORTED_NVLINK_C2C_ENERGY_PER_BIT
+    total_energy_status: SOFTWARE_DERIVED_GH200_HOST_PATH_DYNAMIC_ENERGY
+    provenance:
+      - record_id: gh200_primary_host_path_v0
+        classification: MATCHED_REFERENCE
+        source: configs/platform/gpu_package_h200_reference.yaml
+        status: GH200_MEASURED_EFFECTIVE_PRIMARY
+  - host_path_id: GH200_IDEAL_NVLINK_C2C_450_GBPS
+    path_role: SENSITIVITY_ONLY
+    status: RESOLVED
+    direct_effective_bandwidth_bytes_per_second: 450.0e9
+    effective_bandwidth_status: IDEAL_NVLINK_C2C_ONE_DIRECTION_UPPER_BOUND
+    power_model_status: INCREMENTAL_DYNAMIC_OFFLOAD_POWER
+    host_static_power_status: UNRESOLVED
+    memory_dynamic_J_per_bit: 4.0e-12
+    link_dynamic_J_per_bit: 1.3e-12
+    total_dynamic_J_per_bit: 5.3e-12
+    memory_energy_status: SOFTWARE_DERIVED_FROM_VENDOR_REPORTED_GRACE_MEMORY_POWER_AND_BANDWIDTH
+    link_energy_status: VENDOR_REPORTED_NVLINK_C2C_ENERGY_PER_BIT
+    total_energy_status: SOFTWARE_DERIVED_GH200_HOST_PATH_DYNAMIC_ENERGY
+    provenance:
+      - record_id: gh200_ideal_c2c_sensitivity_v0
+        classification: MATCHED_REFERENCE
+        source: NVIDIA Grace Hopper Architecture In-Depth / GH200 whitepaper
+        status: IDEAL_NVLINK_C2C_ONE_DIRECTION_UPPER_BOUND_SENSITIVITY_ONLY

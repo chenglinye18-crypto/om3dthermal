@@ -56,14 +56,14 @@ def test_formal_serving_path_reads_current_architecture_capacity_and_skips_therm
         if row.requested_requests == 8)
     assert hbm_8.capacity_status == "CAPACITY_PRESSURED"
     assert hbm_8.evaluation_status == "EVALUATED"
-    assert hbm_8.host_effective_bandwidth_bytes_per_second == 56.2e9
+    assert hbm_8.host_effective_bandwidth_bytes_per_second == 416.34e9
     assert hbm_8.host_transfer_time_ms == pytest.approx(
-        hbm_8.host_transfer_bytes_per_step / 56.2e9 * 1e3)
-    assert hbm_8.host_bandwidth_actual_bytes_per_second == pytest.approx(56.2e9)
+        hbm_8.host_transfer_bytes_per_step / 416.34e9 * 1e3)
+    assert hbm_8.host_bandwidth_actual_bytes_per_second == pytest.approx(416.34e9)
     assert hbm_8.host_bandwidth_saturated is False
-    assert hbm_8.pcie_dynamic_power_W == pytest.approx(75.48784)
-    assert hbm_8.ddr_dynamic_power_W == pytest.approx(11.109302325581394)
-    assert hbm_8.host_offload_dynamic_power_W == pytest.approx(86.5971423255814)
+    assert hbm_8.pcie_dynamic_power_W == pytest.approx(4.329936)
+    assert hbm_8.ddr_dynamic_power_W == pytest.approx(13.32288)
+    assert hbm_8.host_offload_dynamic_power_W == pytest.approx(17.652816)
     assert hbm_8.host_static_power_status == "UNRESOLVED"
     assert m3d_8.capacity_status == "FULLY_LOCAL"
     assert m3d_8.evaluation_status == "EVALUATED"
@@ -105,8 +105,8 @@ def test_formal_sensitivity_is_monotonic_and_all_local_points_match() -> None:
                 if row.requested_requests == 8)
     nominal_8 = next(row for row in nominal["conventional_hbm_2x1"].rows
                      if row.requested_requests == 8)
-    assert low.aggregate_tokens_per_s <= nominal_8.aggregate_tokens_per_s
-    assert nominal_8.aggregate_tokens_per_s <= high.aggregate_tokens_per_s
+    assert low.aggregate_tokens_per_s <= high.aggregate_tokens_per_s
+    assert high.aggregate_tokens_per_s <= nominal_8.aggregate_tokens_per_s
 
 
 def test_plot_ready_csv_export(tmp_path) -> None:

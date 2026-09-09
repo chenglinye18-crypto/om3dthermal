@@ -479,8 +479,10 @@ def evaluate_persistent_mixed_service_horizon(
     if total_s is not None:
         known["gpu_static_J"] = compute.static_power_W*total_s
         host_bits = 8.0*(host_to_local+local_to_host)
-        known["host_pcie_dynamic_J"] = host_bits*float(host.e_pcie_dynamic_J_per_bit or 0.0)
-        known["host_ddr_dynamic_J"] = host_bits*float(host.e_ddr_dynamic_J_per_bit or 0.0)
+        known["host_link_dynamic_J"] = host_bits*float(
+            host.host_link_dynamic_J_per_bit or 0.0)
+        known["host_memory_dynamic_J"] = host_bits*float(
+            host.host_memory_dynamic_J_per_bit or 0.0)
         if system == "CONVENTIONAL_HBM_GPU":
             read, write, total = gpu_traffic
             known["decode_gpu_dynamic_J"] = 8.0*total*gpu.e_decode_J_per_bit
