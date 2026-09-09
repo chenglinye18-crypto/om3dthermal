@@ -126,6 +126,7 @@ class ExperimentScenarioSpec(_StrictFrozenModel):
     ]
     m3d_parameter_sensitivity: M3DParameterSensitivitySpec | None = None
     thermal_mesh_max_cell_size_mm: tuple[float, float, float] | None = None
+    thermal_setup_cache_path: Path | None = None
 
     @model_validator(mode="after")
     def _bandwidth_exactly_one_source(self) -> "ExperimentScenarioSpec":

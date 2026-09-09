@@ -31,8 +31,6 @@ from .discretization import (
     validate_cell_surface_partition,
     validate_volume_conservation,
 )
-from .geometry.horizontal_columns import HorizontalColumnsBuilder
-from .geometry.orthogonal_hbm import OrthogonalHBMBuilder
 from .thermal import (
     PowerVector,
     build_boundary_link_table,
@@ -46,6 +44,12 @@ from .thermal import (
 )
 from .thermal.boundary import BoundaryLinkTable
 from .thermal.operator import MatrixFreeThermalOperator
+from .thermal.setup_cache import (
+    ThermalSetupArtifacts,
+    build_scene_and_signature,
+    load_setup_cache,
+    save_setup_cache,
+)
 from .thermal.steady_state import SteadyStateResult
 
 
@@ -66,6 +70,14 @@ class PipelineResult:
     conductance_seconds: float
     operator_seconds: float
     solve_seconds: float
+    setup_build_seconds: float
+    cache_serialization_seconds: float
+    cache_load_seconds: float
+    total_pipeline_seconds: float
+    cache_status: str
+    cache_path: str | None
+    cache_size_bytes: int | None
+    cache_physical_signature: str | None
     # Aggregates that are useful to both the per-case writeout and
     # the mesh-convergence sweep summary.
     cell_count: int
@@ -160,12 +172,17 @@ def run_steady_pipeline(
     check_interval: int = 10,
     initial_temperature_K: float = 293.15,
     backend: str = "cpu",
+    setup_cache_path: str | Path | None = None,
 ) -> PipelineResult:
     """Run the full steady-state pipeline and return all artifacts.
 
     ``max_cell_size_m`` is a 3-tuple ``(dx, dy, dz)`` in metres that
     overrides ``config.discretization.max_cell_size`` for this run.
     Pass ``None`` (the default) to use whatever the config declares.
+
+    ``setup_cache_path`` optionally persists the power-independent mesh,
+    mappings, graph, boundary links, matrix-free operator and Jacobi diagonal.
+    Its physical signature excludes workload power and the RHS.
 
     ``backend`` selects between two implementations of the
     *same* thermal-resistance-network relaxation equation:
@@ -199,51 +216,80 @@ def run_steady_pipeline(
     if max_cell_size_m is not None:
         config = _override_discretization(config, max_cell_size_m)
 
-    # Geometry.
-    scene = (
-        OrthogonalHBMBuilder(config).build()
-        if config.orthogonal_hbm is not None
-        else HorizontalColumnsBuilder(config).build())
-    boxes = list(scene.boxes)
+    pipeline_started = time.perf_counter()
+    boxes, physical_signature = build_scene_and_signature(config)
+    cache_path = Path(setup_cache_path) if setup_cache_path is not None else None
+    artifacts = None
+    cache_load_seconds = 0.0
+    cache_serialization_seconds = 0.0
+    cache_status = "DISABLED"
+    if cache_path is not None:
+        artifacts, cache_load_seconds, cache_status = load_setup_cache(
+            cache_path, physical_signature)
 
-    # Discretise.
-    t0 = time.perf_counter()
-    grid = build_global_grid(boxes, config.discretization.max_cell_size)
-    cells = generate_cells(boxes, grid)
-    edges = build_adjacency(cells, grid)
-    boundary_faces = build_boundary_faces(cells, grid)
-    validate_volume_conservation(cells, boxes)
-    validate_cell_surface_partition(cells, edges, boundary_faces)
-    t1 = time.perf_counter()
+    discretization_seconds = conductance_seconds = operator_seconds = 0.0
+    setup_build_seconds = 0.0
+    if artifacts is None:
+        build_started = time.perf_counter()
+        t0 = time.perf_counter()
+        grid = build_global_grid(boxes, config.discretization.max_cell_size)
+        cells = generate_cells(boxes, grid)
+        edges = build_adjacency(cells, grid)
+        boundary_faces = build_boundary_faces(cells, grid)
+        validate_volume_conservation(cells, boxes)
+        validate_cell_surface_partition(cells, edges, boundary_faces)
+        t1 = time.perf_counter()
+        discretization_seconds = t1 - t0
 
-    # Conductance + boundary links + power.
-    t2 = time.perf_counter()
-    conductance_table = build_conductance_table(
-        cells=cells, adjacency_edges=edges,
-        materials=config.materials,
-        config=config.thermal_conductance,
-    )
-    boundary_table = build_boundary_link_table(
-        boundary_faces=boundary_faces, cells=cells,
-        materials=config.materials,
-        config=config.thermal_boundary_conditions,
-    )
+        t2 = time.perf_counter()
+        conductance_table = build_conductance_table(
+            cells=cells, adjacency_edges=edges,
+            materials=config.materials,
+            config=config.thermal_conductance,
+        )
+        boundary_table = build_boundary_link_table(
+            boundary_faces=boundary_faces, cells=cells,
+            materials=config.materials,
+            config=config.thermal_boundary_conditions,
+        )
+        t3 = time.perf_counter()
+        conductance_seconds = t3 - t2
+
+        t4 = time.perf_counter()
+        operator_template = build_matrix_free_operator(
+            conductance=conductance_table, boundary=boundary_table,
+            power_W=np.zeros(len(cells), dtype=np.float64),
+        )
+        validate_anchored_components(
+            cell_count=operator_template.cell_count,
+            internal_cell_a=operator_template.internal_cell_a,
+            internal_cell_b=operator_template.internal_cell_b,
+            boundary=boundary_table,
+        )
+        t5 = time.perf_counter()
+        operator_seconds = t5 - t4
+        artifacts = ThermalSetupArtifacts(
+            grid=grid,
+            cells=cells,
+            edges=edges,
+            boundary_faces=boundary_faces,
+            conductance_table=conductance_table,
+            boundary_table=boundary_table,
+            operator_template=operator_template,
+        )
+        setup_build_seconds = time.perf_counter() - build_started
+        if cache_path is not None:
+            cache_serialization_seconds = save_setup_cache(
+                cache_path, physical_signature, artifacts)
+            cache_status = (
+                "REBUILT" if cache_status == "INVALIDATED" else "BUILT")
+
+    cells = artifacts.cells
+    edges = artifacts.edges
+    boundary_faces = artifacts.boundary_faces
+    boundary_table = artifacts.boundary_table
     power = map_power_sources(cells=cells, config=config.thermal_power_sources)
-    t3 = time.perf_counter()
-
-    # Operator + anchored check.
-    t4 = time.perf_counter()
-    operator = build_matrix_free_operator(
-        conductance=conductance_table, boundary=boundary_table,
-        power_W=power.power_W,
-    )
-    validate_anchored_components(
-        cell_count=operator.cell_count,
-        internal_cell_a=operator.internal_cell_a,
-        internal_cell_b=operator.internal_cell_b,
-        boundary=boundary_table,
-    )
-    t5 = time.perf_counter()
+    operator = artifacts.operator_template.with_power(power.power_W)
 
     # Solve.
     initial_T = np.full(operator.cell_count, initial_temperature_K,
@@ -312,10 +358,21 @@ def run_steady_pipeline(
         boundary_table=boundary_table,
         power=power,
         operator=operator,
-        discretization_seconds=t1 - t0,
-        conductance_seconds=t3 - t2,
-        operator_seconds=t5 - t4,
+        discretization_seconds=discretization_seconds,
+        conductance_seconds=conductance_seconds,
+        operator_seconds=operator_seconds,
         solve_seconds=float(result.solve_seconds),
+        setup_build_seconds=setup_build_seconds,
+        cache_serialization_seconds=cache_serialization_seconds,
+        cache_load_seconds=cache_load_seconds,
+        total_pipeline_seconds=time.perf_counter() - pipeline_started,
+        cache_status=cache_status,
+        cache_path=str(cache_path) if cache_path is not None else None,
+        cache_size_bytes=(
+            cache_path.stat().st_size
+            if cache_path is not None and cache_path.exists() else None),
+        cache_physical_signature=(
+            physical_signature if cache_path is not None else None),
         cell_count=len(cells),
         internal_edge_count=len(edges),
         active_boundary_link_count=boundary_table.link_count,

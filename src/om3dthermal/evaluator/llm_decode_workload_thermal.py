@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
@@ -96,6 +97,12 @@ class LLMDecodeWorkloadThermalMetrics(BaseModel):
     setup_time_s: float | None = None
     thermal_solver_wall_clock_time_s: float | None = None
     total_simulation_time_s: float | None = None
+    thermal_setup_build_time_s: float | None = None
+    cache_serialization_time_s: float | None = None
+    cache_load_time_s: float | None = None
+    cache_status: str | None = None
+    cache_file_size_bytes: int | None = None
+    cache_physical_signature: str | None = None
 
     thermal_backend: Literal["gpu_pcg"]
     precision_status: Literal["FP64"]
@@ -268,8 +275,10 @@ def map_workload_power_to_thermal(
 
 def run_llm_decode_workload_thermal(
     mapping: WorkloadThermalMapping,
+    *,
+    setup_cache_path: str | Path | None = None,
 ) -> LLMDecodeWorkloadThermalMetrics:
-    """Run one fresh frozen FP64 matrix-free Jacobi GPU-PCG solve."""
+    """Run one frozen FP64 matrix-free Jacobi GPU-PCG solve."""
     pipeline = run_steady_pipeline(
         mapping.simulation,
         rtol=1e-3,
@@ -278,6 +287,7 @@ def run_llm_decode_workload_thermal(
         check_interval=10,
         initial_temperature_K=293.15,
         backend=THERMAL_BACKEND,
+        setup_cache_path=setup_cache_path,
     )
     result = pipeline.result
     info = result.solver_info
@@ -298,9 +308,7 @@ def run_llm_decode_workload_thermal(
     max_update = result.max_temperature_update
     if max_update is None:
         raise RuntimeError("GPU-PCG result did not report temperature update")
-    setup_time = (
-        pipeline.discretization_seconds + pipeline.conductance_seconds
-        + pipeline.operator_seconds)
+    setup_time = pipeline.setup_build_seconds
     return LLMDecodeWorkloadThermalMetrics(
         architecture=mapping.architecture,
         rho=mapping.rho,
@@ -329,7 +337,13 @@ def run_llm_decode_workload_thermal(
         hotspot_component=pipeline.hottest_cell_component,
         setup_time_s=setup_time,
         thermal_solver_wall_clock_time_s=pipeline.solve_seconds,
-        total_simulation_time_s=setup_time + pipeline.solve_seconds,
+        total_simulation_time_s=pipeline.total_pipeline_seconds,
+        thermal_setup_build_time_s=pipeline.setup_build_seconds,
+        cache_serialization_time_s=pipeline.cache_serialization_seconds,
+        cache_load_time_s=pipeline.cache_load_seconds,
+        cache_status=pipeline.cache_status,
+        cache_file_size_bytes=pipeline.cache_size_bytes,
+        cache_physical_signature=pipeline.cache_physical_signature,
         thermal_backend="gpu_pcg",
         precision_status="FP64",
         preconditioner_status="JACOBI_DIAGONAL",

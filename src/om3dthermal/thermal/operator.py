@@ -123,6 +123,37 @@ class MatrixFreeThermalOperator:
         denom = max(b_norm, epsilon)
         return float(np.linalg.norm(r) / denom)
 
+    def with_power(self, power_W: np.ndarray) -> "MatrixFreeThermalOperator":
+        """Return an operator sharing the fixed matrix with a new power RHS.
+
+        The diagonal (and therefore the Jacobi preconditioner) depends only on
+        conductance and boundary links.  ``self.rhs_W - self.power_W`` is the
+        boundary-only RHS, so a workload point can be applied without
+        rebuilding either the matrix or its preconditioner.
+        """
+        power = np.asarray(power_W, dtype=np.float64)
+        if power.shape != (self.cell_count,):
+            raise ValueError(
+                f"power_W has shape {power.shape}; expected "
+                f"({self.cell_count},)")
+        if not np.all(np.isfinite(power)):
+            raise ValueError("operator: power vector contains non-finite values")
+        boundary_rhs = self.rhs_W - self.power_W
+        return MatrixFreeThermalOperator(
+            cell_count=self.cell_count,
+            internal_cell_a=self.internal_cell_a,
+            internal_cell_b=self.internal_cell_b,
+            internal_conductance_W_K=self.internal_conductance_W_K,
+            boundary_cell=self.boundary_cell,
+            boundary_conductance_W_K=self.boundary_conductance_W_K,
+            boundary_reference_temperature_K=(
+                self.boundary_reference_temperature_K),
+            power_W=np.array(power, copy=True),
+            diagonal_W_K=self.diagonal_W_K,
+            rhs_W=boundary_rhs + power,
+            matvec_count=0,
+        )
+
 
 def build_matrix_free_operator(
     conductance: ConductanceTable,

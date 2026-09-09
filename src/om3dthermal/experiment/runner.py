@@ -391,7 +391,13 @@ def run_experiment(
                     simulation=mapping.simulation.model_copy(update={
                         "discretization": overridden_discretization}),
                 )
-            thermal = run_llm_decode_workload_thermal(mapping)
+            cache_path = experiment.scenario.thermal_setup_cache_path
+            thermal = (
+                run_llm_decode_workload_thermal(
+                    mapping, setup_cache_path=root / cache_path)
+                if cache_path is not None
+                else run_llm_decode_workload_thermal(mapping)
+            )
             row = assemble_conditional_llm_decode_e2e_row(
                 workload_spec.decode,
                 workload,
@@ -488,6 +494,10 @@ def run_experiment(
             "write_energy_model_status": "NOT_VALIDATED",
             "thermal_mesh_max_cell_size_mm": (
                 experiment.scenario.thermal_mesh_max_cell_size_mm),
+            "thermal_setup_cache_path": (
+                str(experiment.scenario.thermal_setup_cache_path)
+                if experiment.scenario.thermal_setup_cache_path is not None
+                else None),
             "gpu_energy_model_status": (
                 "ANALYTICAL_AFFINE_UTILIZATION_MODEL"
                 if gpu_energies else "NOT_AVAILABLE"),

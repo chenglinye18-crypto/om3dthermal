@@ -1,0 +1,21 @@
+schema_version: 1
+experiment_id: conventional_hbm_no_nmp_2p4TBps_cached
+mode: conditional_llm_decode_e2e
+architecture_configs:
+  - configs/architecture/conventional_hbm_2x1.yaml
+platform_config: configs/platform/gpu_package_h200_reference.yaml
+workload_config: configs/workload/llama31_8b_decode_b1_s131072.yaml
+scenario:
+  # 4.8 TB/s GPU ceiling times the retained 0.5 nominal utilization gives
+  # the requested 2.4 TB/s actual bandwidth (19.2 Tbit/s).
+  matched_payload_bandwidth_bits_per_second: 38.4e12
+  bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
+  effective_compute_flops_per_second: 1.0e14
+  compute_status: NUMERICAL_CHOICE_NOT_HARDWARE_VALIDATED
+  reserved_capacity_bytes: 0
+  rho_values: [0]
+  unresolved_logic_background_policy:
+    conventional_hbm_2x1: REQUIRE_RESOLVED
+  thermal_setup_cache_path: runs/cache/conventional_hbm_2x1_nominal_v1.pkl
+output_dir: runs/conventional_hbm_no_nmp_2p4TBps_cached
+output_policy: ERROR_IF_EXISTS
