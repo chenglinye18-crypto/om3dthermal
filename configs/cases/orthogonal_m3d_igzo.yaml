@@ -227,12 +227,10 @@ thermal:
   geometry_source: canonical_case_geometry
   package_size_mm: [65.0, 65.0]
   gpu_footprint_mm: [32.0, 24.0]
-  # Rev v3 retains the A-arm edge-strip policy: the 1 mm y-edge strips between the 22 mm
-  # cube and the 24 mm GPU die are filled with mold resin, matching the
-  # conventional-case background material.  The B-arm ablation case
-  # (orthogonal_m3d_igzo_edge_si_bar.yaml) fills them with Thermal_Silicon
-  # to separate orthogonal-structure vs Si-bar thermal contributions.
-  edge_strip_material: Mold
+  # The 1 mm y-edge strips between the 22 mm cube and the 24 mm GPU die are
+  # Cu sidebars. This changes only the side strips; the memory slab materials
+  # and their homogenized mapping remain unchanged.
+  edge_strip_material: Cu
   source_mapping:
     gpu: GPU_FEOL
     memory_internal_miv_interface: M3D_BITCELL_BEOL_STACK
@@ -255,6 +253,7 @@ thermal:
     Cu_Pillar_Bump: [0.54, 0.54, 13.25]
     Laminate: 13.0
     Mold: 3.0
+    Cu: 400.0
   common_stack:
     foundation_um: 300.0
     gpu: {cu_pillar_um: 70.0, bspdn_um: 1.715, feol_um: 0.15, beol_um: 1.4}

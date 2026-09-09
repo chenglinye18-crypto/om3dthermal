@@ -89,6 +89,14 @@ class LLMDecodeWorkloadThermalMetrics(BaseModel):
     internal_edge_count: int
     full_vector_d2h_during_iteration: int
 
+    hotspot_cell_id: int | None = None
+    hotspot_xyz_m: tuple[float, float, float] | None = None
+    hotspot_material: str | None = None
+    hotspot_component: str | None = None
+    setup_time_s: float | None = None
+    thermal_solver_wall_clock_time_s: float | None = None
+    total_simulation_time_s: float | None = None
+
     thermal_backend: Literal["gpu_pcg"]
     precision_status: Literal["FP64"]
     preconditioner_status: Literal["JACOBI_DIAGONAL"]
@@ -290,6 +298,9 @@ def run_llm_decode_workload_thermal(
     max_update = result.max_temperature_update
     if max_update is None:
         raise RuntimeError("GPU-PCG result did not report temperature update")
+    setup_time = (
+        pipeline.discretization_seconds + pipeline.conductance_seconds
+        + pipeline.operator_seconds)
     return LLMDecodeWorkloadThermalMetrics(
         architecture=mapping.architecture,
         rho=mapping.rho,
@@ -312,6 +323,13 @@ def run_llm_decode_workload_thermal(
         internal_edge_count=int(pipeline.internal_edge_count),
         full_vector_d2h_during_iteration=int(
             info["full_vector_d2h_during_iteration"]),
+        hotspot_cell_id=int(pipeline.hottest_cell_id),
+        hotspot_xyz_m=pipeline.hottest_cell_xyz_m,
+        hotspot_material=pipeline.hottest_cell_material,
+        hotspot_component=pipeline.hottest_cell_component,
+        setup_time_s=setup_time,
+        thermal_solver_wall_clock_time_s=pipeline.solve_seconds,
+        total_simulation_time_s=setup_time + pipeline.solve_seconds,
         thermal_backend="gpu_pcg",
         precision_status="FP64",
         preconditioner_status="JACOBI_DIAGONAL",

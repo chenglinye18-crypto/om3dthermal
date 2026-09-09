@@ -1329,13 +1329,11 @@ def test_active_cases_parse_and_resolve_system_power():
     hbm_system = resolve_system_power(
         hbm_case, project_root=ROOT, geometry=hbm_geometry,
         **_resolve_case_power_operating_point_kwargs(hbm_case, ROOT))
-    # H200-anchored range-midpoint bandwidth-saturated compatibility point.
-    assert hbm_system.gpu_power_W == 367.568
+    assert hbm_system.gpu_power_W == 298.256
     assert hbm_system.memory_result is not None
     hbm = hbm_system.memory_result
     assert hbm.diagnostics["activated_row_data_utilization"] == 0.10
     assert hbm.diagnostics["effective_rd_per_act"] == 6.4
-    # Rev v2: refresh scales with capacity 116.0 -> 145.0 GB.
     assert hbm.P_refresh_W == pytest.approx(0.9614665609424703)
     assert hbm.diagnostics["total_stored_bits"] == 1159641169920  # rev v2: 135 GiB
     assert hbm.E_base_route_pj_bit == pytest.approx(
@@ -1364,7 +1362,7 @@ def test_active_cases_parse_and_resolve_system_power():
     assert m3d.E_feol_route_pj_bit == 0.16705631334524151
     assert m3d.E_interface_pj_bit == 0.5
     assert m3d.P_refresh_W == pytest.approx(
-        318 * 0.0003484694872064)  # rev v3: 318 slabs
+        318 * 0.0003484694872064)
     assert m3d.diagnostics["geometry_source_config"] == (
         "canonical_case:orthogonal_m3d_igzo")
 
@@ -1403,7 +1401,7 @@ def test_active_case_system_mapping_uses_resolved_power():
         mapping = map_system_power_to_thermal(case, system)
         assert mapping.unresolved is False
         assert mapping.total_mapped_power_W == pytest.approx(
-            367.568 + system.resolved_total_memory_power_W)
+            298.256 + system.resolved_total_memory_power_W)
 
 
 def test_m3d_si_unresolved_is_na_not_zero():
@@ -1422,7 +1420,7 @@ def test_m3d_si_unresolved_is_na_not_zero():
     assert system.resolved_total_memory_power_W is None
     assert system.as_dict(display_na=True)["resolved_total_memory_power_W"] == "N/A"
     assert mapping.unresolved is True
-    assert mapping.total_mapped_power_W == 367.568
+    assert mapping.total_mapped_power_W == 298.256
 
 
 def test_orthogonal_si_uses_matched_row_workload_and_refresh():

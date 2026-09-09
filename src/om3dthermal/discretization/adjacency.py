@@ -27,7 +27,6 @@ class _CellBuilder:
     """Mutable accumulator used while emitting cells."""
 
     cells: list[ThermalCell]
-    cell_by_grid: dict[tuple[int, int, int], int]
     voxel_to_box: dict[tuple[int, int, int], str]
 
 
@@ -87,7 +86,7 @@ def generate_cells(boxes: list[AxisAlignedBox], grid: GlobalGrid) -> list[Therma
     per voxel that lies inside the box. Raises ``GeometryOverlapError`` if
     two boxes claim the same voxel.
     """
-    builder = _CellBuilder(cells=[], cell_by_grid={}, voxel_to_box={})
+    builder = _CellBuilder(cells=[], voxel_to_box={})
     for box in boxes:
         ix0, ix1, iy0, iy1, iz0, iz1 = _box_index_range(box, grid)
         for ix in range(ix0, ix1 + 1):
@@ -115,10 +114,11 @@ def generate_cells(boxes: list[AxisAlignedBox], grid: GlobalGrid) -> list[Therma
                         material=box.material,
                         parent_box_id=box.id, parent_box_name=box.name,
                         component=component, source_path=box.source_path,
-                        rotation=box.rotation, tags=dict(box.tags),
+                        # Geometry metadata is immutable after scene build;
+                        # sharing it avoids millions of identical dict copies.
+                        rotation=box.rotation, tags=box.tags,
                     )
                     builder.cells.append(cell)
-                    builder.cell_by_grid[key] = cell_id
     return builder.cells
 
 

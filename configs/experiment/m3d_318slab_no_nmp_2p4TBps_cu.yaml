@@ -1,0 +1,23 @@
+schema_version: 1
+experiment_id: m3d_318slab_no_nmp_2p4TBps_cu
+mode: conditional_llm_decode_e2e
+architecture_configs:
+  - configs/architecture/orthogonal_m3d_igzo.yaml
+platform_config: configs/platform/gpu_package_h200_reference.yaml
+workload_config: configs/workload/llama31_8b_decode_b1_s131072.yaml
+scenario:
+  # The formal runner applies the retained 0.5 GPU service utilization after
+  # the 4.8 TB/s GPU ceiling, yielding the requested 2.4 TB/s actual bandwidth.
+  matched_payload_bandwidth_bits_per_second: 38.4e12
+  bandwidth_status: MATCHED_REFERENCE_NOT_CAPABILITY_VALIDATED
+  effective_compute_flops_per_second: 1.0e14
+  compute_status: NUMERICAL_CHOICE_NOT_HARDWARE_VALIDATED
+  reserved_capacity_bytes: 0
+  rho_values: [0]
+  # NUMERICAL_CHOICE: preserve every material boundary while using a coarser
+  # anisotropic y/z mesh for this run-only feasibility validation.
+  thermal_mesh_max_cell_size_mm: [0.5, 1.0, 0.25]
+  unresolved_logic_background_policy:
+    orthogonal_m3d_igzo: EXISTING_PLACEHOLDER_ZERO
+output_dir: runs/m3d_318slab_no_nmp_2p4TBps_cu
+output_policy: ERROR_IF_EXISTS

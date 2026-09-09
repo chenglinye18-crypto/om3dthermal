@@ -91,8 +91,8 @@ def test_service_layer_is_not_a_gpu_power_model() -> None:
         bandwidth_demand_bytes_per_s=service.sustained_bandwidth_bytes_per_s,
         peak_bandwidth_bytes_per_s=decode.peak_memory_bandwidth_bytes_per_s,
     )
-    assert decode.e_decode_J_per_bit == pytest.approx(15.29e-12)
-    assert achieved_bandwidth_model.gpu_power_W == pytest.approx(367.568)
+    assert decode.e_decode_J_per_bit == pytest.approx(11.68e-12)
+    assert achieved_bandwidth_model.gpu_power_W == pytest.approx(298.256)
 
 
 def test_nmp_placement_does_not_consume_gpu_service_utilization() -> None:

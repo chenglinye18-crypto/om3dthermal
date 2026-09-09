@@ -174,7 +174,10 @@ class AffineGPUDecodePowerSpec(BaseModel):
         "VENDOR_SPEC_H200_PEAK_HBM3E_BANDWIDTH",
     ]
     coefficient_range_status: Literal["REFERENCE_DERIVED_RANGE"]
-    coefficient_nominal_status: Literal["MODELING_CHOICE_RANGE_MIDPOINT"]
+    coefficient_nominal_status: Literal[
+        "MODELING_CHOICE_RANGE_MIDPOINT",
+        "USER_SPECIFIED_MODELING_CHOICE",
+    ]
     model_form_status: Literal[
         "MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING"
     ]

@@ -20,6 +20,8 @@ CONFIG = (
     "m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
 AUDIT_CONFIG = (
     ROOT / "configs" / "experiment" / "m3d_semantic_boundary_audit_v0.yaml")
+SINGLE_M3D_CONFIG = (
+    ROOT / "configs" / "experiment" / "m3d_318slab_no_nmp_2p4TBps_cu.yaml")
 
 
 def _fake_thermal(mapping):
@@ -61,6 +63,13 @@ def _fake_thermal(mapping):
     )
 
 
+def _capture_mesh_thermal(mappings):
+    def thermal(mapping):
+        mappings.append(mapping)
+        return _fake_thermal(mapping)
+    return thermal
+
+
 @pytest.fixture
 def formal_run(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
@@ -81,7 +90,7 @@ def test_formal_runner_assembles_exact_three_by_four_table(formal_run) -> None:
         for rho in (0.0, 1.0, 100.0, 1000.0)
     ]
     assert all(row.aggregate_tokens_per_second == pytest.approx(
-        72.3327300024961) for row in formal_run.rows)
+        74.55887865736948) for row in formal_run.rows)
     assert all(row.bandwidth_capability_status == "NOT_VALIDATED"
                for row in formal_run.rows)
 
@@ -129,10 +138,10 @@ def test_formal_runner_evaluates_gpu_decode_energy_stage(formal_run) -> None:
         assert gpu.bandwidth_demand_bytes_per_s == pytest.approx(2.4e12)
         assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(2.4e12)
         assert gpu.bandwidth_saturated is False
-        assert gpu.gpu_dynamic_power_W == pytest.approx(293.568)
-        assert gpu.gpu_decode_power_W == pytest.approx(367.568)
+        assert gpu.gpu_dynamic_power_W == pytest.approx(224.256)
+        assert gpu.gpu_decode_power_W == pytest.approx(298.256)
         assert gpu.gpu_energy_j_per_token == pytest.approx(
-            367.568 * gpu.token_time_s)
+            298.256 * gpu.token_time_s)
         row = e7[(gpu.architecture, gpu.rho)]
         assert row.gpu_power_W == gpu.gpu_decode_power_W
         assert gpu.system_energy_j_per_token == pytest.approx(
@@ -147,6 +156,31 @@ def test_formal_runner_evaluates_gpu_decode_energy_stage(formal_run) -> None:
         (output / "provenance.json").read_text(encoding="utf-8"))
     assert provenance["environment"]["gpu_decode_energy_stage_status"] == (
         "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY")
+
+
+def test_single_m3d_case_power_sanity_and_static_exclusion(
+        tmp_path, monkeypatch) -> None:
+    mappings = []
+    monkeypatch.setattr(
+        runner_module, "run_llm_decode_workload_thermal",
+        _capture_mesh_thermal(mappings))
+    result = run_experiment(
+        SINGLE_M3D_CONFIG, project_root=ROOT,
+        output_dir_override=tmp_path / "single_m3d")
+    assert len(result.rows) == 1
+    row = result.rows[0]
+    gpu = result.gpu_decode_energy[0]
+    assert gpu.bandwidth_actual_bytes_per_s == pytest.approx(2.4e12)
+    assert gpu.gpu_dynamic_power_W == pytest.approx(224.256)
+    assert gpu.gpu_decode_power_W == pytest.approx(298.256)
+    power = json.loads((result.output_dir / "power.json").read_text())[0]
+    assert power["refresh_power_W"] == 0.0
+    assert power["memory_background_power_W"] == 0.0
+    assert power["logic_background_effective_W"] == 0.0
+    assert row.memory_total_power_W == pytest.approx(row.memory_dynamic_power_W)
+    size = mappings[0].simulation.discretization.max_cell_size
+    assert (size.x, size.y, size.z) == pytest.approx(
+        (0.5e-3, 1.0e-3, 0.25e-3))
 
 
 @pytest.mark.parametrize("bandwidth_scale", [1.0, 0.5])
@@ -177,7 +211,7 @@ def test_runner_shares_gpu_operating_point_in_energy_power_and_thermal(
     bandwidth_demand = 4.9e12 * bandwidth_scale
     bandwidth_ceiling = min(bandwidth_demand, 4.8e12)
     bandwidth_actual = 0.5 * bandwidth_ceiling
-    expected_gpu = 74.0 + 15.29e-12 * 8.0 * bandwidth_actual
+    expected_gpu = 74.0 + 11.68e-12 * 8.0 * bandwidth_actual
     for row, gpu, power, thermal in zip(
             result.rows, result.gpu_decode_energy, power_rows, thermal_rows):
         assert row.gpu_power_W == pytest.approx(expected_gpu)
@@ -238,8 +272,8 @@ def test_single_platform_coefficient_propagates_to_power_and_thermal(
         result = run_experiment(CONFIG, project_root=ROOT, write_bundle=False)
         return result, mappings
 
-    nominal, nominal_mappings = run_with(15.29e-12)
-    changed, changed_mappings = run_with(16.29e-12)
+    nominal, nominal_mappings = run_with(11.68e-12)
+    changed, changed_mappings = run_with(12.68e-12)
     expected_delta_W = 1.0e-12 * 8.0 * 2.4e12
     for before, after, before_map, after_map in zip(
             nominal.rows, changed.rows,
@@ -278,10 +312,10 @@ def test_m3d_sensitivity_uses_same_reduced_gpu_power_as_main_rows(monkeypatch):
     assert len(mappings) == 5  # nominal plus four logic-background points
     for mapping in mappings:
         gpu = next(source for source in mapping.sources if source.name == "gpu")
-        assert gpu.power_W == pytest.approx(223.842)
+        assert gpu.power_W == pytest.approx(188.464)
         assert "SHARED_WITH_ENERGY" in gpu.mapping_provenance
     for row in result.m3d_parameter_sensitivity.logic_background_rows:
-        assert row.package_total_power_W - row.memory_total_power_W == pytest.approx(223.842)
+        assert row.package_total_power_W - row.memory_total_power_W == pytest.approx(188.464)
 
 
 def test_result_bundle_persists_workload_demand_boundary(formal_run) -> None:

@@ -447,8 +447,12 @@ def test_frozen_table_has_exactly_twelve_rows_and_statuses(frozen) -> None:
     for row in rows:
         assert row.dynamic_power_status == (
             "WORKLOAD_J_PER_TOKEN_TIMES_AGGREGATE_TOKENS_PER_SECOND")
-        assert row.static_power_status == (
-            "EXISTING_POWER_MODEL_COMPONENTS_ADDED_ONCE")
+        expected_static_status = (
+            "MEMORY_STATIC_POWER_EXCLUDED_FOR_HBM_AND_M3D"
+            if row.architecture in {
+                "conventional_hbm_2x1", "orthogonal_m3d_igzo"}
+            else "EXISTING_POWER_MODEL_COMPONENTS_ADDED_ONCE")
+        assert row.static_power_status == expected_static_status
         assert row.gpu_power_status == (
             "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY")
         assert row.system_energy_status == (
@@ -462,12 +466,18 @@ def test_rho_one_anchor_and_memory_total_close_for_three_architectures(frozen) -
         system = frozen[row.architecture][3]
         assert row.memory_dynamic_access_power_W == pytest.approx(
             system.memory_result.P_access_W, abs=1e-10)
+        expected_memory = (
+            row.memory_dynamic_access_power_W
+            if row.architecture in {
+                "conventional_hbm_2x1", "orthogonal_m3d_igzo"}
+            else system.resolved_total_memory_power_W)
         assert row.memory_workload_total_W == pytest.approx(
-            system.resolved_total_memory_power_W, abs=1e-10)
+            expected_memory, abs=1e-10)
     m3d = next(row for row in rows if row.architecture == "orthogonal_m3d_igzo")
-    # Rev v2 re-frozen: refresh scales with capacity 428.75 -> 463.75 GiB
-    # (was 33.5603645761 W).
-    assert m3d.memory_workload_total_W == pytest.approx(16.4579408186)
+    assert m3d.refresh_power_W == 0.0
+    assert m3d.memory_background_power_W == 0.0
+    assert m3d.memory_workload_total_W == pytest.approx(
+        m3d.memory_dynamic_access_power_W)
     assert m3d.logic_background_raw_W is None
     assert m3d.logic_background_effective_W == 0
 

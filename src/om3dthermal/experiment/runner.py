@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from hashlib import sha256
 import math
@@ -13,6 +13,7 @@ import sys
 from typing import Any
 
 from om3dthermal import _git_metadata
+from om3dthermal.config import CellSizeConfig
 from om3dthermal.adapters import resolve_architecture_spec
 from om3dthermal.evaluator import (
     ConditionalLLMDecodeE2ERow,
@@ -376,6 +377,20 @@ def run_experiment(
             )
             mapping = map_workload_power_to_thermal(
                 resolved.case, system, power)
+            mesh_override = experiment.scenario.thermal_mesh_max_cell_size_mm
+            if mesh_override is not None:
+                discretization = mapping.simulation.discretization
+                if discretization is None:
+                    raise ValueError("thermal mesh override requires discretization")
+                x_mm, y_mm, z_mm = mesh_override
+                overridden_discretization = discretization.model_copy(update={
+                    "max_cell_size": CellSizeConfig(
+                        x=x_mm * 1e-3, y=y_mm * 1e-3, z=z_mm * 1e-3)})
+                mapping = replace(
+                    mapping,
+                    simulation=mapping.simulation.model_copy(update={
+                        "discretization": overridden_discretization}),
+                )
             thermal = run_llm_decode_workload_thermal(mapping)
             row = assemble_conditional_llm_decode_e2e_row(
                 workload_spec.decode,
@@ -471,6 +486,8 @@ def run_experiment(
                 for architecture_id, point in bandwidth_services.items()
             },
             "write_energy_model_status": "NOT_VALIDATED",
+            "thermal_mesh_max_cell_size_mm": (
+                experiment.scenario.thermal_mesh_max_cell_size_mm),
             "gpu_energy_model_status": (
                 "ANALYTICAL_AFFINE_UTILIZATION_MODEL"
                 if gpu_energies else "NOT_AVAILABLE"),

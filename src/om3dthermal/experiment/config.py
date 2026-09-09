@@ -125,6 +125,7 @@ class ExperimentScenarioSpec(_StrictFrozenModel):
         str, Literal["REQUIRE_RESOLVED", "EXISTING_PLACEHOLDER_ZERO"]
     ]
     m3d_parameter_sensitivity: M3DParameterSensitivitySpec | None = None
+    thermal_mesh_max_cell_size_mm: tuple[float, float, float] | None = None
 
     @model_validator(mode="after")
     def _bandwidth_exactly_one_source(self) -> "ExperimentScenarioSpec":
@@ -148,6 +149,21 @@ class ExperimentScenarioSpec(_StrictFrozenModel):
         if len(set(result)) != len(result):
             raise ValueError("rho_values must be unique")
         return result
+
+    @field_validator("thermal_mesh_max_cell_size_mm")
+    @classmethod
+    def _thermal_mesh_size(
+        cls, values: tuple[float, float, float] | None,
+    ) -> tuple[float, float, float] | None:
+        if values is None:
+            return None
+        if len(values) != 3 or any(
+                not math.isfinite(float(value)) or value <= 0.0
+                for value in values):
+            raise ValueError(
+                "thermal_mesh_max_cell_size_mm must contain three positive "
+                "finite values")
+        return tuple(float(value) for value in values)
 
 
 class ExperimentSpec(_StrictFrozenModel):

@@ -13,9 +13,8 @@ state. A future KCL / steady-state solver would attach those to the
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any, Literal
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..config import CellSizeConfig, DiscretizationConfig  # re-exported below
 from ..geometry.primitives import IDENTITY_ROTATION
@@ -51,7 +50,8 @@ class GeometryOverlapError(ValueError):
             f"z in {z_range}")
 
 
-class ThermalCell(BaseModel):
+@dataclass(slots=True)
+class ThermalCell:
     """A single block-structured cell produced by the discretiser.
 
     Cells are unitless with respect to thermal state. They carry enough
@@ -59,11 +59,10 @@ class ThermalCell(BaseModel):
     trace back to the originating ``AxisAlignedBox``.
     """
 
-    model_config = ConfigDict(extra="forbid")
-    id: int = Field(ge=0)
-    ix: int = Field(ge=0)
-    iy: int = Field(ge=0)
-    iz: int = Field(ge=0)
+    id: int
+    ix: int
+    iy: int
+    iz: int
     x0: float
     x1: float
     y0: float
@@ -73,13 +72,14 @@ class ThermalCell(BaseModel):
     material: str
     parent_box_id: str
     parent_box_name: str
-    component: str | None = None
     source_path: str
+    component: str | None = None
     rotation: tuple[tuple[float, float, float], ...] = IDENTITY_ROTATION
-    tags: dict[str, Any] = Field(default_factory=dict)
+    tags: dict[str, Any] = field(default_factory=dict)
 
-    @model_validator(mode="after")
-    def positive_extents(self):
+    def __post_init__(self) -> None:
+        if min(self.id, self.ix, self.iy, self.iz) < 0:
+            raise ValueError("cell id and grid indices must be non-negative")
         if not (self.x1 > self.x0):
             raise ValueError(f"cell {self.id} has non-positive x extent "
                              f"({self.x0}, {self.x1})")
@@ -89,7 +89,6 @@ class ThermalCell(BaseModel):
         if not (self.z1 > self.z0):
             raise ValueError(f"cell {self.id} has non-positive z extent "
                              f"({self.z0}, {self.z1})")
-        return self
 
     @property
     def size_x(self) -> float:
@@ -120,7 +119,8 @@ class ThermalCell(BaseModel):
         return self.size_x * self.size_y * self.size_z
 
 
-class AdjacencyEdge(BaseModel):
+@dataclass(slots=True)
+class AdjacencyEdge:
     """Face-shared adjacency between two ``ThermalCell`` nodes.
 
     The edge always points along one of the three world axes
@@ -131,10 +131,9 @@ class AdjacencyEdge(BaseModel):
     of each cell along the normal axis.
     """
 
-    model_config = ConfigDict(extra="forbid")
-    id: int = Field(ge=0)
-    cell_a: int = Field(ge=0)
-    cell_b: int = Field(ge=0)
+    id: int
+    cell_a: int
+    cell_b: int
     axis: Literal["x", "y", "z"]
     interface_coordinate: float
     face_area: float
@@ -145,15 +144,20 @@ class AdjacencyEdge(BaseModel):
     material_b: str
     is_material_interface: bool
 
-    @field_validator("face_area", "center_distance", "half_distance_a", "half_distance_b")
-    @classmethod
-    def strictly_positive(cls, value: float) -> float:
-        if value <= 0:
-            raise ValueError("face_area / center_distance / half_distance_? must be > 0")
-        return value
+    def __post_init__(self) -> None:
+        if min(self.id, self.cell_a, self.cell_b) < 0:
+            raise ValueError("edge id and cell ids must be non-negative")
+        if self.axis not in {"x", "y", "z"}:
+            raise ValueError("edge axis must be x, y, or z")
+        if min(
+                self.face_area, self.center_distance,
+                self.half_distance_a, self.half_distance_b) <= 0:
+            raise ValueError(
+                "face_area / center_distance / half_distance_? must be > 0")
 
 
-class BoundaryFace(BaseModel):
+@dataclass(slots=True)
+class BoundaryFace:
     """A face of a cell that is not shared with another cell.
 
     ``classification`` distinguishes the two cases the future solver
@@ -167,14 +171,26 @@ class BoundaryFace(BaseModel):
       lateral gaps in the benchmark).
     """
 
-    model_config = ConfigDict(extra="forbid")
-    id: int = Field(ge=0)
-    cell_id: int = Field(ge=0)
+    id: int
+    cell_id: int
     axis: Literal["x", "y", "z"]
     side: Literal["minus", "plus"]
     coordinate: float
-    area: float = Field(gt=0)
+    area: float
     normal: tuple[float, float, float]
-    component: str | None = None
     material: str
     classification: Literal["scene_outer_boundary", "exposed_internal_boundary"]
+    component: str | None = None
+
+    def __post_init__(self) -> None:
+        if min(self.id, self.cell_id) < 0:
+            raise ValueError("boundary face id and cell id must be non-negative")
+        if self.axis not in {"x", "y", "z"}:
+            raise ValueError("boundary face axis must be x, y, or z")
+        if self.side not in {"minus", "plus"}:
+            raise ValueError("boundary face side must be minus or plus")
+        if self.area <= 0:
+            raise ValueError("boundary face area must be positive")
+        if self.classification not in {
+                "scene_outer_boundary", "exposed_internal_boundary"}:
+            raise ValueError("unsupported boundary face classification")

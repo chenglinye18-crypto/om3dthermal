@@ -101,7 +101,7 @@ def test_three_architecture_source_selection_and_gpu_once(frozen) -> None:
         assert set(names) == expected[name]
         assert names.count("gpu") == 1
         assert next(source for source in mapping.sources
-                    if source.name == "gpu").power_W == 367.568
+                    if source.name == "gpu").power_W == 298.256
 
 
 def test_hbm_dynamic_decomposition_and_visible_group_split_close(frozen) -> None:
@@ -187,8 +187,17 @@ def test_rho_one_source_powers_reproduce_old_mapping(frozen) -> None:
         old_by_name = {source.name: source.power_W for source in old.sources}
         new_by_name = {source.name: source.power_W for source in new.sources}
         assert set(old_by_name) == set(new_by_name)
-        for name in old_by_name:
-            assert new_by_name[name] == pytest.approx(old_by_name[name], abs=1e-9)
+        assert new_by_name["gpu"] == pytest.approx(old_by_name["gpu"], abs=1e-9)
+        if case.name in {"conventional_hbm_2x1", "orthogonal_m3d_igzo"}:
+            excluded_static = (
+                system.memory_result.P_refresh_W
+                + system.memory_result.P_memory_background_W)
+            assert new.mapped_total_power_W == pytest.approx(
+                old.total_mapped_power_W - excluded_static, abs=1e-9)
+        else:
+            for name in old_by_name:
+                assert new_by_name[name] == pytest.approx(
+                    old_by_name[name], abs=1e-9)
 
 
 def test_output_has_no_system_energy_or_bandwidth_capability_claim() -> None:

@@ -21,6 +21,8 @@ EXPERIMENT = (
     "m3d_igzo_llama31_8b_decode_conditional_v0.yaml")
 AUDIT_EXPERIMENT = (
     ROOT / "configs" / "experiment" / "m3d_semantic_boundary_audit_v0.yaml")
+SINGLE_M3D_EXPERIMENT = (
+    ROOT / "configs" / "experiment" / "m3d_318slab_no_nmp_2p4TBps_cu.yaml")
 
 
 def test_formal_experiment_config_resolves_three_separate_layers() -> None:
@@ -46,14 +48,14 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
         and item.classification == "SOFTWARE_DERIVED"
         for item in workload.provenance
     )
-    # GPU coefficient is normalized to the nominal sustained 2.4 TB/s rate:
-    # 74 W + 15.29 pJ/actual-bit x 2.4 TB/s x 8 = 367.568 W.
+    # User-specified GPU Decode coefficient at the sustained 2.4 TB/s rate:
+    # 74 W + 11.68 pJ/actual-bit x 2.4 TB/s x 8 = 298.256 W.
     assert platform.gpu_decode_power.static_power_W == 74.0
-    assert platform.gpu_decode_power.e_decode_J_per_bit == 15.29e-12
+    assert platform.gpu_decode_power.e_decode_J_per_bit == 11.68e-12
     assert platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s == 4.8e12
     assert platform.gpu_bandwidth_service.nominal_utilization == 0.5
     assert platform.gpu_decode_power.derived_peak_decode_power_W == pytest.approx(
-        661.136)
+        522.512)
     raw_platform = yaml.safe_load(experiment.platform_config.read_text())
     assert set(raw_platform["gpu_decode_power"]) == {
         "model", "static_power_W", "e_decode_J_per_bit",
@@ -84,6 +86,35 @@ def test_formal_experiment_config_resolves_three_separate_layers() -> None:
     assert experiment.output_policy == "ERROR_IF_EXISTS"
     assert experiment.experiment_id == (
         "m3d_igzo_llama31_8b_decode_conditional_v0")
+
+
+def test_single_m3d_experiment_is_318_slab_no_nmp_cu_at_2p4_tbps() -> None:
+    experiment = load_experiment_spec(SINGLE_M3D_EXPERIMENT, project_root=ROOT)
+    assert experiment.architecture_configs == (
+        ROOT / "configs/architecture/orthogonal_m3d_igzo.yaml",)
+    assert experiment.scenario.rho_values == (0.0,)
+    assert experiment.scenario.matched_payload_bandwidth_bits_per_second == 38.4e12
+    assert experiment.scenario.thermal_mesh_max_cell_size_mm == (0.5, 1.0, 0.25)
+    architecture = load_architecture_spec(
+        experiment.architecture_configs[0], project_root=ROOT)
+    case = load_case_config(architecture.canonical_case)
+    assert case.geometry.orthogonal.slab_count == 318
+    assert case.geometry.orthogonal.slab_pitch_x_um == 100.0
+    assert case.geometry.m3d_stack.bitcell_layers == 8
+    assert case.architecture.base_route.enabled is False
+    # Refresh remains enabled only to supply capacity metadata; E5 excludes its
+    # power contribution from the modeled HBM/M3D package power.
+    assert case.power.refresh.enabled is True
+    assert case.power.background.enabled is False
+    assert case.thermal["edge_strip_material"] == "Cu"
+    assert case.thermal["materials"]["Cu"] == 400.0
+    for filename in (
+            "orthogonal_m3d_igzo.yaml",
+            "orthogonal_m3d_igzo_edge_si_bar.yaml"):
+        variant = load_case_config(ROOT / "configs/cases" / filename)
+        assert variant.thermal["edge_strip_material"] == "Cu"
+        assert variant.thermal["materials"]["M3D_Si"] == 140.0
+        assert variant.thermal["materials"]["M3D_Bitcell_BEOL"] == 0.85
 
 
 def test_no_obsolete_parameter_path_remains() -> None:

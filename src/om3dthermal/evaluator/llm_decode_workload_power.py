@@ -5,10 +5,11 @@ operating rate. For M3D bandwidth-bound decode, the shared M3D-to-GPU transfer
 rate scales the scenario-demand throughput so memory and GPU power consume the
 same actual traffic. Existing configured-demand power is never added.
 
-Refresh, memory-background, and logic-background power are consumed once from
-``ResolvedSystemPower.memory_result``. GPU power always comes from the same E8
-result used for energy accounting. This stage reports power, not system J/token
-or Tmax.
+HBM and M3D refresh, memory-background, and logic-background power are excluded
+from modeled package power. Refresh may still be calculated upstream because
+its diagnostics carry capacity metadata. GPU power always comes from the same
+E8 result used for energy accounting. This stage reports power, not system
+J/token or Tmax.
 """
 
 from __future__ import annotations
@@ -38,6 +39,11 @@ STATUS_UNRESOLVED_STATIC = "UNRESOLVED_STATIC_POWER"
 DYNAMIC_POWER_STATUS = (
     "WORKLOAD_J_PER_TOKEN_TIMES_AGGREGATE_TOKENS_PER_SECOND")
 STATIC_POWER_STATUS = "EXISTING_POWER_MODEL_COMPONENTS_ADDED_ONCE"
+STATIC_POWER_EXCLUDED_STATUS = "MEMORY_STATIC_POWER_EXCLUDED_FOR_HBM_AND_M3D"
+
+
+def _exclude_memory_static(architecture: str) -> bool:
+    return architecture.startswith(("conventional_hbm", "orthogonal_m3d"))
 GPU_WORKLOAD_POWER_STATUS = "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY"
 SCENARIO_STATUS = "CONDITIONAL_MATCHED_REFERENCE_SENSITIVITY"
 
@@ -111,7 +117,9 @@ class LLMDecodeWorkloadPowerMetrics(BaseModel):
     dynamic_power_status: Literal[
         "WORKLOAD_J_PER_TOKEN_TIMES_AGGREGATE_TOKENS_PER_SECOND"]
     static_power_status: Literal[
-        "EXISTING_POWER_MODEL_COMPONENTS_ADDED_ONCE"]
+        "EXISTING_POWER_MODEL_COMPONENTS_ADDED_ONCE",
+        "MEMORY_STATIC_POWER_EXCLUDED_FOR_HBM_AND_M3D",
+    ]
     gpu_power_status: Literal[
         "WORKLOAD_AFFINE_GPU_DECODE_POWER_SHARED_WITH_ENERGY"]
     system_energy_status: Literal[
@@ -167,7 +175,10 @@ def _common(
         "capacity_feasible": energy.capacity_feasible,
         "unresolved_logic_background_policy": policy,
         "dynamic_power_status": DYNAMIC_POWER_STATUS,
-        "static_power_status": STATIC_POWER_STATUS,
+        "static_power_status": (
+            STATIC_POWER_EXCLUDED_STATUS
+            if _exclude_memory_static(energy.architecture)
+            else STATIC_POWER_STATUS),
         "gpu_power_status": GPU_WORKLOAD_POWER_STATUS,
         "system_energy_status": (
             "GPU_ENERGY_REPORTED_IN_GPU_DECODE_ENERGY_STAGE"),
@@ -299,9 +310,12 @@ def evaluate_llm_decode_workload_power(
     throughput = _finite_nonnegative(
         "performance.aggregate_tokens_per_second",
         performance.aggregate_tokens_per_second)
-    refresh = _finite_nonnegative("memory.P_refresh_W", memory.P_refresh_W)
-    background = _finite_nonnegative(
+    raw_refresh = _finite_nonnegative("memory.P_refresh_W", memory.P_refresh_W)
+    raw_background = _finite_nonnegative(
         "memory.P_memory_background_W", memory.P_memory_background_W)
+    exclude_memory_static = _exclude_memory_static(energy.architecture)
+    refresh = 0.0 if exclude_memory_static else raw_refresh
+    background = 0.0 if exclude_memory_static else raw_background
     if gpu_decode_energy.evaluation_status != (
             "EVALUATED_ANALYTICAL_GPU_DECODE_ENERGY"):
         raise ValueError("evaluated workload requires evaluated GPU energy")
@@ -342,7 +356,7 @@ def evaluate_llm_decode_workload_power(
         old_total_valid = _finite_nonnegative(
             "system.resolved_total_memory_power_W", old_total)
         old_access = _finite_nonnegative("memory.P_access_W", memory.P_access_W)
-        expected_old = old_access + refresh + background
+        expected_old = old_access + raw_refresh + raw_background
         if not math.isclose(
                 old_total_valid, expected_old,
                 rel_tol=0.0, abs_tol=_OLD_TOTAL_ABS_TOL_W):

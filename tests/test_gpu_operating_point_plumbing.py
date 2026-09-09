@@ -147,7 +147,7 @@ def test_nominal_m3d_gpu_transfer_and_power_close() -> None:
         0.8552605756733209)
     assert system.memory_result.P_read_W == pytest.approx(
         16.421003052927762)
-    assert gpu.gpu_power_W == pytest.approx(367.568)
+    assert gpu.gpu_power_W == pytest.approx(298.256)
     assert system.memory_dynamic_power_bandwidth_source == (
         "GPU_SUSTAINED_BANDWIDTH_SERVICE_OPERATING_POINT")
 

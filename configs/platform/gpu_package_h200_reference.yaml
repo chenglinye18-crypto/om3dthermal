@@ -23,12 +23,12 @@ gpu_bandwidth_service:
 gpu_decode_power:
   model: AFFINE_UTILIZATION_MODEL
   static_power_W: 74.0
-  e_decode_J_per_bit: 15.29e-12
+  e_decode_J_per_bit: 11.68e-12
   peak_memory_bandwidth_bytes_per_s: 4.8e12
   static_power_status: MEASURED_REFERENCE_H200_SXM_IDLE_FLOOR
   bandwidth_status: VENDOR_SPEC_H200_PEAK_HBM3E_BANDWIDTH
   coefficient_range_status: REFERENCE_DERIVED_RANGE
-  coefficient_nominal_status: MODELING_CHOICE_RANGE_MIDPOINT
+  coefficient_nominal_status: USER_SPECIFIED_MODELING_CHOICE
   model_form_status: MODELING_CHOICE_AFFINE_FORM__LOCAL_MEASUREMENT_VALIDATION_PENDING
   provenance:
     - record_id: ml_energy_llama31_8b_h100_v0
@@ -77,22 +77,18 @@ gpu_decode_power:
         proposed rows identically.  See
         docs/research/gpu_platform_table_2026-09-06.csv (idle_power_anchor
         section).
-    - record_id: e_decode_dynamic_rev_v2_v0
-      classification: SOFTWARE_DERIVED
-      source: docs/research/gpu_platform_table_2026-09-06.csv; arXiv:2604.10852v1 Fig.8
-      source_location: decode power fraction 45-60% TDP on A100/H100-class GPUs
-      status: REFERENCE_DERIVED_RANGE
+    - record_id: e_decode_dynamic_rev_v3_v0
+      classification: MODELING_CHOICE
+      source: user-specified DAC 2026 operating point
+      source_location: GPU Decode dynamic-energy coefficient
+      status: USER_SPECIFIED_MODELING_CHOICE
       notes: >-
-        The retained H200 decode range is 12.56-18.02 pJ/actual-bit, derived
-        from P_decode = 45-60% of 700 W TDP, P_static = 74 W, and nominal
-        achieved/sustained BW = eta_bw * peak BW = 0.5 * 4.8 TB/s. The
-        nominal 15.29 pJ/actual-bit is the range midpoint and is a modeling
-        choice, not a paper-reported measurement. This re-normalization keeps
-        the reference decode-power anchors unchanged. HBM energy is not
-        deducted; memory energy remains independently modeled elsewhere.
-        Identical GPU silicon gives H200, baseline, and proposed rows the same
-        GPU decode coefficient. The range endpoints remain available for
-        sensitivity analyses.
+        Use 11.68 pJ per actual transferred bit for GPU Decode dynamic power.
+        With the retained 74 W static floor, P_GPU_dynamic = bandwidth x 8 x
+        11.68 pJ/bit. This is a user-specified modeling choice, not a
+        paper-reported measurement. Memory dynamic energy remains independently
+        modeled; memory static power is disabled in the canonical HBM and M3D
+        case configurations.
 gpu_compute_power:
   model: AFFINE_COMPUTE_RATE_MODEL
   static_power_W: 74.0

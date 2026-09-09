@@ -131,6 +131,8 @@ def test_single_box_uniform_subdivision_2x2x2_yields_eight_cells():
                 (1.5e-3, 1.5e-3, 1.5e-3)]
     assert centres == [(pytest.approx(x), pytest.approx(y), pytest.approx(z))
                        for (x, y, z) in expected]
+    assert all(not hasattr(cell, "__dict__") for cell in cells)
+    assert all(cell.tags is box.tags for cell in cells)
 
 
 def test_non_integer_length_subdivision_keeps_max_cell_size_below_config():
