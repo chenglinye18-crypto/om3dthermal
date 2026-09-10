@@ -319,12 +319,26 @@ def calculate_memory_power(
             None if m3d_geometry is None else m3d_geometry.layers),
         memory_region_count=geometry.memory_region_count,
     )
+    capacity_diagnostics = dict(refresh_result.diagnostics)
+    # Stored capacity is a geometry property even when refresh power is disabled.
+    if not config.power.refresh.enabled:
+        if m3d_subarray is not None and m3d_geometry is not None:
+            capacity_diagnostics.update(
+                bits_per_layer=m3d_subarray.bits_per_layer,
+                memory_layer_count=m3d_geometry.layers,
+                total_stored_bits=(m3d_subarray.bits_per_layer
+                                   * m3d_geometry.layers
+                                   * geometry.memory_region_count),
+            )
+        else:
+            capacity_diagnostics["total_stored_bits"] = backend.metadata[
+                "dreamram_total_stored_bits"]
     physical_capacity_result = None
     architecture_bandwidth_closure = None
     if physical_latency_result is not None:
         if m3d_subarray is None:
             raise ValueError("physical capacity layout requires M3D topology")
-        raw_total_bits = refresh_result.diagnostics.get("total_stored_bits")
+        raw_total_bits = capacity_diagnostics.get("total_stored_bits")
         if not isinstance(raw_total_bits, int):
             raise ValueError(
                 "physical capacity layout requires resolved total stored bits")
@@ -413,7 +427,7 @@ def calculate_memory_power(
             **({} if physical_capacity_result is None
                else physical_capacity_result.as_dict()),
             **({} if m3d_subarray is None else zhu_scaling_diagnostics),
-            **refresh_result.diagnostics,
+            **capacity_diagnostics,
             **electrical_access_comparison,
             "cell_model": config.memory.cell_model.type,
             "operation_energy_provenance": (

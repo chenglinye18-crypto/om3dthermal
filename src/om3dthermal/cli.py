@@ -60,8 +60,17 @@ def main(argv: list[str] | None = None) -> int:
     prefill_parser.add_argument(
         "--platform", type=Path,
         default=Path("configs/platform/gpu_package_h200_reference.yaml"))
+    sensitivity_parser = subparsers.add_parser(
+        "thermal-sensitivity", help="run the four-curve No-NMP geometry comparison")
+    sensitivity_parser.add_argument("--output-dir", type=Path, required=True)
+    sensitivity_parser.add_argument("--nominal-cache-dir", type=Path)
     args = parser.parse_args(argv)
-    if args.command == "prefill":
+    if args.command == "thermal-sensitivity":
+        from .thermal_sensitivity import run_thermal_sensitivity
+        print(json.dumps(run_thermal_sensitivity(
+            args.output_dir, project_root=Path.cwd(),
+            nominal_cache_dir=args.nominal_cache_dir), indent=2))
+    elif args.command == "prefill":
         from .experiment import load_platform_spec, load_prefill_workload_spec
         from .platform import (
             resolve_gpu_bandwidth_service,

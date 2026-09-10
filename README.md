@@ -37,6 +37,21 @@ Serving configuration `capacity_aware_serving_v0.yaml` uses
 scripts remain in `scripts/`. `bandwidth-thermal-sweep` retains the existing
 paper sweep entry; do not run it for a single-point regression.
 
+The separate No-NMP geometry sensitivity keeps the frozen cases unchanged:
+
+```powershell
+python -m om3dthermal thermal-sensitivity --output-dir runs/no_nmp_geometry_sensitivity --nominal-cache-dir runs/no_nmp_bandwidth_thermal_sweep_frozen_v2/cache
+```
+
+`*_sensitivity.yaml` adds hypothetical 24-high HBM and 300 µm / 106-slab M3D.
+This entry recomputes DreamRAM full/closed-row energies at 24-high and uses
+their arithmetic mean; nominal HBM retains its frozen energy. Memory static
+and refresh power are zero throughout. Bandwidth is a prescribed thermal
+load, not an achievable-throughput claim. The four curves use independent
+geometry caches, a common 0–4.8 TB/s slope fit, and a 2.2–2.6 TB/s local slope.
+CSV, JSON (including hotspots and row energies), PNG and SVG go to the output
+directory. Omit `--nominal-cache-dir` to build all four caches there.
+
 ## Outputs
 
 Formal experiments write stage JSON, tables, resolved inputs and a checksummed
