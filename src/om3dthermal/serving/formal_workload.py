@@ -14,8 +14,8 @@ from om3dthermal.workload import DenseLLMModelSpec, evaluate_llm_decode
 
 from .gpu import AnalyticalRooflineGPUModel
 from .mixed_phase_e2e import SystemId, resolve_conventional_hbm_backend
-from .nmp_decode import evaluate_nmp_decode_batch, resolve_m3d_architecture_backend
-from .persistent_horizon import PersistentMixedServiceCase, _m3d_gpu_bandwidth, _nmp_decode_sum, _prefill_roofline
+from .nmp_decode import resolve_m3d_architecture_backend
+from .persistent_horizon import PersistentMixedServiceCase, _m3d_gpu_bandwidth, _prefill_roofline
 from .workspace import WorkspaceExecutionConfig, evaluate_decode_workspace, evaluate_prefill_workspace
 
 
@@ -379,14 +379,7 @@ def evaluate_formal_inference_workload(
                 known["m3d_decode_write_J"] = 8.0*traffic[1]*write_pj*1e-12
                 numerical = "EXACT_PER_TOKEN_GROWING_CONTEXT_SUM"
             else:
-                decode_compute, nmp_J = _nmp_decode_sum(
-                    root, model, batch=B, resident_batch=B, S=S, G=G)
-                first_result = evaluate_nmp_decode_batch(
-                    model.decode_input(batch_size=B, context_length=S),
-                    project_root=root)
-                first_step = float(first_result.decode_step_time_ms)*1e-3
-                known["nmp_decode_total_J"] = nmp_J
-                numerical = "THREE_POINT_QUADRATIC_GROWING_CONTEXT_SUM__SHORT_G_VALIDATED"
+                raise ValueError("Die-only formal NMP model retired; use the physical FEOL Decode comparison")
             makespan = prefill_s+decode_compute
             ttfts = [prefill_s+first_step]*B
             completions = [makespan]*B

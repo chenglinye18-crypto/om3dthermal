@@ -16,7 +16,6 @@ from om3dthermal.platform import (
     resolve_local_memory_gpu_transfer,
 )
 from om3dthermal.power.memory_bandwidth import resolve_internal_service_bandwidth
-from om3dthermal.power.nmp_die_activity import NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS
 from om3dthermal.power.nmp_die_power import resolve_orthogonal_m3d_write_energy_pj_per_bit
 from om3dthermal.workload import (
     DenseLLMModelSpec, evaluate_gpu_prefill_roofline, evaluate_llm_decode,
@@ -27,7 +26,7 @@ from .gpu import AnalyticalRooflineGPUModel
 from .mixed_phase_e2e import (
     SYSTEM_CONFIGURATIONS, SystemId, resolve_conventional_hbm_backend,
 )
-from .nmp_decode import evaluate_nmp_decode_batch, resolve_m3d_architecture_backend
+from .nmp_decode import resolve_m3d_architecture_backend
 from .state_ledger import EvaluationSemantics, require_comparable_semantics
 from .workspace import (
     WorkspaceExecutionConfig, evaluate_decode_workspace,
@@ -35,7 +34,6 @@ from .workspace import (
 )
 
 
-_NMP_STREAM_CACHE: dict[tuple[object, ...], dict[str, object]] = {}
 
 
 class PersistentMixedServiceCase(BaseModel):
@@ -213,7 +211,7 @@ def _m3d_gpu_bandwidth(root: Path) -> float:
     if gpu is None:
         raise ValueError("GPU Decode platform data is incomplete")
     latency = statistics.fmean(
-        item.mat_latency_ns + item.miv_latency_ns + NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS
+        item.mat_latency_ns + item.miv_latency_ns
         for item in architecture.physical_latency.locations)
     internal = resolve_internal_service_bandwidth(architecture.bandwidth, latency)
     boundary = resolve_local_memory_gpu_transfer(
@@ -286,66 +284,6 @@ def _gpu_decode_sum(
     return time_s, (read_bytes, write_bytes, total_bytes)
 
 
-def _nmp_decode_sum(
-    root: Path, model: DenseLLMModelSpec, *, batch: int, resident_batch: int,
-    S: int, G: int,
-) -> tuple[float, float]:
-    stream_key = (str(root), model.model_id, batch, resident_batch, S)
-    stream = _NMP_STREAM_CACHE.get(stream_key)
-    if stream is None:
-        initial = evaluate_nmp_decode_batch(
-            model.decode_input(batch_size=batch, context_length=S),
-            project_root=root, active_capacity_requests=resident_batch,
-            resident_context_length=S)
-        if initial.evaluation_status != "EVALUATED" or initial.execution_trace is None:
-            raise RuntimeError("feasible horizon lacks initial NMP execution placement")
-        stream = {
-            "placement": initial.execution_trace.resident_placement,
-            "points": {0: initial},
-        }
-        _NMP_STREAM_CACHE[stream_key] = stream
-    placement = stream["placement"]
-    cache = stream["points"]
-
-    def point(j: int):
-        if j not in cache:
-            cache[j] = evaluate_nmp_decode_batch(
-                model.decode_input(batch_size=batch, context_length=S+j),
-                project_root=root, active_capacity_requests=resident_batch,
-                resident_context_length=S,
-                persistent_resident_placement=placement)
-        result = cache[j]
-        if result.evaluation_status != "EVALUATED":
-            raise RuntimeError("NMP persistent execution unexpectedly became infeasible")
-        return result
-
-    def sum_field(field: str, lo: int, hi: int) -> float:
-        if lo == hi:
-            return float(getattr(point(lo), field))
-        if hi-lo <= 2:
-            return sum(float(getattr(point(index), field))
-                       for index in range(lo, hi+1))
-        left = float(getattr(point(lo), field))
-        right = float(getattr(point(hi), field))
-        mid = (lo+hi)//2
-        middle = float(getattr(point(mid), field))
-        n = hi-lo
-        m = mid-lo
-        # Fixed-placement integer sharding adds a small periodic ripple to the
-        # smooth context curve.  A three-point quadratic integrates that curve
-        # without rebuilding the full placement/power stack for every token.
-        # Short-horizon regression compares this numerical path to the exact
-        # token loop; this is a NUMERICAL_CHOICE, not a physical coefficient.
-        curvature = ((right-left)/n-(middle-left)/m)/(n-m)
-        slope = (middle-left)/m-curvature*m
-        count = n+1
-        sum_x = n*(n+1)/2.0
-        sum_x2 = n*(n+1)*(2*n+1)/6.0
-        return count*left+slope*sum_x+curvature*sum_x2
-
-    return (
-        sum_field("decode_step_time_ms", 0, G-1)*1e-3,
-        sum_field("total_J_per_step", 0, G-1))
 
 
 def evaluate_persistent_mixed_service_horizon(
@@ -433,7 +371,6 @@ def evaluate_persistent_mixed_service_horizon(
     prefill_s = prefill_compute_s
     status = "EVALUATED"
     decode_s: float | None = None
-    nmp_energy = 0.0
     gpu_traffic = (0.0, 0.0, 0.0)
     if system != "CONVENTIONAL_HBM_GPU" and not all_local_feasible:
         status = "CAPACITY_INFEASIBLE"
@@ -464,10 +401,7 @@ def evaluate_persistent_mixed_service_horizon(
             G=case.generated_decode_steps, bandwidth=_m3d_gpu_bandwidth(root),
             compute=compute.peak_compute_BF16_dense_flops_per_s)
     else:
-        decode_s, nmp_energy = _nmp_decode_sum(
-            root, model, batch=case.decode_requests,
-            resident_batch=case.batch_size, S=case.context_length,
-            G=case.generated_decode_steps)
+        raise ValueError("Die-only persistent NMP model retired; use the physical FEOL Decode comparison")
 
     generated = case.decode_requests*case.generated_decode_steps
     total_s = (None if decode_s is None or prefill_s is None else
@@ -500,12 +434,6 @@ def evaluate_persistent_mixed_service_horizon(
             known["m3d_write_dynamic_J"] = 8.0*(
                 prefill_metrics.prefill_write_bytes+write)*write_pj*1e-12
             known["m3d_refresh_J"] = float(architecture.memory.P_refresh_W or 0.0)*total_s
-        else:
-            known["nmp_decode_total_J"] = nmp_energy
-            write_pj = resolve_orthogonal_m3d_write_energy_pj_per_bit(
-                architecture.case, architecture.memory)
-            known["prefill_m3d_read_J"] = 8.0*prefill_metrics.prefill_read_bytes*architecture.memory.E_access_total_pj_bit*1e-12
-            known["prefill_m3d_write_J"] = 8.0*prefill_metrics.prefill_write_bytes*write_pj*1e-12
     known_total = sum(known.values())
     energy_status: Literal["COMPLETE", "INCOMPLETE"] = "INCOMPLETE"
     capacity_margin = capacity-peak_runtime
@@ -539,9 +467,7 @@ def evaluate_persistent_mixed_service_horizon(
                               else decode_ws.peak_stage),
         workspace_provenance_status=workspace_config.provenance_status,
         allocation_status="DETERMINISTIC_PAGE_SLOT_AND_WHOLE_VECTOR_OWNER_CLOSED",
-        horizon_sum_status=(
-            "THREE_POINT_QUADRATIC_NUMERICAL_SUM__SHORT_G_EXACT_REGRESSION"
-            if proposed else "EXACT_PER_TOKEN_SUM"))
+        horizon_sum_status="EXACT_PER_TOKEN_SUM")
 
 
 class PersistentHorizonComparison(BaseModel):

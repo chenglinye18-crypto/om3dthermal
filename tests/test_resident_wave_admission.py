@@ -10,7 +10,6 @@ from om3dthermal.serving import (
     MixedPhaseServingCase,
     evaluate_conventional_hbm_resident_wave_admission,
     evaluate_conventional_hbm_resident_wave_decode,
-    evaluate_nmp_decode_batch,
     load_final_dense_e2e_matrix,
     resolve_conventional_hbm_backend,
 )
@@ -111,21 +110,3 @@ def test_final_matrix_manifest_remains_36_points():
         ROOT / "configs/experiment/final_dense_e2e_matrix.yaml")
     assert len(manifest.models) * len(manifest.mixed_points) * len(
         manifest.systems) == 36
-
-
-@pytest.mark.parametrize("batch,status,step_ms", [
-    (1, "EVALUATED", 2.1168573135262956),
-    (28, "EVALUATED", 43.54320348356118),
-    (29, "CAPACITY_INFEASIBLE", None),
-])
-def test_nmp_frozen_regressions_unchanged(registry, batch, status, step_ms):
-    result = evaluate_nmp_decode_batch(
-        registry["llama31_8b"].decode_input(
-            batch_size=batch, context_length=131072),
-        project_root=ROOT)
-    assert result.evaluation_status == status
-    if step_ms is None:
-        assert result.decode_step_time_ms is None
-    else:
-        assert result.decode_step_time_ms == pytest.approx(step_ms)
-        assert result.capacity_violations == 0

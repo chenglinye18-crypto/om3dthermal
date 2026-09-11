@@ -89,6 +89,17 @@ def wire_cv2_energy_pj_per_bit(*,activity_factor:float,capacitance_fF_per_um:flo
     return activity_factor*capacitance_fF_per_um*length_um*voltage_V**2*1e-3
 
 
+def distributed_elmore_delay_ns(length_um: float, wire) -> float:
+    """Shared distributed Elmore convention, including driver and fixed load."""
+    if length_um < 0:
+        raise ValueError("wire length must be nonnegative")
+    resistance = wire.resistance_ohm_per_um*length_um
+    capacitance = wire.capacitance_fF_per_um*length_um*1e-3
+    tau_ps = (wire.fixed_driver_resistance_ohm*(capacitance+wire.fixed_load_pF)
+              + resistance*wire.fixed_load_pF + .5*resistance*capacitance)
+    return -math.log(1-.8)*tau_ps*1e-3
+
+
 def _cluster_centers(
         topology: M3DSubarrayResult) -> tuple[tuple[float, float], ...]:
     pitch_x = topology.cluster_width_um + topology.cluster_gap_x_um

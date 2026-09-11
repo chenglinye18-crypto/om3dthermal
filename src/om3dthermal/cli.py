@@ -49,9 +49,6 @@ def main(argv: list[str] | None = None) -> int:
     experiment_parser.add_argument(
         "--output-dir", type=Path, default=None,
         help="override the configured formal result-bundle directory")
-    nmp_parser = subparsers.add_parser(
-        "nmp-attention", help="run the nominal B=1 dense NMP attention E2E audit")
-    nmp_parser.add_argument("--output-dir", type=Path, default=Path("runs/nmp_attention_nominal"))
     prefill_parser = subparsers.add_parser(
         "prefill", help="evaluate the independent dense prefill GPU roofline")
     prefill_parser.add_argument(
@@ -134,9 +131,6 @@ def main(argv: list[str] | None = None) -> int:
                 energy_calibration.model_dump(mode="json")),
             "gpu_roofline": roofline.model_dump(mode="json"),
         }, indent=2))
-    elif args.command == "nmp-attention":
-        from scripts.evaluate_nmp_locality_placement import run
-        print(json.dumps(run(args.output_dir)["summary"], indent=2))
     elif args.command == "build":
         scene = build(args.config, args.out)
         print(f"Built {len(scene.boxes)} boxes in {args.out}")

@@ -224,39 +224,6 @@ def test_complete_result_schema_enforces_phase_and_mixed_energy_closure():
         MixedPhaseE2EResult(**{**common, "mixed_total_energy_J": 28.0})
 
 
-@pytest.mark.parametrize("batch,prefill,decode", [
-    (4, 1, 3), (4, 2, 2), (28, 1, 27), (28, 14, 14),
-])
-def test_system_roles_and_resolved_nmp_batch_path(
-    registry, batch, prefill, decode,
-):
-    assert SYSTEM_CONFIGURATIONS["CONVENTIONAL_HBM_GPU"].comparison_role == "BASELINE"
-    memory_only = SYSTEM_CONFIGURATIONS["ORTHOGONAL_M3D_IGZO_MEMORY_ONLY"]
-    assert memory_only.comparison_role == "ABLATION"
-    assert memory_only.decode_executor == "GPU"
-    proposed = SYSTEM_CONFIGURATIONS["IOM3D_FEOL_NMP"]
-    assert proposed.decode_executor == "FEOL_NMP_GPU_HYBRID"
-    case = MixedPhaseServingCase(
-        model_id="llama31_8b", context_length=131072,
-        batch_size=batch, prefill_requests=prefill, decode_requests=decode)
-    result = evaluate_mixed_phase_e2e(
-        project_root=ROOT, model=registry["llama31_8b"], case=case,
-        system_id="IOM3D_FEOL_NMP")
-    assert result.nmp_batch_generalization_status == (
-        "RESOLVED_ANALYTICAL_BATCH_MODEL")
-    assert result.evaluation_status == "EVALUATED"
-    assert result.capacity_status == "FULLY_LOCAL"
-    assert result.capacity_violations == 0
-    assert result.resident_requests == batch
-    assert result.decode_tokens_per_s > 0.0
-    assert result.decode_total_J > 0.0
-    assert result.prefill_memory_write_dynamic_J > 0.0
-    assert result.prefill_memory_dynamic_J == pytest.approx(
-        result.prefill_memory_read_dynamic_J
-        + result.prefill_memory_write_dynamic_J)
-    assert result.mixed_epoch_time_ms == pytest.approx(
-        result.prefill_service_time_ms + result.decode_service_time_ms)
-    assert result.thermal is None
 
 
 def test_memory_only_backend_is_evaluated_and_gpu_only(registry):

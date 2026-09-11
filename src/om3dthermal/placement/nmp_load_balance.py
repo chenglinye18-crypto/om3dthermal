@@ -1,211 +1,129 @@
-"""Deterministic stage-level sharding under fixed NMP locality constraints."""
-from __future__ import annotations
-from dataclasses import asdict, dataclass
-import math, statistics
-from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
-from om3dthermal.workload.llm_decode import LLMDecodeInput
-from om3dthermal.workload.m3d_page_demand import M3DWorkloadPageDemand
-from om3dthermal.workload.dense_decode_ledger import (
-    DenseDecodePlacementUnit, active_weight_read_bytes,
-    build_dense_decode_placement_units, boundary_bytes_per_die,
-    unit_shard_fractions)
+"""Atomic resident striping into existing cluster-layer physical slots."""
+from dataclasses import dataclass, replace
+import numpy as np
 
-@dataclass(frozen=True)
-class NMPPlacementUnitLoad:
-    unit: DenseDecodePlacementUnit; resident_bytes: float
-    weight_read_bytes: float; kv_read_bytes: float; kv_write_bytes: float
-    local_memory_traffic_bytes: float; nmp_flops: float; minimum_die_span: int
-
-@dataclass(frozen=True)
-class NMPShardAssignment:
-    die_id: int; shard_index: int; shard_count: int; shard_fraction: float
-    resident_bytes: float; weight_read_bytes: float; kv_read_bytes: float
-    kv_write_bytes: float; local_memory_traffic_bytes: float; nmp_flops: float
-
-@dataclass(frozen=True)
-class NMPPerformanceBalancedPlacement:
-    unit_loads: tuple[NMPPlacementUnitLoad,...]; ownership: tuple[tuple[int,...],...]
-    shard_assignments: tuple[tuple[NMPShardAssignment,...],...]
-    resident_used_bytes_per_die: tuple[float,...]; traffic_bytes_per_die: tuple[float,...]
-    flops_per_die: tuple[float,...]; service_time_ms_per_die: tuple[float,...]
-    operator_die_spans: tuple[int,...]; minimum_capacity_die_spans: tuple[int,...]
-    max_capacity_utilization: float; mean_capacity_utilization: float
-    capacity_violations: int; mean_exec_die_span: float; median_exec_die_span: float
-    max_exec_die_span: int; algorithm: str; locality_constraint: str
-    def as_dict(self): return asdict(self)
-
-def derive_unit_loads(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,layout:PhysicalCapacityLayout)->tuple[NMPPlacementUnitLoad,...]:
-    units=build_dense_decode_placement_units(workload)
-    if not math.isclose(sum(u.weight_bytes for u in units),demand.weight_footprint_bytes):
-        raise ValueError("workload resident-weight ledger and demand disagree")
-    if not math.isclose(sum(u.kv_bytes for u in units),demand.kv_footprint_bytes):
-        raise ValueError("workload KV ledger and demand disagree")
-    if not math.isclose(active_weight_read_bytes(units),demand.total_weight_read_bytes_per_decode_step):
-        raise ValueError("workload active-weight ledger and demand disagree")
-    raw_resident=sum(u.weight_bytes+u.kv_bytes for u in units)
-    runtime=float(demand.runtime_footprint_bytes)
-    loads=[]
-    for u in units:
-        raw=u.weight_bytes+u.kv_bytes
-        resident=raw+(runtime*raw/raw_resident if raw_resident else 0.0)
-        weight_read=u.active_weight_read_bytes
-        kv_read=u.kv_bytes; kv_write=u.kv_write_bytes
-        traffic=weight_read+kv_read+kv_write
-        unit_flops=(workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops
-        loads.append(NMPPlacementUnitLoad(u,resident,weight_read,kv_read,kv_write,
-            traffic,unit_flops,max(1,math.ceil(resident/layout.capacity_per_slab_bytes))))
-    if not math.isclose(sum(x.weight_read_bytes for x in loads),active_weight_read_bytes(units)):
-        raise ValueError("active weight traffic ledger failed closure")
-    return tuple(loads)
-
-def _counts(total:int,span:int)->tuple[int,...]:
-    quotient,remainder=divmod(total,span)
-    return tuple(quotient+(index<remainder) for index in range(span))
-
-def shard_fractions(load:NMPPlacementUnitLoad,span:int)->tuple[float,...]:
-    """Analytical row/vector partition; an atomic item never crosses a die."""
-    return unit_shard_fractions(load.unit,span)
-
-def _stage_time(load:NMPPlacementUnitLoad,span:int,bw:float,compute:float)->float:
-    fractions=shard_fractions(load,span)
-    return max(max(load.local_memory_traffic_bytes*f/bw,load.nmp_flops*f/compute)
-               for f in fractions)
-
-def choose_execution_die_span(load:NMPPlacementUnitLoad,physical_die_count:int,
-        bandwidth_per_die_bytes_per_s:float,compute_per_die_flops_per_s:float)->int:
-    lower=load.minimum_die_span
-    if load.unit.shard_mode in ("RESIDENT_ONLY","LOCAL_LOOKUP") or (not load.local_memory_traffic_bytes and not load.nmp_flops):
-        return lower
-    upper=min(physical_die_count,max(lower,load.unit.max_useful_parallelism))
-    return min(range(lower,upper+1),key=lambda span:(
-        _stage_time(load,span,bandwidth_per_die_bytes_per_s,compute_per_die_flops_per_s),span))
-
-def _assign(load:NMPPlacementUnitLoad,owners:tuple[int,...])->tuple[NMPShardAssignment,...]:
-    fractions=shard_fractions(load,len(owners))
-    counts=_counts(load.unit.atomic_count,len(owners)) if load.unit.atomic_count else (0,)*len(owners)
-    return tuple(NMPShardAssignment(die,index,counts[index],fraction,
-        load.resident_bytes*fraction,load.weight_read_bytes*fraction,
-        load.kv_read_bytes*fraction,load.kv_write_bytes*fraction,
-        load.local_memory_traffic_bytes*fraction,load.nmp_flops*fraction)
-        for index,(die,fraction) in enumerate(zip(owners,fractions,strict=True)))
-
-def build_performance_balanced_placement(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,
-        layout:PhysicalCapacityLayout,*,bandwidth_per_die_bytes_per_s:float,compute_per_die_flops_per_s:float)->NMPPerformanceBalancedPlacement:
-    loads=derive_unit_loads(workload,demand,layout); n=layout.slab_count; cap=layout.capacity_per_slab_bytes
-    resident=[0.0]*n; traffic=[0.0]*n; flops=[0.0]*n
-    ownership=[]; assignments=[]; kv_pair_owners={}
-    for load in loads:
-        span=choose_execution_die_span(load,n,bandwidth_per_die_bytes_per_s,compute_per_die_flops_per_s)
-        pair_key=(load.unit.layer_id,load.unit.request_id)
-        paired=(load.unit.operator_type=="ATTENTION_AV" and pair_key in kv_pair_owners
-                and len(kv_pair_owners[pair_key])==span)
-        if paired:
-            chosen=kv_pair_owners[pair_key]
-        else:
-            feasible=[]
-            candidate_spans = (
-                range(span, n + 1)
-                if load.unit.shard_mode == "RESIDENT_ONLY" else (span,))
-            for candidate_span in candidate_spans:
-                fractions=shard_fractions(load,candidate_span); feasible=[]
-                for die in sorted(range(n),key=lambda d:(resident[d],d)):
-                    fraction=fractions[len(feasible)]
-                    if resident[die]+load.resident_bytes*fraction<=cap:
-                        feasible.append(die)
-                        if len(feasible)==candidate_span: break
-                if len(feasible)==candidate_span:
-                    span=candidate_span
-                    break
-            if len(feasible)<span:
-                raise ValueError(
-                    f"PERFORMANCE_BALANCED_CAPACITY_FAIL:{load.unit.unit_id}")
-            chosen=tuple(feasible)
-        if load.unit.operator_type=="ATTENTION_QK": kv_pair_owners[pair_key]=chosen
-        shards=_assign(load,chosen)
-        for shard in shards:
-            resident[shard.die_id]+=shard.resident_bytes
-            traffic[shard.die_id]+=shard.local_memory_traffic_bytes
-            flops[shard.die_id]+=shard.nmp_flops
-        ownership.append(chosen); assignments.append(shards)
-    service=tuple(max(traffic[d]/bandwidth_per_die_bytes_per_s,
-                      flops[d]/compute_per_die_flops_per_s)*1e3 for d in range(n))
-    spans=tuple(len(x) for x in ownership)
-    active_spans=tuple(span for load,span in zip(loads,spans)
-                       if load.unit.shard_mode not in ("RESIDENT_ONLY","LOCAL_LOOKUP"))
-    return NMPPerformanceBalancedPlacement(loads,tuple(ownership),tuple(assignments),
-        tuple(resident),tuple(traffic),tuple(flops),service,spans,
-        tuple(x.minimum_die_span for x in loads),max(resident)/cap,
-        statistics.fmean(resident)/cap,sum(x>cap for x in resident),
-        statistics.fmean(active_spans),statistics.median(active_spans),max(active_spans),
-        "DETERMINISTIC_PER_STAGE_SPAN_LATENCY_OPTIMIZER__TIE_FEWER_DIES__CAPACITY_BALANCED_OWNERS",
-        "ROW_BLOCKS_AND_WHOLE_TOKEN_KV_HEAD_VECTORS__PAIRED_KV_COLOCATION")
+from om3dthermal.workload.dense_decode_ledger import build_dense_decode_placement_units
 
 
-def project_active_execution_placement(
-        resident_placement:NMPPerformanceBalancedPlacement,
-        workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,
-        layout:PhysicalCapacityLayout,*,bandwidth_per_die_bytes_per_s:float,
-        compute_per_die_flops_per_s:float)->NMPPerformanceBalancedPlacement:
-    """Project active-request load onto one validated persistent layout."""
-    loads=derive_unit_loads(workload,demand,layout); n=layout.slab_count
-    resident_owner_by_id={load.unit.unit_id:owners for load,owners in zip(
-        resident_placement.unit_loads,resident_placement.ownership,strict=True)}
-    ownership=[]; assignments=[]; traffic=[0.0]*n; flops=[0.0]*n
-    for load in loads:
-        try:
-            owners=resident_owner_by_id[load.unit.unit_id]
-        except KeyError as error:
-            raise ValueError(
-                f"active unit absent from resident layout: {load.unit.unit_id}") from error
-        shards=_assign(load,owners)
-        ownership.append(owners); assignments.append(shards)
-        for shard in shards:
-            traffic[shard.die_id]+=shard.local_memory_traffic_bytes
-            flops[shard.die_id]+=shard.nmp_flops
-    service=tuple(max(traffic[d]/bandwidth_per_die_bytes_per_s,
-                      flops[d]/compute_per_die_flops_per_s)*1e3 for d in range(n))
-    spans=tuple(len(x) for x in ownership)
-    active_spans=tuple(span for load,span in zip(loads,spans)
-                       if load.unit.shard_mode not in ("RESIDENT_ONLY","LOCAL_LOOKUP"))
-    return NMPPerformanceBalancedPlacement(
-        loads,tuple(ownership),tuple(assignments),
-        resident_placement.resident_used_bytes_per_die,tuple(traffic),tuple(flops),
-        service,spans,tuple(x.minimum_die_span for x in loads),
-        resident_placement.max_capacity_utilization,
-        resident_placement.mean_capacity_utilization,
-        resident_placement.capacity_violations,statistics.fmean(active_spans),
-        statistics.median(active_spans),max(active_spans),
-        "PERSISTENT_RESIDENT_LAYOUT__ACTIVE_REQUEST_LOAD_PROJECTION",
-        resident_placement.locality_constraint)
+@dataclass
+class ResidentOperator:
+    unit: object
+    atom_bytes: int
+    atom_count: int
+    lane_offset: int
+    lanes: np.ndarray
+    start_layers: np.ndarray
+    tile_ids: np.ndarray
+    die_count: int
 
-def build_locality_only_placement(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,
-        layout:PhysicalCapacityLayout,*,bandwidth_per_die_bytes_per_s:float,compute_per_die_flops_per_s:float)->NMPPerformanceBalancedPlacement:
-    """Minimum-capacity-span reference, retained for placement comparisons."""
-    loads=derive_unit_loads(workload,demand,layout); n=layout.slab_count; cap=layout.capacity_per_slab_bytes
-    resident=[0.0]*n; traffic=[0.0]*n; flops=[0.0]*n; ownership=[]; assignments=[]
-    for load in loads:
-        span=load.minimum_die_span; fractions=shard_fractions(load,span); feasible=[]
-        for die in sorted(range(n),key=lambda d:(resident[d],d)):
-            if resident[die]+load.resident_bytes*fractions[len(feasible)]<=cap:
-                feasible.append(die)
-                if len(feasible)==span: break
-        if len(feasible)<span: raise ValueError("LOCALITY_ONLY_CAPACITY_FAIL")
-        chosen=tuple(feasible); shards=_assign(load,chosen)
-        ownership.append(chosen); assignments.append(shards)
-        for shard in shards:
-            resident[shard.die_id]+=shard.resident_bytes; traffic[shard.die_id]+=shard.local_memory_traffic_bytes; flops[shard.die_id]+=shard.nmp_flops
-    service=tuple(max(traffic[d]/bandwidth_per_die_bytes_per_s,flops[d]/compute_per_die_flops_per_s)*1e3 for d in range(n))
-    spans=tuple(len(x) for x in ownership)
-    active_spans=tuple(span for load,span in zip(loads,spans)
-                       if load.unit.shard_mode not in ("RESIDENT_ONLY","LOCAL_LOOKUP"))
-    return NMPPerformanceBalancedPlacement(loads,tuple(ownership),tuple(assignments),tuple(resident),tuple(traffic),tuple(flops),service,spans,
-        tuple(x.minimum_die_span for x in loads),max(resident)/cap,statistics.fmean(resident)/cap,sum(x>cap for x in resident),
-        statistics.fmean(active_spans),statistics.median(active_spans),max(active_spans),
-        "CAPACITY_BALANCED_FIRST_TOUCH_LOCALITY_ONLY","MINIMUM_CAPACITY_DIE_SPAN_ONLY")
+    def __post_init__(self):
+        self.order = (self.lanes-self.lane_offset) % (self.die_count*70)
+        self.layer_order = (np.arange(8)[None, :]-self.start_layers[:, None]) % 8
+        self.group_ids = self.lanes//self.die_count
+        self.die_ids = self.lanes % self.die_count
+        self.region_ids = np.minimum(self.group_ids//18, 3)
+        self.region_dest = self.die_ids*4+self.region_ids
 
-def remaining_external_bytes_for_ownership(loads, ownership)->float:
-    die_count=1+max(d for owners in ownership for d in owners)
-    return sum(external_bytes_per_die_for_ownership(loads,ownership,die_count))
+    def prefix_counts(self, atoms):
+        if not 0 <= atoms <= self.atom_count:
+            raise ValueError("active atoms exceed resident allocation")
+        return np.maximum(0, (atoms+self.die_count*70-1-self.order)//(self.die_count*70))
 
-def external_bytes_per_die_for_ownership(loads, ownership, die_count)->tuple[float,...]:
-    return boundary_bytes_per_die(tuple(x.unit for x in loads),ownership,die_count)
+    def layer_bytes(self, atoms, *, begin=0):
+        """Only read/write already resident atoms; four clusters share a layer."""
+        count = self.prefix_counts(atoms)
+        before = self.prefix_counts(begin)
+        layer = self.layer_order
+        end = np.maximum(0, (count[:, None]+7-layer)//8)
+        start = np.maximum(0, (before[:, None]+7-layer)//8)
+        return (end-start)*self.atom_bytes
+
+
+class PhysicalResidentPlacement:
+    """Die-fastest cyclic rows/vectors, then capacity-balanced layer striping.
+
+    Each atom stays in one group/layer and is bit-striped across its four
+    physical clusters. Arrays describe counts, never materialized tensors.
+    """
+    def __init__(self, workload, floorplan):
+        if workload.batch_size != 1 or (workload.weight_bits, workload.kv_bits) != (16, 16):
+            raise ValueError("physical execution currently requires B1, 16-bit storage")
+        self.floorplan = floorplan
+        self.workload = workload
+        self.dies = floorplan.layout.slab_count
+        n = self.dies*70
+        self.slot_used = np.zeros((n, 8), dtype=np.int64)  # bytes per member cluster
+        self.operators = {}
+        cursor = 0
+        paired = {}
+        units = build_dense_decode_placement_units(workload)
+        embedding = workload.d_model*workload.vocab_size*2
+        for original in units:
+            u = original
+            if u.operator_type == "TOKEN_EMBED_LOOKUP":
+                u = replace(u, weight_bytes=embedding, atomic_count=workload.vocab_size)
+                atom = workload.d_model*2
+            elif u.operator_type == "OTHER_WEIGHT":
+                u = replace(u, weight_bytes=u.weight_bytes-embedding)
+                atom = 32
+            elif u.shard_mode == "KV_ATOMIC":
+                atom = workload.d_head*2
+            else:
+                atom = int(u.weight_bytes/u.output_rows)
+            total = int(u.weight_bytes+u.kv_bytes)
+            if total == 0:
+                continue
+            if total % atom or atom % 4:
+                raise ValueError("resident atom does not close to four-cluster striping")
+            count = total//atom
+            offset = paired[u.layer_id] if u.operator_type == "ATTENTION_AV" else cursor % n
+            if u.operator_type == "ATTENTION_QK":
+                paired[u.layer_id] = offset
+            lanes = (np.arange(min(count, n), dtype=np.int32)+offset) % n
+            starts = np.argmin(self.slot_used[lanes], axis=1).astype(np.uint8)
+            entry = ResidentOperator(u, atom, count, offset, lanes, starts, np.zeros(len(lanes), dtype=np.int32), self.dies)
+            allocated = entry.layer_bytes(count)
+            self.slot_used[lanes] += allocated//4
+            if np.any(self.slot_used[lanes] > floorplan.layout.slot_capacity_bytes):
+                raise ValueError(f"physical slot capacity exceeded: {u.unit_id}")
+            assert allocated.sum() == total
+            self._assign_tiles(entry)
+            self.operators[u.layer_id, u.operator_type] = entry
+            cursor += count
+        expected = workload.n_param*2 + 2*workload.n_layers*workload.context_length*workload.n_heads_kv*workload.d_head*2
+        assert int(self.slot_used.sum())*4 == expected
+
+    def _assign_tiles(self, entry):
+        f = self.floorplan
+        # Earliest projected tile completion includes physical route startup.
+        loads = np.zeros((self.dies, 32))
+        counts = entry.prefix_counts(entry.atom_count)
+        flop_atom = entry.unit.local_flops/entry.atom_count
+        for g in range(70):
+            indices = np.flatnonzero(entry.lanes//self.dies == g)
+            if not len(indices):
+                continue
+            dies = entry.lanes[indices] % self.dies
+            region = f.groups[g]["region_id"]
+            tiles = np.arange(region*8, region*8+8)
+            work = counts[indices]*flop_atom
+            costs = (loads[dies[:, None], tiles]+work[:, None])/f.tile_flops + f.sa_tile_ns[g, tiles]*1e-9
+            chosen = tiles[np.argmin(costs, axis=1)]
+            entry.tile_ids[indices] = chosen
+            loads[dies, chosen] += work
+
+    def audit(self):
+        group = self.slot_used.sum(axis=1)*4
+        dies = group.reshape(70, self.dies).sum(axis=0)
+        f = self.floorplan
+        return dict(resident_bytes=int(group.sum()), max_slot_bytes=int(self.slot_used.max()),
+                    slot_capacity_bytes=f.layout.slot_capacity_bytes,
+                    max_group_bytes=int(group.max()), group_capacity_bytes=32*f.layout.slot_capacity_bytes,
+                    max_die_bytes=int(dies.max()), die_capacity_bytes=f.layout.capacity_per_slab_bytes,
+                    active_resident_groups=int(np.count_nonzero(group)),
+                    physical_slots_used=int(np.count_nonzero(self.slot_used))*4,
+                    slot_capacity_violations=int(np.count_nonzero(self.slot_used > f.layout.slot_capacity_bytes)),
+                    group_resident_bytes=group.reshape(70, self.dies).T.tolist(),
+                    group_active_layer_slots=(self.slot_used > 0).sum(axis=1).reshape(70, self.dies).T.tolist(),
+                    atomic_locality="ONE_GROUP_ONE_LAYER_FOUR_MEMBER_CLUSTER_BIT_STRIPES",
+                    algorithm="DIE_FASTEST_CYCLIC_ATOMS__LEAST_OCCUPIED_START_LAYER__CYCLIC_LAYER_STRIPING")

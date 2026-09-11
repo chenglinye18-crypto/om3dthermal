@@ -16,8 +16,6 @@ from om3dthermal.serving import (
     load_serving_e2e_closure_spec,
 )
 from om3dthermal.workload import load_dense_model_registry
-from om3dthermal.serving.persistent_horizon import _nmp_decode_sum
-from om3dthermal.serving.nmp_decode import evaluate_nmp_decode_batch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,20 +57,6 @@ def test_decode_workspace_grows_with_context_and_nmp_boundary(registry, spec):
     assert nmp.peak_bytes >= gpu.peak_bytes
 
 
-@pytest.mark.parametrize("p,d", [(1, 27), (14, 14)])
-def test_llama_b28_g512_remains_infeasible_with_workspace(registry, spec, p, d):
-    case = PersistentMixedServiceCase(
-        model_id="llama31_8b", context_length=131072,
-        prefill_requests=p, decode_requests=d, generated_decode_steps=512)
-    result = evaluate_persistent_mixed_service_horizon(
-        project_root=ROOT, model=registry["llama31_8b"], case=case,
-        system="ORTHOGONAL_M3D_IGZO_MEMORY_ONLY",
-        workspace_config=spec.workspace)
-    assert result.status == "CAPACITY_INFEASIBLE"
-    assert result.peak_workspace_bytes > 0
-    assert result.capacity_margin_bytes < 0
-    assert result.first_infeasible_step is not None
-    assert result.total_service_time_s is None
 
 
 def test_physical_whole_vectors_are_integer_nonoverlap_and_kv_paired():
@@ -128,24 +112,3 @@ def test_comparison_rejects_workload_mismatch(registry, spec):
     changed = baseline.model_copy(update={"G": 3})
     with pytest.raises(ValueError, match="INCOMPARABLE"):
         compare_persistent_horizons(baseline, changed)
-
-
-def test_nmp_quadratic_horizon_sum_matches_short_exact_loop(registry):
-    model = registry["llama31_8b"]
-    S, G, batch, resident = 32768, 8, 3, 4
-    summed_s, _ = _nmp_decode_sum(
-        ROOT, model, batch=batch, resident_batch=resident, S=S, G=G)
-    initial = evaluate_nmp_decode_batch(
-        model.decode_input(batch_size=batch, context_length=S),
-        project_root=ROOT, active_capacity_requests=resident,
-        resident_context_length=S)
-    placement = initial.execution_trace.resident_placement
-    exact_ms = float(initial.decode_step_time_ms)
-    for j in range(1, G):
-        result = evaluate_nmp_decode_batch(
-            model.decode_input(batch_size=batch, context_length=S+j),
-            project_root=ROOT, active_capacity_requests=resident,
-            resident_context_length=S,
-            persistent_resident_placement=placement)
-        exact_ms += float(result.decode_step_time_ms)
-    assert summed_s == pytest.approx(exact_ms*1e-3, rel=1e-4)

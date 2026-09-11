@@ -29,11 +29,6 @@ from .resident_adapter import (
     build_resident_objects_from_serving_residency,
     build_resident_pages_from_serving_residency,
 )
-from .nmp_decode import (
-    NMP_BATCH_GENERALIZATION_STATUS,
-    NMPDecodeBatchResult,
-    evaluate_nmp_decode_batch,
-)
 from .mixed_phase_e2e import (
     CONVENTIONAL_HBM_WRITE_ENERGY_STATUS,
     SYSTEM_CONFIGURATIONS,
@@ -45,7 +40,6 @@ from .mixed_phase_e2e import (
     SystemConfiguration,
     compare_mixed_phase_results,
     evaluate_conventional_hbm_mixed_phase,
-    evaluate_iom3d_feol_nmp_mixed_phase,
     evaluate_orthogonal_m3d_igzo_memory_only_mixed_phase,
     evaluate_mixed_phase_e2e,
     load_final_dense_e2e_matrix,
@@ -152,8 +146,6 @@ __all__ = [
     "search_serving_operating_point",
     "SYSTEM_CONFIGURATIONS",
     "CONVENTIONAL_HBM_WRITE_ENERGY_STATUS",
-    "NMP_BATCH_GENERALIZATION_STATUS",
-    "NMPDecodeBatchResult",
     "ConventionalHBMBackend",
     "FinalDenseE2EMatrixSpec",
     "MixedPhaseComparison",
@@ -162,9 +154,7 @@ __all__ = [
     "SystemConfiguration",
     "compare_mixed_phase_results",
     "evaluate_conventional_hbm_mixed_phase",
-    "evaluate_iom3d_feol_nmp_mixed_phase",
     "evaluate_orthogonal_m3d_igzo_memory_only_mixed_phase",
-    "evaluate_nmp_decode_batch",
     "evaluate_mixed_phase_e2e",
     "load_final_dense_e2e_matrix",
     "resolve_conventional_hbm_backend",

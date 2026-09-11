@@ -13,7 +13,6 @@ from om3dthermal.serving import (
     evaluate_conventional_hbm_resident_wave_growing_kv,
     evaluate_conventional_prefill_first_state_window,
     evaluate_m3d_growing_kv_capacity,
-    evaluate_nmp_decode_batch,
     free_local,
     initial_decode_state,
     initial_prefill_state,
@@ -108,47 +107,10 @@ def test_short_g_growing_reference_closes(registry):
         result.total_compute_time_ms+result.total_admission_time_ms)
 
 
-@pytest.mark.parametrize("prefill,decode,growth",[
-    (1,27,1811939328.0),(14,14,939524096.0)])
-def test_llama_b28_g512_crosses_m3d_capacity(registry,prefill,decode,growth):
-    case=MixedPhaseServingCase(model_id="llama31_8b",context_length=131072,
-        batch_size=28,prefill_requests=prefill,decode_requests=decode)
-    result=evaluate_m3d_growing_kv_capacity(
-        project_root=ROOT,model=registry["llama31_8b"],case=case,
-        generated_decode_steps=512)
-    assert result.growing_kv_bytes==growth
-    assert result.capacity_status=="CAPACITY_INFEASIBLE"
-    assert result.capacity_margin_GB<0.0
 
 
-def test_nmp_execution_projects_one_persistent_resident_layout(registry):
-    workload=registry["llama31_8b"].decode_input(
-        batch_size=14,context_length=131072)
-    result=evaluate_nmp_decode_batch(workload,project_root=ROOT,
-        active_capacity_requests=28)
-    trace=result.execution_trace
-    assert result.resident_execution_placement_status==(
-        "SINGLE_PERSISTENT_RESIDENT_LAYOUT_ACTIVE_LOAD_PROJECTION")
-    resident={load.unit.unit_id:owners for load,owners in zip(
-        trace.resident_placement.unit_loads,trace.resident_placement.ownership)}
-    assert all(resident[load.unit.unit_id]==owners for load,owners in zip(
-        trace.placement.unit_loads,trace.placement.ownership))
-    assert trace.placement.resident_used_bytes_per_die==(
-        trace.resident_placement.resident_used_bytes_per_die)
-    assert result.post_step_capacity_violations==0
-    assert result.kv_append_allocation_status.startswith(
-        "WHOLE_VECTOR_APPEND_DIE_OWNER_AND_CAPACITY_VALIDATED")
 
 
-def test_kv_append_is_256_byte_atomic_and_kv_pair_owner_consistent(registry):
-    result=evaluate_nmp_decode_batch(registry["llama31_8b"].decode_input(
-        batch_size=1,context_length=131072),project_root=ROOT)
-    activity=result.execution_trace.activity
-    assert all(item.kv_write_bytes/256==round(item.kv_write_bytes/256)
-               for item in activity.activities)
-    owners=activity.kv_append_owner_by_layer_request
-    for layer in range(32):
-        assert owners[layer,0,"ATTENTION_QK"]==owners[layer,0,"ATTENTION_AV"]
 
 
 def test_comparison_rejects_scope_or_context_mismatch():

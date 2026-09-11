@@ -17,7 +17,6 @@ from om3dthermal.power import (
     resolve_effective_bandwidth,
 )
 from om3dthermal.power.config import CanonicalCaseConfig
-from om3dthermal.power.nmp_die_activity import canonical_nmp_hardware
 from om3dthermal.thermal.nmp_die_mapping import physical_nmp_die_regions
 
 
@@ -87,12 +86,6 @@ def test_per_slab_primitives_unchanged_and_aggregates_explicit(revisions) -> Non
     assert old.rate_gbps_per_link == new.rate_gbps_per_link == 8.0
     assert old.coil_bandwidth_bytes_per_s == pytest.approx(5.3e12)
     assert new.coil_bandwidth_bytes_per_s == pytest.approx(15.9e12)
-    old_nmp = canonical_nmp_hardware(old.slab_count)
-    new_nmp = canonical_nmp_hardware(new.slab_count)
-    assert old_nmp.macs_per_die == new_nmp.macs_per_die == 512
-    assert old_nmp.clock_hz == new_nmp.clock_hz == 1.0e9
-    assert old_nmp.aggregate_peak_flops == pytest.approx(108.544e12)
-    assert new_nmp.aggregate_peak_flops == pytest.approx(325.632e12)
     assert len(physical_nmp_die_regions(old_case)) == 106
     assert len(physical_nmp_die_regions(new_case)) == 318
 

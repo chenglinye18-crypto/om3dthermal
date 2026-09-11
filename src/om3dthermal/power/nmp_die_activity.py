@@ -1,251 +1,219 @@
-"""Canonical per-die NMP hardware, workload activity, and compute power."""
+"""Performance-only physical group/fabric/tile execution; no power model."""
 from __future__ import annotations
-from dataclasses import asdict, dataclass
-import math, statistics
-from om3dthermal.platform import load_platform_spec_file, resolve_gpu_bandwidth_service, resolve_local_memory_gpu_transfer
-from pathlib import Path
-from om3dthermal.workload.dense_decode_ledger import (
-    attention_boundary_by_layer, build_dense_decode_handoffs,
-    build_dense_decode_placement_units, build_dense_decode_small_ops,
-    kv_append_bytes_per_die)
-from om3dthermal.placement.nmp_load_balance import NMPPlacementUnitLoad, shard_fractions
-from om3dthermal.power.memory_bandwidth import ArchitectureBandwidthClosure
-from om3dthermal.power.physical_capacity import PhysicalCapacityLayout
-from om3dthermal.workload.llm_decode import LLMDecodeInput
-from om3dthermal.workload.m3d_page_demand import M3DWorkloadPageDemand
 
-NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS = 1.0
-NMP_LOCAL_ROUTE_PROVENANCE = (
-    "MODELING_CHOICE_FIXED_LOCAL_NMP_ROUTE_DELAY__NOT_PHYSICALLY_EXTRACTED__"
-    "NOT_OPTIMIZED__NOT_POSITION_DEPENDENT")
+import numpy as np
 
-@dataclass(frozen=True)
-class NMPHardware:
-    precision: str; macs_per_die: int; active_mac_ceiling_per_die: int; clock_hz: float
-    flops_per_mac: int; peak_flops_per_die: float; physical_die_count: int
-    aggregate_peak_flops: float; mac_energy_pj: float
-    mac_count_provenance: str; clock_provenance: str; peak_provenance: str
 
-@dataclass(frozen=True)
-class NMPDiePower:
-    die_id: int; compute_dynamic_W: float; memory_dynamic_W: float|None
-    refresh_W: float|None; total_dynamic_W: float|None; power_status: str
-    memory_read_dynamic_W: float|None=None; memory_write_dynamic_W: float|None=None
-    mac_dynamic_W: float|None=None; nmp_logic_overhead_factor: float=1.0
-    nmp_dynamic_W: float|None=None; residual_external_W: float|None=None
-    total_W: float|None=None; thermal_memory_carrier_W: float|None=None
-    thermal_nmp_carrier_W: float|None=None; thermal_mapping_status: str="THERMAL_MAPPING_PENDING"
+def group_service_seconds(layer_bytes, service_ns):
+    """Eight layers serialize within a group; inactive groups have zero time."""
+    if np.any(layer_bytes < 0):
+        raise ValueError("negative memory service bytes")
+    return (((layer_bytes+31)//32)*service_ns).sum(axis=-1)*1e-9
 
-@dataclass(frozen=True)
-class NMPDieWorkloadActivity:
-    die_id: int; weight_read_bytes: float; kv_read_bytes: float; kv_write_bytes: float
-    total_local_memory_bytes: float; nmp_flops: float; arithmetic_intensity_flop_per_byte: float
-    memory_service_time_ms: float; compute_service_time_ms: float; active_service_time_ms: float
-    memory_utilization: float; compute_utilization: float; bottleneck: str
-    compute_energy_j: float; power: NMPDiePower
 
-@dataclass(frozen=True)
-class NMPDieActivitySummary:
-    hardware: NMPHardware; local_access_latency_ns: float; local_route_delay_ns: float
-    local_route_provenance: str
-    local_bandwidth_per_die_bytes_per_s: float; aggregate_local_bandwidth_bytes_per_s: float
-    hardware_balance_flop_per_byte: float; activities: tuple[NMPDieWorkloadActivity,...]
-    global_nmp_stage_time_ms: float; decode_step_interval_ms: float; straggler_die_id: int
-    mean_die_service_time_ms: float; p90_die_service_time_ms: float; max_die_service_time_ms: float
-    memory_bound_die_count: int; compute_bound_die_count: int; balanced_die_count: int
-    aggregate_compute_energy_j: float; aggregate_compute_dynamic_W: float
-    memory_power_status: str
-    timing_semantics: str
-    stages: tuple[dict, ...]
-    attention_layers: dict
-    score_bytes: float
-    probability_bytes: float
-    partial_bytes: float
-    attention_boundary_bytes: float
-    residual_boundary_bytes: float
-    boundary_time_ms: float
-    transfer: dict
-    softmax_local_bytes: float
-    softmax_time_ms: float
-    softmax_dynamic_energy_j: float
-    gpu_static_energy_j: float
-    mean_exec_die_span: float
-    median_exec_die_span: float
-    max_exec_die_span: int
-    realized_effective_local_bandwidth_bytes_per_s: float
-    handoffs: tuple[dict, ...]
-    small_ops: tuple[dict, ...]
-    gpu_remaining_local_bytes: float
-    gpu_remaining_time_ms: float
-    gpu_remaining_dynamic_energy_j: float
-    embedding_local_read_bytes: float
-    embedding_local_time_ms: float
-    kv_append_owner_by_layer_request: dict
-    def as_dict(self): return asdict(self)
+def structured_noc(floorplan, region_bytes, *, mode, vector_bytes=0):
+    """Root-0 multicast or pairwise (1->0, 3->2), then 2->0 gather/reduce.
 
-def canonical_nmp_hardware(physical_die_count:int)->NMPHardware:
-    macs=512; clock=1.0e9; flops_per_mac=2; peak=macs*clock*flops_per_mac
-    return NMPHardware("FP16",macs,macs,clock,flops_per_mac,peak,physical_die_count,peak*physical_die_count,0.604,
-        "ARCHITECTURE_MODELING_CHOICE","REFERENCE_ANCHORED_MODELING_CHOICE__NOT_PHYSICALLY_SYNTHESIZED_FOR_THIS_DESIGN",
-        "DERIVED_FROM_MAC_COUNT_CLOCK_AND_PRECISION")
+    Link counters include every traversed directed physical edge; payload
+    endpoints and hop bytes are distinct. No edge crosses a slab boundary.
+    """
+    f = floorplan
+    region_bytes = np.asarray(region_bytes, dtype=float)
+    active = region_bytes > 0
+    n = len(region_bytes)
+    links = np.zeros((n, 3, 2))
+    if mode == "multicast":
+        # All destinations of a multicast receive the same payload.
+        payload = region_bytes.max(axis=1)
+        for edge in range(3):
+            links[:, edge, 0] = payload*np.any(active[:, edge+1:], axis=1)
+        path_ns = np.zeros(n)
+        for r in range(1, 4):
+            path_ns = np.maximum(path_ns, active[:, r]*sum(l["hop_ns"] for l in f.links[:r]))
+        time = float(np.max(links)/f.link_Bps+path_ns.max()*1e-9)
+        endpoint = float(region_bytes.sum())
+    elif mode in ("gather", "reduce"):
+        reduce = mode == "reduce"
+        first1 = region_bytes[:, 1]
+        first3 = region_bytes[:, 3]
+        merged23 = (np.any(active[:, 2:], axis=1)*vector_bytes if reduce else region_bytes[:, 2:].sum(axis=1))
+        links[:, 0, 1] += first1
+        links[:, 2, 1] += first3
+        links[:, 1, 1] += merged23
+        links[:, 0, 1] += merged23
+        t1 = max(float(np.max(first1)/f.link_Bps + (np.any(first1 > 0)*f.links[0]["hop_ns"]*1e-9)),
+                 float(np.max(first3)/f.link_Bps + (np.any(first3 > 0)*f.links[2]["hop_ns"]*1e-9)))
+        t2 = float(np.max(merged23)/f.link_Bps + np.any(merged23 > 0)*sum(l["hop_ns"] for l in f.links[:2])*1e-9)
+        if reduce:
+            add_s = (vector_bytes/4)/(f.config["reduction_adds_per_cycle"]*f.config["clock_hz"])
+            t1 += add_s*bool(np.any((active[:, 0]&active[:, 1]) | (active[:, 2]&active[:, 3])))
+            t2 += add_s*bool(np.any(np.any(active[:, :2], axis=1)&np.any(active[:, 2:], axis=1)))
+        time = t1+t2
+        endpoint = float(region_bytes.sum())
+    else:
+        raise ValueError("only structured multicast/gather/reduce is supported")
+    return dict(time_s=time, link_bytes=links, hop_bytes=float(links.sum()), endpoint_bytes=endpoint,
+                max_link_busy_s=float(links.max()/f.link_Bps))
 
-def evaluate_nmp_die_activity(workload:LLMDecodeInput,demand:M3DWorkloadPageDemand,layout:PhysicalCapacityLayout,
-        bandwidth:ArchitectureBandwidthClosure,*,local_access_latency_ns:float,bandwidth_demand_bytes_per_s:float,
-        ownership:tuple[tuple[int,...],...])->NMPDieActivitySummary:
-    hw=canonical_nmp_hardware(layout.slab_count)
-    bw_die=(bandwidth.local_service_groups_per_slab*bandwidth.read_payload_bytes_per_service/(bandwidth.service_cycle_scale*local_access_latency_ns*1e-9))
-    units=build_dense_decode_placement_units(workload); spans=ownership; n=layout.slab_count
-    if len(spans)!=len(units): raise ValueError("unit ownership count mismatch")
-    weights=[0.0]*n; kvreads=[0.0]*n; kvwrites=[0.0]*n; flops=[0.0]*n
-    stages_by_key={}; append_owners={}
-    score=probability=partial=0.0
-    for u,owners in zip(units,spans,strict=True):
-        if not owners or len(set(owners)) != len(owners) or any(d < 0 or d >= n for d in owners):
-            raise ValueError("invalid unit ownership")
-        key=(u.layer_id,u.operator_type)
-        stage_mem,stage_flops=stages_by_key.setdefault(key,([0.0]*n,[0.0]*n))
-        score+=u.score_bytes; probability+=u.probability_bytes
 
-        unit_flops=(workload.batch_size if u.placement_scope=="SHARED_BATCH" else 1)*u.local_flops
-        load=NMPPlacementUnitLoad(u,u.weight_bytes+u.kv_bytes,u.active_weight_read_bytes,
-            u.kv_bytes,u.kv_write_bytes,u.active_weight_read_bytes+u.kv_bytes+u.kv_write_bytes,
-            unit_flops,1)
-        fractions=shard_fractions(load,len(owners))
-        append_by_die=kv_append_bytes_per_die(u,owners,n)
-        if u.shard_mode=="KV_ATOMIC":
-            append_owners[(u.layer_id,u.request_id,u.operator_type)]=tuple(
-                die for die,value in enumerate(append_by_die) if value>0.0)
-        for die,share in zip(owners,fractions,strict=True):
-            weights[die]+=u.active_weight_read_bytes*share
-            kvreads[die]+=u.kv_bytes*share
-            kvwrites[die]+=append_by_die[die]
-            flops[die]+=unit_flops*share
-            stage_mem[die]+=(u.active_weight_read_bytes+u.kv_bytes)*share+append_by_die[die]
-            stage_flops[die]+=unit_flops*share
-    platform=load_platform_spec_file(Path(__file__).resolve().parents[3]/"configs/platform/gpu_package_h200_reference.yaml")
-    gpu=platform.gpu_decode_power
-    service_spec=platform.gpu_bandwidth_service
-    gpu_bw=resolve_gpu_bandwidth_service(
-        transfer_ceiling_bytes_per_s=gpu.peak_memory_bandwidth_bytes_per_s,
-        service_status=service_spec.service_status,
-        provenance=service_spec.provenance).sustained_bandwidth_bytes_per_s
-    transfer=resolve_local_memory_gpu_transfer(
-        bandwidth_demand_bytes_per_s=bandwidth_demand_bytes_per_s,
-        memory_capability_bytes_per_s=bandwidth.coil_bandwidth_bytes_per_s,
-        gpu_peak_bandwidth_bytes_per_s=gpu_bw)
-    handoffs=build_dense_decode_handoffs(units,spans,n)
-    boundary=sum(x.bytes for x in handoffs)
-    attention_layers=attention_boundary_by_layer(units,spans)
-    partial=sum(row["partial_bytes"] for row in attention_layers.values())
-    if boundary and not transfer.bandwidth_actual_bytes_per_s:
-        raise ValueError("positive boundary traffic requires positive transfer demand")
-    external_boundary_time_ms=boundary/transfer.bandwidth_actual_bytes_per_s*1e3 if boundary else 0
-    softmax_ms=(score+probability)/gpu_bw*1e3
-    local_stages={}
-    for (layer,operator),(mem,compute) in stages_by_key.items():
-        memory_ms=max(mem)/bw_die*1e3
-        compute_ms=max(compute)/hw.peak_flops_per_die*1e3
-        stage_ms=max(max(m/bw_die,f/hw.peak_flops_per_die)*1e3 for m,f in zip(mem,compute))
-        stage_owners=set(d for u,o in zip(units,spans,strict=True)
-                         if u.layer_id==layer and u.operator_type==operator for d in o)
-        local_stages[layer,operator]=dict(layer=layer,operator=operator,kind="NMP_STAGE",
-            execution_die_span=len(stage_owners),memory_ms=memory_ms,compute_ms=compute_ms,
-            stage_ms=stage_ms,time_ms=stage_ms)
-    small_ops=build_dense_decode_small_ops(workload,units,spans,n)
-    def gpu_stage(operator,variant,layer,label):
-        rows=[x for x in small_ops if x.operator==operator and x.variant==variant and x.layer_id==layer]
-        bytes_=sum(x.gpu_local_total_bytes for x in rows)
-        return dict(layer=layer,operator=label,kind="GPU_SMALL_OP",gpu_local_bytes=bytes_,
-            time_ms=bytes_/gpu_bw*1e3)
-    def handoff_stage(producer,consumer,layer,label):
-        rows=[x for x in handoffs if x.producer==producer and x.consumer==consumer and x.layer_id==layer]
-        bytes_=sum(x.bytes for x in rows)
-        return dict(layer=layer,operator=label,kind="BOUNDARY_HANDOFF",producer=producer,
-            consumer=consumer,direction=rows[0].direction,bytes=bytes_,
-            reason="; ".join(sorted({x.reason for x in rows})),
-            time_ms=bytes_/transfer.bandwidth_actual_bytes_per_s*1e3)
-    stages=[local_stages[-1,"TOKEN_EMBED_LOOKUP"],
-        handoff_stage("TOKEN_EMBED_LOOKUP","RMSNORM_PRE_ATTENTION",-1,"EMBEDDING_TRANSFER")]
-    for layer in range(workload.n_layers):
-        stages.append(gpu_stage("RMSNORM","PRE_ATTENTION",layer,"RMSNORM_PRE_ATTENTION"))
-        for consumer in ("Q","K","V"):
-            stages.append(handoff_stage("RMSNORM_PRE_ATTENTION",consumer,layer,
-                f"RMSNORM_TO_{consumer}_TRANSFER"))
-        stages.extend((local_stages[layer,"Q"],handoff_stage("Q","ROPE",layer,"Q_TO_ROPE_TRANSFER"),
-            local_stages[layer,"K"],handoff_stage("K","ROPE",layer,"K_TO_ROPE_TRANSFER"),
-            local_stages[layer,"V"],handoff_stage("V","KV_VECTOR_REPACK",layer,"V_TO_KV_REPACK_TRANSFER"),
-            handoff_stage("KV_VECTOR_REPACK","KV_WRITE",layer,"V_KV_REPACK_RETURN_TRANSFER"),
-            gpu_stage("ROPE","Q_K",layer,"ROPE"),
-            handoff_stage("ROPE_Q","ATTENTION_QK",layer,"ROPE_Q_RETURN_TRANSFER"),
-            handoff_stage("ROPE_K","KV_WRITE",layer,"ROPE_K_RETURN_TRANSFER"),
-            local_stages[layer,"ATTENTION_QK"],
-            handoff_stage("ATTENTION_QK","GPU_SOFTMAX",layer,"SCORE_TRANSFER"),
-            dict(layer=layer,operator="GPU_SOFTMAX",kind="GPU_SOFTMAX",
-                 gpu_local_bytes=attention_layers[layer]["score_bytes"]+attention_layers[layer]["probability_bytes"],
-                 time_ms=(attention_layers[layer]["score_bytes"]+attention_layers[layer]["probability_bytes"])/gpu_bw*1e3),
-            handoff_stage("GPU_SOFTMAX","ATTENTION_AV",layer,"PROBABILITY_TRANSFER"),
-            local_stages[layer,"ATTENTION_AV"],
-            handoff_stage("ATTENTION_AV","AV_REDUCTION",layer,"PARTIAL_TRANSFER"),
-            gpu_stage("AV_REDUCTION","FP32_PARTIAL_TO_FP16",layer,"AV_REDUCTION"),
-            handoff_stage("AV_REDUCTION","O",layer,"AV_REDUCTION_TO_O_TRANSFER"),
-            local_stages[layer,"O"],handoff_stage("O","RESIDUAL_ADD_ATTENTION",layer,"O_TO_RESIDUAL_TRANSFER"),
-            gpu_stage("RESIDUAL_ADD","ATTENTION",layer,"RESIDUAL_ADD_ATTENTION"),
-            gpu_stage("RMSNORM","PRE_FFN",layer,"RMSNORM_PRE_FFN"),
-            handoff_stage("RMSNORM_PRE_FFN","FFN_GATE",layer,"RMSNORM_TO_FFN_GATE_TRANSFER"),
-            handoff_stage("RMSNORM_PRE_FFN","FFN_UP",layer,"RMSNORM_TO_FFN_UP_TRANSFER"),
-            local_stages[layer,"FFN_GATE"],handoff_stage("FFN_GATE","SWIGLU",layer,"FFN_GATE_TO_SWIGLU_TRANSFER"),
-            local_stages[layer,"FFN_UP"],handoff_stage("FFN_UP","SWIGLU",layer,"FFN_UP_TO_SWIGLU_TRANSFER"),
-            gpu_stage("SWIGLU","SILU_GATE_TIMES_UP",layer,"SWIGLU"),
-            handoff_stage("SWIGLU","FFN_DOWN",layer,"SWIGLU_TO_FFN_DOWN_TRANSFER"),
-            local_stages[layer,"FFN_DOWN"],
-            handoff_stage("FFN_DOWN","RESIDUAL_ADD_FFN",layer,"FFN_DOWN_TO_RESIDUAL_TRANSFER"),
-            gpu_stage("RESIDUAL_ADD","FFN",layer,"RESIDUAL_ADD_FFN")))
-    stages.extend((gpu_stage("FINAL_RMSNORM","FINAL",workload.n_layers,"FINAL_RMSNORM"),
-        handoff_stage("FINAL_RMSNORM","LM_HEAD",workload.n_layers,"FINAL_RMSNORM_TO_LM_HEAD_TRANSFER"),
-        local_stages[workload.n_layers,"LM_HEAD"],
-        handoff_stage("LM_HEAD","SAMPLING",workload.n_layers,"LOGITS_TRANSFER"),
-        gpu_stage("SAMPLING","GREEDY_ARGMAX",workload.n_layers,"SAMPLING")))
-    for actual,expected in ((sum(weights),sum(u.active_weight_read_bytes for u in units)),
-                            (sum(kvreads),sum(u.kv_bytes for u in units)),
-                            (sum(kvwrites),demand.kv_write_bytes_per_decode_step)):
-        if not math.isclose(actual,expected,rel_tol=1e-12):
-            raise ValueError("workload ledger and page demand disagree")
-    totals=[weights[i]+kvreads[i]+kvwrites[i] for i in range(n)]
-    mem_ms=[x/bw_die*1e3 for x in totals]; comp_ms=[x/hw.peak_flops_per_die*1e3 for x in flops]
-    service=[max(mem_ms[i],comp_ms[i]) for i in range(n)]
-    stage=sum(s["time_ms"] for s in stages if s.get("kind")=="NMP_STAGE")
-    interval=sum(s["time_ms"] for s in stages)
-    ai_balance=hw.peak_flops_per_die/bw_die; rows=[]
-    for i in range(n):
-        ai=0 if totals[i]==0 else flops[i]/totals[i]; ratio=ai/ai_balance if ai_balance else 0
-        label="BALANCED" if math.isclose(ratio,1.0,rel_tol=.02) else ("COMPUTE_BOUND" if ratio>1 else "MEMORY_BOUND")
-        energy=flops[i]/2*hw.mac_energy_pj*1e-12; power=energy/(interval*1e-3)
-        rows.append(NMPDieWorkloadActivity(i,weights[i],kvreads[i],kvwrites[i],totals[i],flops[i],ai,mem_ms[i],comp_ms[i],service[i],mem_ms[i]/stage,comp_ms[i]/stage,label,energy,
-            NMPDiePower(i,power,None,None,None,"COMPUTE_DYNAMIC_RESOLVED__DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B")))
-    ordered=sorted(service); p90=ordered[math.ceil(.9*len(ordered))-1]
-    exec_spans=tuple(len(o) for u,o in zip(units,spans)
-                     if u.shard_mode not in ("RESIDENT_ONLY","LOCAL_LOOKUP"))
-    memory_stage_seconds=sum(s["stage_ms"] for s in stages
-        if "memory_ms" in s and s["memory_ms"]>=s["compute_ms"])*1e-3
-    realized_bw=sum(totals)/memory_stage_seconds if memory_stage_seconds else 0.0
-    gpu_remaining_bytes=sum(x.gpu_local_total_bytes for x in small_ops
-                            if x.operator!="TOKEN_EMBED_LOOKUP")
-    gpu_remaining_ms=gpu_remaining_bytes/gpu_bw*1e3
-    gpu_remaining_j=8*gpu_remaining_bytes*gpu.e_decode_J_per_bit
-    embedding_bytes=sum(u.active_weight_read_bytes for u in units
-                        if u.operator_type=="TOKEN_EMBED_LOOKUP")
-    embedding_ms=local_stages[-1,"TOKEN_EMBED_LOOKUP"]["time_ms"]
-    return NMPDieActivitySummary(
-        hw, local_access_latency_ns, NMP_BANK_TO_LOCAL_ROUTE_DELAY_NS,
-        NMP_LOCAL_ROUTE_PROVENANCE, bw_die, bw_die*n, ai_balance, tuple(rows),
-        stage, interval, service.index(max(service)), statistics.fmean(service),
-        p90, max(service),
-        sum(r.bottleneck=="MEMORY_BOUND" for r in rows),sum(r.bottleneck=="COMPUTE_BOUND" for r in rows),sum(r.bottleneck=="BALANCED" for r in rows),
-        sum(r.compute_energy_j for r in rows),sum(r.power.compute_dynamic_W for r in rows),"DIE_LEVEL_MEMORY_POWER_DISTRIBUTION_PENDING_B",
-        "SERIAL_DEPENDENT_STAGES_WITH_GPU_SOFTMAX_BARRIERS",tuple(stages),attention_layers,
-        score,probability,partial,score+probability+partial,boundary,external_boundary_time_ms,transfer.model_dump(),
-        score+probability,softmax_ms,8*(score+probability)*gpu.e_decode_J_per_bit,
-        gpu.static_power_W*interval*1e-3,statistics.fmean(exec_spans),statistics.median(exec_spans),
-        max(exec_spans),realized_bw,tuple(asdict(x) for x in handoffs),
-        tuple(asdict(x) for x in small_ops),gpu_remaining_bytes,gpu_remaining_ms,
-        gpu_remaining_j,embedding_bytes,embedding_ms,append_owners)
+def external_service(f, *, group_bytes=None, root_bytes=None):
+    """Nearest physical port serialization plus global thermal bandwidth cap."""
+    n = f.layout.slab_count
+    if not hasattr(f, "group_ports"):
+        f.group_ports = np.array([min(range(len(f.ports)), key=lambda p: abs(g["center_um"][0]-f.ports[p][0])+abs(g["center_um"][1]-f.ports[p][1])) for g in f.groups])
+        f.root_ports = np.array([min(range(len(f.ports)), key=lambda p: abs(r["center_um"][0]-f.ports[p][0])+abs(r["center_um"][1]-f.ports[p][1])) for r in f.regions])
+        f.group_port_ids = (np.arange(n)[:, None]*len(f.ports)+f.group_ports).ravel()
+        f.root_port_ids = (np.arange(n)[:, None]*len(f.ports)+f.root_ports).ravel()
+    port_loads = np.zeros(n*len(f.ports))
+    startup = 0.0
+    if group_bytes is not None:
+        group_bytes = np.asarray(group_bytes)
+        port_loads += np.bincount(f.group_port_ids, weights=group_bytes.ravel(), minlength=n*len(f.ports))
+        startup = float(f.sa_edge_ns[np.any(group_bytes > 0, axis=0)].max(initial=0))*1e-9
+    if root_bytes is not None:
+        port_loads += np.bincount(f.root_port_ids, weights=root_bytes.ravel(), minlength=n*len(f.ports))
+        startup = max(startup, float(f.root_edge_ns[np.any(root_bytes > 0, axis=0)].max(initial=0))*1e-9)
+    total = float(port_loads.sum())
+    per_port = f.case.architecture.memory_service.coil.data_rate_gbps_per_link*1e9/8
+    # 50 x 8 Gb/s physical contactless links; thermal cap remains global.
+    duration = max(total/f.external_Bps, float(port_loads.max())/per_port)+startup if total else 0.0
+    return duration, total
+
+
+class PhysicalStageModel:
+    def __init__(self, floorplan, platform, workload):
+        self.f = floorplan
+        self.w = workload
+        self.gpu_compute = platform.gpu_compute_power.peak_compute_BF16_dense_flops_per_s
+        self.gpu_bw = platform.gpu_decode_power.peak_memory_bandwidth_bytes_per_s
+        self.service_prefix = np.zeros((70, 8, 9))
+        for start in range(8):
+            self.service_prefix[:, start, 1:] = np.cumsum(floorplan.service_ns[:, (np.arange(8)+start) % 8], axis=1)
+        self.service_sum = floorplan.service_ns.sum(axis=1)
+
+    def evaluate(self, entry, atoms, *, nmp, begin=0, write=False, details=False):
+        f, w = self.f, self.w
+        n = f.layout.slab_count
+        end_count = entry.prefix_counts(atoms)
+        begin_count = entry.prefix_counts(begin) if begin else np.zeros_like(end_count)
+        occupied = end_count > begin_count
+        group, die, rid = entry.group_ids[occupied], entry.die_ids[occupied], entry.region_dest[occupied]
+        tiles_assigned = entry.tile_ids[occupied]
+        end_count, begin_count = end_count[occupied], begin_count[occupied]
+        starts = entry.start_layers[occupied]
+        counts = end_count-begin_count
+        bytes_ = counts*entry.atom_bytes
+        active = bytes_ > 0
+        # Exact cyclic-layer service sum, avoiding materialized per-step slot
+        # arrays. Each stored atom is a whole number of 32-byte services.
+        assert entry.atom_bytes % 32 == 0
+        cycles = ((end_count//8-begin_count//8)*self.service_sum[group]
+                  + self.service_prefix[group, starts, end_count % 8]
+                  - self.service_prefix[group, starts, begin_count % 8])
+        group_times = cycles*(entry.atom_bytes//32)*1e-9
+        array_s = float(group_times.max(initial=0))
+        region_bytes = np.bincount(rid, weights=bytes_, minlength=n*4).reshape(n, 4)
+        region_active = region_bytes > 0
+        active_dies = np.any(region_active, axis=1)
+        group_total = np.zeros((n, 70))
+        group_total[die, group] = bytes_
+        op = entry.unit.operator_type
+        attention = op in ("ATTENTION_QK", "ATTENTION_AV")
+        flop_atom = 2*w.n_heads_q*w.d_head/w.n_heads_kv if attention else entry.unit.local_flops/entry.atom_count
+        if write:
+            flop_atom = 0
+        flops = counts*flop_atom
+        tile_loads = np.bincount(die*32+tiles_assigned, weights=flops, minlength=n*32).reshape(n, 32)
+        tile_active = np.zeros((n, 32), dtype=bool)
+        tile_active[die[active], tiles_assigned[active]] = True
+        tile_counts = tile_active.reshape(n, 4, 8).sum(axis=2)
+        fabric_bytes = region_bytes.copy()
+        fabric_startup = np.zeros(n*4)
+        np.maximum.at(fabric_startup, rid, f.sa_tile_ns[group, tiles_assigned]*1e-9)
+        fabric_startup = fabric_startup.reshape(n, 4)
+        noc_s = noc_bytes = noc_busy = input_boundary = output_boundary = 0.0
+        noc_link_bytes = np.zeros((n, 3, 2))
+        boundary_s = 0.0
+        reduction_s = 0.0
+        if nmp and not write:
+            if op == "ATTENTION_AV":
+                # Probability partitions follow the resident KV atoms.
+                input_region = np.bincount(rid, weights=counts*w.n_heads_q/w.n_heads_kv*2, minlength=n*4).reshape(n, 4)
+                input_root = np.zeros((n, 4)); input_root[:, 0] = input_region.sum(axis=1)
+                # Singleton multicast destinations carry partitioned probabilities.
+                incoming = [structured_noc(f, np.eye(4)[r][None, :]*input_region[:, r:r+1], mode="multicast") for r in range(4)]
+                noc_in_s = sum(x["time_s"] for x in incoming)
+                noc_bytes += sum(x["hop_bytes"] for x in incoming)
+                noc_link_bytes += sum(x["link_bytes"] for x in incoming)
+                fabric_bytes += input_region
+                # Tile partials reduce at each region root before the pairwise tree.
+                fabric_bytes += tile_counts*w.d_model*4
+                reduction_s = float(np.maximum(tile_counts-1, 0).max()*w.d_model/(8*f.config["clock_hz"]))
+                output_region = region_active*w.d_model*4
+                outgoing = structured_noc(f, output_region, mode="reduce", vector_bytes=w.d_model*4)
+                output_root = np.zeros((n, 4)); output_root[:, 0] = active_dies*w.d_model*4
+            else:
+                input_size = (w.d_model*2 if op == "ATTENTION_QK" else entry.unit.activation_input_bytes)
+                input_region = region_active*input_size
+                input_root = np.zeros((n, 4)); input_root[:, 0] = active_dies*input_size
+                incoming = structured_noc(f, input_region, mode="multicast")
+                noc_in_s = incoming["time_s"]
+                noc_bytes += incoming["hop_bytes"]; noc_link_bytes += incoming["link_bytes"]
+                fabric_bytes += tile_counts*input_size
+                if op == "ATTENTION_QK":
+                    outputs = counts*w.n_heads_q/w.n_heads_kv*2
+                elif op == "TOKEN_EMBED_LOOKUP":
+                    outputs = bytes_
+                else:
+                    outputs = counts*2
+                output_region = np.bincount(rid, weights=outputs, minlength=n*4).reshape(n, 4)
+                fabric_bytes += output_region
+                outgoing = structured_noc(f, output_region, mode="gather")
+                output_root = np.zeros((n, 4)); output_root[:, 0] = output_region.sum(axis=1)
+            noc_s = noc_in_s+outgoing["time_s"]
+            noc_bytes += outgoing["hop_bytes"]; noc_link_bytes += outgoing["link_bytes"]
+            noc_busy = float(noc_link_bytes.max()/f.link_Bps)
+            in_s, input_boundary = external_service(f, root_bytes=input_root)
+            out_s, output_boundary = external_service(f, root_bytes=output_root)
+            boundary_s = in_s+out_s
+            if np.any(tile_active):
+                fabric_startup += (tile_active*f.root_tile_ns).reshape(n, 4, 8).max(axis=2)*1e-9
+            fabric_times = fabric_bytes/f.fabric_Bps+fabric_startup
+            fabric_s = float(fabric_times.max())
+            compute_s = float(tile_loads.max()/f.tile_flops)
+            core_s = max(array_s, fabric_s, compute_s)
+            seconds = boundary_s+noc_s+core_s+reduction_s
+            components = dict(ARRAY=array_s, LOCAL_FABRIC=fabric_s, MAC=compute_s,
+                              INTER_REGION_NOC=noc_s+reduction_s, EXTERNAL_BOUNDARY=boundary_s, GPU_COMPUTE=0.0)
+        else:
+            boundary_s, output_boundary = external_service(f, group_bytes=group_total)
+            activation = entry.unit.activation_input_bytes+entry.unit.partial_output_bytes
+            if attention:
+                activation = (atoms-begin)/w.n_heads_kv*w.n_heads_q*2+w.d_model*2
+            gpu_s = 0.0 if write else max(float(flops.sum())/self.gpu_compute, (float(bytes_.sum())+activation)/self.gpu_bw)
+            seconds = max(array_s, boundary_s, gpu_s)
+            components = dict(ARRAY=array_s, LOCAL_FABRIC=0.0, MAC=0.0, INTER_REGION_NOC=0.0,
+                              EXTERNAL_BOUNDARY=boundary_s, GPU_COMPUTE=gpu_s)
+            fabric_s = 0.0
+        result = dict(operator="KV_APPEND" if write else op, layer=entry.unit.layer_id, executor="NMP" if nmp and not write else "GPU",
+            latency_s=seconds, components=components, bottleneck=max(components, key=components.get),
+            boundary_bytes=input_boundary+output_boundary, input_boundary_bytes=input_boundary,
+            output_boundary_bytes=output_boundary, external_service_s=boundary_s,
+            local_array_bytes=float(bytes_.sum()), array_service_s=array_s,
+            active_groups=int(active.sum()), active_regions=int(region_active.sum()),
+            active_mac_tiles=int(tile_active.sum()) if nmp and not write else 0,
+            fabric_bytes=float(fabric_bytes.sum()) if nmp and not write else 0.0,
+            fabric_service_s=fabric_s, fabric_region_peak_Bps=float(fabric_bytes.max()/fabric_s) if fabric_s else 0.0,
+            fabric_region_average_Bps=float(fabric_bytes.sum()/region_active.sum()/seconds) if nmp and not write else 0.0,
+            noc_bytes=noc_bytes, noc_s=noc_s, noc_max_link_busy_s=noc_busy,
+            noc_link_busy_s=noc_link_bytes/f.link_Bps,
+            nmp_flops=float(flops.sum()) if nmp and not write else 0.0,
+            nmp_peak_utilization=float(flops.sum())/core_s/(n*32*f.tile_flops) if nmp and not write else 0.0,
+            active_dies=int(active_dies.sum()), max_buffer_chunks=int(np.ceil(fabric_bytes.max()/f.config["region_buffer_bytes"])) if nmp else 0)
+        if details:
+            layer_bytes = entry.layer_bytes(atoms, begin=begin)[occupied]
+            result["groups"] = [dict(die_id=int(d), group_id=int(g), active_read_bytes=int(b) if not write else 0,
+                                      active_write_bytes=int(b) if write else 0, active_layer_slots=int(np.count_nonzero(lb)), service_s=float(t),
+                                      assigned_mac_tile=int(tile)) for d, g, b, lb, t, tile in
+                                zip(die, group, bytes_, layer_bytes, group_times, tiles_assigned, strict=True) if b]
+        return result
