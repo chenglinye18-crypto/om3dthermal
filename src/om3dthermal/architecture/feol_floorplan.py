@@ -43,6 +43,17 @@ class FEOLFloorplan:
     sa_edge_ns: np.ndarray
     root_edge_ns: np.ndarray
 
+    def __post_init__(self):
+        self.region_port_ids = [[] for _ in self.regions]
+        for p, (x, _) in enumerate(self.ports):
+            candidates = [r for r in self.regions if r["bounds_um"][0] <= x <= r["bounds_um"][2]]
+            owner = min(candidates, key=lambda r: (abs(x-r["center_um"][0]), r["region_id"]))
+            self.region_port_ids[owner["region_id"]].append(p)
+        assert sum(map(len, self.region_port_ids)) == len(self.ports)
+        assert all(self.region_port_ids)
+        self.root_port_route_um = np.array([[manhattan(r["center_um"], p) for p in self.ports] for r in self.regions])
+        self.root_port_route_ns = np.array([[self.wire_ns(x) for x in row] for row in self.root_port_route_um])
+
     @property
     def fabric_Bps(self):
         return self.config["fabric_ports_per_region"]*self.config["fabric_bits_per_port"]*self.config["clock_hz"]/8
@@ -81,6 +92,10 @@ class FEOLFloorplan:
                     regions=self.regions, region_group_counts=[len(r["groups"]) for r in self.regions],
                     mac_tiles=self.tiles, macs_per_slab=len(self.tiles)*self.config["macs_per_tile"],
                     region_roots=[r["center_um"] for r in self.regions], io_ports_um=self.ports,
+                    region_port_counts=list(map(len, self.region_port_ids)), region_port_ids=self.region_port_ids,
+                    root_port_route_um=self.root_port_route_um.tolist(), root_port_route_ns=self.root_port_route_ns.tolist(),
+                    root_local_port_length_um=stats([self.root_port_route_um[r,p] for r,ids in enumerate(self.region_port_ids) for p in ids]),
+                    root_local_port_rc_ns=stats([self.root_port_route_ns[r,p] for r,ids in enumerate(self.region_port_ids) for p in ids]),
                     noc_links=self.links, sa_nearest_mac_length_um=stats(local_lengths),
                     sa_nearest_edge_length_um=stats(external_lengths),
                     root_edge_lengths_um=[min(manhattan(r["center_um"], p) for p in self.ports) for r in self.regions],

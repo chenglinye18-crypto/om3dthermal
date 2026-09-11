@@ -35,7 +35,7 @@ def audit():
              policies=list(ExecutionPolicy), models={name:w.model_dump() for name,w in llama31_models().items()})
     print("PRE-RUN FLOORPLAN AUDIT", flush=True)
     for k in ("git_head", "slab_dimensions_um", "slabs", "thickness_um", "layers", "capacity_GB", "cluster_grid",
-              "region_group_counts", "macs_per_slab", "fabric_GBps_per_region", "noc_GBps_per_direction",
+              "region_group_counts", "region_port_counts", "region_port_ids", "root_local_port_length_um", "root_local_port_rc_ns", "macs_per_slab", "fabric_GBps_per_region", "noc_GBps_per_direction",
               "external_saturated_TBps", "config", "sa_nearest_mac_length_um", "sa_nearest_edge_length_um",
               "noc_links", "workload", "models"):
         print(k+": "+json.dumps(a[k]), flush=True)
@@ -142,6 +142,16 @@ def main():
                 inter_region_noc_latency_ms_per_token=total("noc_s"),
                 NMP_peak_utilization=max(s["NMP_peak_utilization"] for s in steps),
                 NMP_average_utilization=total("nmp_flops")/seconds/(318*32*engine.floorplan.tile_flops))
+            port_counts = [v for s in steps for v in s["active_external_port_counts"]]
+            row.update(mean_active_external_ports_per_stage=float(np.mean(port_counts)),
+                       p90_active_external_ports_per_stage=float(np.percentile(port_counts,90)),
+                       max_active_external_ports_per_stage=max(port_counts),
+                       max_external_port_utilization=max(s["max_external_port_utilization"] for s in steps),
+                       external_global_cap_limited_fraction=sum(s["external_limit_counts"]["GLOBAL_THERMAL_CAP"] for s in steps)/len(port_counts),
+                       external_port_limited_fraction=sum(s["external_limit_counts"]["PORT_SERIALIZATION"] for s in steps)/len(port_counts))
+            for cause,label in (("ARRAY","ARRAY"),("LOCAL_FABRIC","LOCAL_FABRIC"),("MAC","MAC"),
+                                ("INTER_REGION_NOC","INTER_REGION_NOC"),("EXTERNAL_BOUNDARY","EXTERNAL"),("GPU_COMPUTE","GPU")):
+                row["sum_"+label+"_component_s"] = sum(s["component_sums"][cause] for s in steps)
             summary.append(row)
             traffic = {k:sum(s["traffic_bytes"][k] for s in steps)/1000 for k in steps[0]["traffic_bytes"]}
             assert (traffic["historical_K"] > 0) == (policy == ExecutionPolicy.NO_NMP)
@@ -152,7 +162,7 @@ def main():
                 count = sum(s["bottlenecks"].get(cause, {}).get("count", 0) for s in steps)
                 time = sum(s["bottlenecks"].get(cause, {}).get("time_s", 0) for s in steps)
                 bottlenecks.append(dict(model=name, policy=policy, bottleneck=cause, stage_count=count,
-                                        stage_time_s=time, stage_time_fraction=time/seconds))
+                                        dominant_stage_attribution_s=time, dominant_stage_attribution_fraction=time/seconds))
             print(json.dumps(row), flush=True)
     for row in summary:
         base = next(r for r in summary if r["model"] == row["model"] and r["policy"] == ExecutionPolicy.NO_NMP)

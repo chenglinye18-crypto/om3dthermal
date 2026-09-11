@@ -165,6 +165,9 @@ class DecodePolicyModel:
         for s in stages:
             b = bottlenecks.setdefault(s["bottleneck"], dict(count=0, time_s=0.0))
             b["count"] += 1; b["time_s"] += s["latency_s"]
+        transfers = [t for s in physical for t in s["external_transfers"] if t["total_boundary_bytes"] > 0]
+        component_sums = {k:sum(s["components"].get(k,0) for s in stages) for k in
+                          ("ARRAY","LOCAL_FABRIC","MAC","INTER_REGION_NOC","EXTERNAL_BOUNDARY","GPU_COMPUTE")}
         groups = [s["active_groups"] for s in physical]
         row = dict(context=context, latency_s=seconds, traffic_bytes=traffic,
                    boundary_bytes=total("boundary_bytes"), external_service_s=total("external_service_s"),
@@ -179,6 +182,11 @@ class DecodePolicyModel:
                    nmp_flops=total("nmp_flops"),
                    NMP_peak_utilization=max((s["nmp_peak_utilization"] for s in physical), default=0),
                    NMP_average_utilization=total("nmp_flops")/seconds/(self.floorplan.layout.slab_count*32*self.floorplan.tile_flops),
+                   component_sums=component_sums,
+                   active_external_port_counts=[t["active_port_count"] for t in transfers],
+                   max_external_port_utilization=max((t["max_port_utilization"] for t in transfers),default=0),
+                   external_limit_counts={reason:sum(t["limiting_reason"]==reason for t in transfers) for reason in
+                                          ("GLOBAL_THERMAL_CAP","PORT_SERIALIZATION","ROUTE_STARTUP")},
                    bottlenecks=bottlenecks)
         if include_stages:
             row["stages"] = stages

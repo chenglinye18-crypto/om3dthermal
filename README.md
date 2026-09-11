@@ -77,15 +77,23 @@ SA-to-tile routes use physical Manhattan lengths and the existing distributed
 Elmore RC. Region time is max(array, shared fabric, assigned tile compute).
 No whole-die bandwidth pool or fixed 1-ns route shortcut remains in execution.
 
-Activation ingress and structured gather use region root 0 on each active
-slab. Multicast forwards along shortest linear paths; AV first reduces tile
-partials at region roots and then uses the pairwise region tree. Only one
-partial per active slab reaches the GPU for cross-slab reduction. Ordinary
-GPU memory reads route directly SA-to-edge, bypassing the MAC fabric.
-Every source uses its nearest port on the single y_min edge. Per-port
-serialization (8 Gb/s each) can constrain a stage below the shared external
-cap: min(raw 15.9 TB/s, GPU 4.8 TB/s, frozen thermal 3.4 TB/s). Root/port
-concentration is explicit, not a utilization factor. No cross-slab NoC exists.
+External handoffs use three explicit routes. GROUP_DIRECT maps each SA to
+its nearest physical edge port, accumulating contention. REGION_DIRECT
+stripes a region's partition over every port whose x coordinate lies in that
+region. REGION_BROADCAST_INGRESS sends one shared activation per active slab
+through a deterministically chosen ingress region's pool, then multicasts on
+the linear NoC. Ingress minimizes maximum physical hop latency, then hop bytes,
+then region id. Port pools and every root-to-port RC route derive from geometry.
+
+QK scores and row-parallel outputs leave their producer regions directly;
+Softmax probability partitions and KV appends enter their destination regions
+directly. These bulk partitions do not traverse the inter-region NoC. AV still
+reduces tile partials locally, then uses a balanced region tree; only one FP32
+partial per active slab reaches GPU cross-slab reduction. The reduction root
+is selected by the same deterministic physical routing rule. No cross-slab
+NoC exists. External completion is max(total/3.4 TB/s, max per-port
+bytes/(1 GB/s) + its actual RC startup). Raw interface remains 15.9 TB/s and
+GPU peak remains 4.8 TB/s. There is no empirical efficiency multiplier.
 Large streams tile through the 128-KiB buffers; full weights do not stage there.
 
 Only `runs/decode_policy_318_feol_v1/` is canonical. It contains summary,
@@ -95,8 +103,14 @@ resident-layout rerun must reproduce every per-step result hash. There is
 no interpolation and no second output directory. Active group/region/tile
 counts are across all slabs per memory stage. Realized array/external rates
 are bytes divided by the entire Decode duration. Fabric realized rate is the
-time-weighted mean per active region; bottleneck fractions attribute each
-stage to its largest time component. These definitions are not peak rates.
+time-weighted mean per active region. Dominant-stage attribution assigns each
+stage's whole duration to its largest component; this is not a latency breakdown.
+Accumulated component times are also reported and cannot be summed to wall time
+because array/fabric/MAC and GPU stages overlap internally. External port counts
+and limiting fractions count each nonempty directional transfer (input/output
+separately), across all slabs. Port utilization is serialization divided by that
+transfer's completion time. Detailed physical-stage evaluation exposes each
+active port's bytes and route startup. These definitions are not peak rates.
 
 The old die-only NMP execution/energy API, quadratic horizon approximation,
 thermal carrier producer and contradictory regression gates were removed,
@@ -108,7 +122,7 @@ thermal solve. Prefill retains the existing optimistic tiled historical-KV
 single-read ledger and GPU roofline; physical bulk group/port service is
 included. These are analytical estimates, not measured silicon performance.
 
-Tests: `python -m pytest -q tests/test_decode_policy.py tests/test_feol_latency.py tests/test_physical_capacity.py tests/test_memory_bandwidth.py tests/test_m3d_100um_slab_architecture.py tests/test_llm_prefill.py tests/test_mixed_phase_e2e.py`.
+Tests: `python -m pytest -q tests/test_feol_ports.py tests/test_decode_policy.py tests/test_feol_latency.py tests/test_physical_capacity.py tests/test_memory_bandwidth.py tests/test_m3d_100um_slab_architecture.py tests/test_llm_prefill.py tests/test_mixed_phase_e2e.py`.
 
 Formal experiments write stage JSON, tables, resolved inputs and a checksummed
 manifest under `results/`; nonempty output directories are rejected.
