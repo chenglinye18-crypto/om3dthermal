@@ -94,7 +94,7 @@ is selected by the same deterministic physical routing rule. No cross-slab
 NoC exists. External completion is max(total/3.4 TB/s, max per-port
 bytes/(1 GB/s) + its actual RC startup). Raw interface remains 15.9 TB/s and
 GPU peak remains 4.8 TB/s. There is no empirical efficiency multiplier.
-Large streams tile through the 128-KiB buffers; full weights do not stage there.
+Activation chunks use PE-local banked scratchpads; streamed weights/KV bypass them.
 
 Only `runs/decode_policy_318_feol_v1/` is canonical. It contains summary,
 normalized, traffic, bottleneck CSVs and floorplan/resident-group audits.
@@ -117,12 +117,42 @@ thermal carrier producer and contradictory regression gates were removed,
 without compatibility forwarding. Legacy mixed/persistent/formal serving
 rejects its retired NMP path; GPU/capacity functionality remains separate.
 The existing M3D write-energy primitive remains available to unrelated users.
-This experiment reports performance only, with no system-energy columns or
-thermal solve. Prefill retains the existing optimistic tiled historical-KV
-single-read ledger and GPU roofline; physical bulk group/port service is
-included. These are analytical estimates, not measured silicon performance.
+Energy is observational: `m3d_feol_energy_v1.yaml` supplies the nominal and
+NMP_ADVERSE_V1 budgets. Raw physical events are counted before coefficients:
+group/layer memory services, layer-dependent MIV bits, actual route bit-um,
+replicated switching/NoC hops, pipeline bit-stages, MACs and reduction adds.
+The array operation table excludes FEOL SA and selection. GPU Decode uses the
+existing boundary-bit proxy plus static power; GPU Prefill uses the midpoint
+of the existing FLOP-energy range plus static power, never the Decode proxy.
 
-Tests: `python -m pytest -q tests/test_feol_ports.py tests/test_decode_policy.py tests/test_feol_latency.py tests/test_physical_capacity.py tests/test_memory_bandwidth.py tests/test_m3d_100um_slab_architecture.py tests/test_llm_prefill.py tests/test_mixed_phase_e2e.py`.
+Each PE owns 1 KiB SRAM: 16 KiB/tile, 128 KiB/region, 512 KiB/slab (159 MiB
+total). These are PE-local SRAM scratchpads, not caches or an additional root
+buffer capacity. Activation copies write/read once per actual consuming tile,
+with per-tile 32-bit access rounding and <=16-KiB chunks. Streamed weights/KV
+bypass SRAM; accumulators remain in registers and no partial sums spill.
+SRAM bandwidth is checked without adding any timing penalty. NO_NMP and GPU
+Prefill have zero NMP dynamic activity and unresolved NMP budget. NMP Decode
+pays the full 31.8 W nominal (95.4 W adverse) unresolved budget for its wall time.
+Memory static/refresh remain zero. Coefficients are modeled budgets, not claims
+of measurements of this design.
+
+Prefill keeps its existing incremental ledger and timing. Weights/history KV
+and new KV writes use resident ownership. Only the already-counted temporary
+activation bytes without prior ownership map deterministically into free
+physical group/layer slots; capacity is checked and traffic is not increased.
+Read/write MIV uses the same existing electrical convention resolved by layer.
+
+The run also emits energy_summary, energy_breakdown, energy_events,
+prefill_energy_summary CSVs and energy_parameter/sram_staging audits. Nominal
+and adverse reuse identical events and timing. Decode and E2E efficiency both
+use only 1000 generated tokens as numerator. Component power is energy divided
+by Decode wall time. The complete pre-energy per-step performance hashes and
+9-case metrics from commit 993d3aa are mandatory exact regression gates.
+Status: PERFORMANCE_FIXED, ENERGY_MODEL_V1_COMPLETE, THERMAL_RECLOSURE_PENDING.
+The retained 3.4-TB/s cap comes from the old NO_NMP thermal point; added FEOL
+energy requires future thermal reclosure and no thermal solver runs here.
+
+Tests: `python -m pytest -q tests/test_feol_energy.py tests/test_feol_ports.py tests/test_decode_policy.py tests/test_feol_latency.py tests/test_physical_capacity.py tests/test_memory_bandwidth.py tests/test_m3d_100um_slab_architecture.py tests/test_llm_prefill.py tests/test_mixed_phase_e2e.py`.
 
 Formal experiments write stage JSON, tables, resolved inputs and a checksummed
 manifest under `results/`; nonempty output directories are rejected.

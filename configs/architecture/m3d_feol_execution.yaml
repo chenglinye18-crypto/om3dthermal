@@ -6,7 +6,6 @@ mac_tile_grid: [4, 2]
 macs_per_tile: 16
 clock_hz: 1.0e+9
 flops_per_mac: 2
-region_buffer_bytes: 131072
 fabric_ports_per_region: 2
 fabric_bits_per_port: 256
 noc_bits_per_link: 256

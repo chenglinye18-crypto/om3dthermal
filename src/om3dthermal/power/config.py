@@ -58,7 +58,7 @@ class OperationEnergyProvenance(StrictModel):
     source: Literal["IEDM2026_HaotongZhu_V5"]
     classification: Literal["PAPER_REPORTED"]
     accounting_level: Literal["SPICE_EXTRACTED_MAT_LOCAL_OPERATION_ENERGY"]
-    sensing_included: Literal[True]
+    sensing_included: Literal[False]
     distributed_rc_included: Literal[True]
     accounting_note: str
 

@@ -50,10 +50,10 @@ memory:
       source: IEDM2026_HaotongZhu_V5
       classification: PAPER_REPORTED
       accounting_level: SPICE_EXTRACTED_MAT_LOCAL_OPERATION_ENERGY
-      sensing_included: true
+      sensing_included: false
       distributed_rc_included: true
-      accounting_note: Full-row SPICE includes distributed WWL/WBL/RWL/RBL RC and
-        sensing.
+      accounting_note: >-
+        User-frozen array-only accounting: cell and local line RC; excludes FEOL SA and selection peripherals.
     background:
       type: per_row
       value_w: 4.26e-15

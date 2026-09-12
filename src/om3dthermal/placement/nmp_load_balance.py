@@ -112,6 +112,21 @@ class PhysicalResidentPlacement:
             entry.tile_ids[indices] = chosen
             loads[dies, chosen] += work
 
+    def transient_layer_bytes(self, total_bytes):
+        """Energy-only Prefill workspace mapping into existing unused slots."""
+        if total_bytes < 0 or total_bytes != int(total_bytes):
+            raise ValueError("invalid transient payload")
+        free=(self.floorplan.layout.slot_capacity_bytes-self.slot_used)*4
+        eligible=np.flatnonzero(free.ravel() >= 32)
+        services,remainder=divmod(int(total_bytes),32)
+        counts=np.zeros(free.size,dtype=np.int64)
+        counts[eligible]=services//len(eligible)
+        counts[eligible[:services % len(eligible)]]+=1
+        b=counts*32
+        if remainder: b[eligible[services % len(eligible)]]+=remainder
+        if np.any(b > free.ravel()): raise ValueError("Prefill workspace exceeds physical free slots")
+        return b.reshape(free.shape)
+
     def audit(self):
         group = self.slot_used.sum(axis=1)*4
         dies = group.reshape(70, self.dies).sum(axis=0)

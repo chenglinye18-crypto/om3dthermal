@@ -1,0 +1,91 @@
+{
+  "source_head": "993d3aae6dd25977d0a540abf9cb8411d460eb60",
+  "summary": [
+    {
+      "model": "Llama-3.1-8B",
+      "policy": "NO_NMP",
+      "prefill_s": "0.11394014361307428",
+      "decode_s": "11.451970611355446",
+      "decode_tok_s": "87.32121605415479",
+      "e2e_tok_s": "86.4609818617541",
+      "boundary_GB_per_token": "31.589998592"
+    },
+    {
+      "model": "Llama-3.1-8B",
+      "policy": "ATTENTION_NMP",
+      "prefill_s": "0.11394014361307428",
+      "decode_s": "7.343097409078735",
+      "decode_tok_s": "136.18231439550794",
+      "e2e_tok_s": "134.10151054409326",
+      "boundary_GB_per_token": "15.777683456"
+    },
+    {
+      "model": "Llama-3.1-8B",
+      "policy": "MAC_NMP",
+      "prefill_s": "0.11394014361307428",
+      "decode_s": "2.025422109486816",
+      "decode_tok_s": "493.7242441050332",
+      "e2e_tok_s": "467.42901934958485",
+      "boundary_GB_per_token": "1.565917696"
+    },
+    {
+      "model": "Llama-3.1-70B",
+      "policy": "NO_NMP",
+      "prefill_s": "0.6655660208947201",
+      "decode_s": "58.104862385169426",
+      "decode_tok_s": "17.21026363286316",
+      "e2e_tok_s": "17.015360056433014",
+      "boundary_GB_per_token": "180.455129088"
+    },
+    {
+      "model": "Llama-3.1-70B",
+      "policy": "ATTENTION_NMP",
+      "prefill_s": "0.6655660208947201",
+      "decode_s": "49.5718686132478",
+      "decode_tok_s": "20.172731591012806",
+      "e2e_tok_s": "19.905475016440764",
+      "boundary_GB_per_token": "142.844909568"
+    },
+    {
+      "model": "Llama-3.1-70B",
+      "policy": "MAC_NMP",
+      "prefill_s": "0.6655660208947201",
+      "decode_s": "11.036149430859316",
+      "decode_tok_s": "90.61131387037918",
+      "e2e_tok_s": "85.45755569967345",
+      "boundary_GB_per_token": "7.820067328"
+    },
+    {
+      "model": "Llama-3.1-405B",
+      "policy": "NO_NMP",
+      "prefill_s": "2.628031716486583",
+      "decode_s": "272.50357581356116",
+      "decode_tok_s": "3.669676616222351",
+      "e2e_tok_s": "3.6346242039486056",
+      "boundary_GB_per_token": "872.782229504"
+    },
+    {
+      "model": "Llama-3.1-405B",
+      "policy": "ATTENTION_NMP",
+      "prefill_s": "2.628031716486583",
+      "decode_s": "264.82070626156127",
+      "decode_tok_s": "3.7761397668515695",
+      "e2e_tok_s": "3.7390342820839177",
+      "boundary_GB_per_token": "819.595923968"
+    },
+    {
+      "model": "Llama-3.1-405B",
+      "policy": "MAC_NMP",
+      "prefill_s": "2.628031716486583",
+      "decode_s": "37.19710512303372",
+      "decode_tok_s": "26.883812508860153",
+      "e2e_tok_s": "25.109769340645535",
+      "boundary_GB_per_token": "24.29531648"
+    }
+  ],
+  "step_hashes": {
+    "Llama-3.1-8B": "b27b9d708731810ca72632add9257d049ce0916dafc9f619a1563d5f0965574b",
+    "Llama-3.1-70B": "9866f01624c5cc3990529a5e019303ac8ff9b9c1814c668eb3039457c85978d2",
+    "Llama-3.1-405B": "e791225e5e7e235434429867084905d55043d3f9970106f70558144291ef2f7a"
+  }
+}

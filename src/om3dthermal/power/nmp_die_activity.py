@@ -75,7 +75,7 @@ def structured_noc(f, region_bytes, *, mode, vector_bytes=0):
                 max_link_busy_s=float(links.max(initial=0)/f.link_Bps))
 
 
-def external_service(f, payload_bytes, *, mode, details=False):
+def external_service(f, payload_bytes, *, mode, details=False, record_events=False):
     """Explicit group routing, region striping, or one-copy broadcast ingress."""
     b = np.asarray(payload_bytes, dtype=float)
     if np.any(b < 0):
@@ -120,6 +120,11 @@ def external_service(f, payload_bytes, *, mode, details=False):
                   max_port_utilization=float(serial.max()/duration) if total else 0.0,
                   global_cap_serialization_s=global_s, port_cap_serialization_s=float(serial.max()),
                   rc_startup_s=float(startup.max()), external_service_s=duration, limiting_reason=reason)
+    if record_events:
+        if mode == "GROUP_DIRECT":
+            result["wire_bit_um"] = float(np.sum(b*f.sa_edge_um)*8)
+        else:
+            result["wire_bit_um"] = float(sum(np.sum(loads[:,ids]*f.root_port_route_um[r,ids]) for r,ids in enumerate(f.region_port_ids))*8)
     if details:
         result["ports"] = [dict(slab=int(d), port=int(p), bytes=float(loads[d,p]), route_startup_s=float(startup[d,p]))
                            for d,p in zip(*np.nonzero(active))]
@@ -129,7 +134,8 @@ def external_service(f, payload_bytes, *, mode, details=False):
 
 
 class PhysicalStageModel:
-    def __init__(self, floorplan, platform, workload):
+    def __init__(self, floorplan, platform, workload, *, record_events=False):
+        self.record_events = record_events
         self.f = floorplan
         self.w = workload
         self.gpu_compute = platform.gpu_compute_power.peak_compute_BF16_dense_flops_per_s
@@ -218,8 +224,8 @@ class PhysicalStageModel:
             noc_s = noc_in_s+outgoing["time_s"]
             noc_bytes += outgoing["hop_bytes"]; noc_link_bytes += outgoing["link_bytes"]
             noc_busy = float(noc_link_bytes.max()/f.link_Bps)
-            incoming_external = external_service(f, input_region, mode=input_mode, details=details)
-            outgoing_external = external_service(f, output_region, mode="REGION_DIRECT", details=details)
+            incoming_external = external_service(f, input_region, mode=input_mode, details=details, record_events=self.record_events)
+            outgoing_external = external_service(f, output_region, mode="REGION_DIRECT", details=details, record_events=self.record_events)
             external_stages = [incoming_external, outgoing_external]
             input_boundary = incoming_external["total_boundary_bytes"]
             output_boundary = outgoing_external["total_boundary_bytes"]
@@ -235,7 +241,7 @@ class PhysicalStageModel:
                               INTER_REGION_NOC=noc_s+reduction_s, EXTERNAL_BOUNDARY=boundary_s, GPU_COMPUTE=0.0)
         else:
             transfer = external_service(f, region_bytes if write else group_total,
-                                        mode="REGION_DIRECT" if write else "GROUP_DIRECT", details=details)
+                                        mode="REGION_DIRECT" if write else "GROUP_DIRECT", details=details, record_events=self.record_events)
             external_stages = [transfer]
             boundary_s, output_boundary = transfer["external_service_s"], transfer["total_boundary_bytes"]
             activation = entry.unit.activation_input_bytes+entry.unit.partial_output_bytes
@@ -262,6 +268,10 @@ class PhysicalStageModel:
             nmp_flops=float(flops.sum()) if nmp and not write else 0.0,
             nmp_peak_utilization=float(flops.sum())/core_s/(n*32*f.tile_flops) if nmp and not write else 0.0,
             active_dies=int(active_dies.sum()), max_buffer_chunks=int(np.ceil(fabric_bytes.max()/f.config["region_buffer_bytes"])) if nmp else 0)
+        if self.record_events:
+            from .feol_energy import stage_events
+            result["energy_events"] = stage_events(f,w,entry,atoms,begin,write,nmp,result,occupied,counts,die,group,
+                                                   tiles_assigned,tile_active,noc_link_bytes)
         if details:
             layer_bytes = entry.layer_bytes(atoms, begin=begin)[occupied]
             result["groups"] = [dict(die_id=int(d), group_id=int(g), active_read_bytes=int(b) if not write else 0,

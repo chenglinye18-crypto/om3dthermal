@@ -128,6 +128,8 @@ def resolve_feol_floorplan(project_root: str | Path):
         miv_parameter_status=memory.diagnostics["miv_resistance_parameter_status"],
         miv_provenance=memory.diagnostics["miv_resistance_provenance"])
     cfg = yaml.safe_load((root/"configs/architecture/m3d_feol_execution.yaml").read_text(encoding="utf-8"))
+    energy_cfg = yaml.safe_load((root/"configs/architecture/m3d_feol_energy_v1.yaml").read_text(encoding="utf-8"))
+    cfg["region_buffer_bytes"] = energy_cfg["pe_sram_bytes"]*cfg["macs_per_tile"]*math.prod(cfg["mac_tile_grid"])
     assert (topology.cluster_count_x, topology.cluster_count_y, layout.slab_count, layout.layers_per_cluster) == (35, 8, 318, 8)
     assert topology.delivered_bits_per_access == 256 and topology.subarrays_per_cluster == 64
     centers = route.feol_route_cluster_centers_um
@@ -171,6 +173,17 @@ def resolve_feol_floorplan(project_root: str | Path):
     service = np.array([[max(by_slot[c, l] for c in g["cluster_members"]) for l in layers] for g in groups])
     sa_tile = np.array([[wire(manhattan(g["center_um"], t["center_um"])) for t in tiles] for g in groups])
     root_tile = np.array([wire(manhattan(t["center_um"], regions[t["region_id"]]["center_um"])) for t in tiles])
-    return FEOLFloorplan(case, geometry, topology, layout, latency, cfg, clusters, groups, regions, tiles, ports, links,
+    result = FEOLFloorplan(case, geometry, topology, layout, latency, cfg, clusters, groups, regions, tiles, ports, links,
         service, sa_tile, root_tile, np.array([wire(min(manhattan(g["center_um"], p) for p in ports)) for g in groups]),
         np.array([wire(min(manhattan(r["center_um"], p) for p in ports)) for r in regions]))
+
+    # The existing MIV primitive is linear in effective per-layer capacitance.
+    d = memory.diagnostics
+    result.energy_config = energy_cfg
+    result.miv_pj_per_bit_by_layer = (np.array(d["miv_effective_capacitance_per_layer_pF"])
+        *d["miv_access_energy_pJ_per_bit"]/d["miv_average_effective_capacitance_pF"])
+    result.sa_tile_um = np.array([[manhattan(g["center_um"],t["center_um"]) for t in tiles] for g in groups])
+    result.root_tile_um = np.array([manhattan(t["center_um"],regions[t["region_id"]]["center_um"]) for t in tiles])
+    result.sa_edge_um = np.array([min(manhattan(g["center_um"],p) for p in ports) for g in groups])
+    result.root_sa_um = np.array([manhattan(g["center_um"],regions[g["region_id"]]["center_um"]) for g in groups])
+    return result

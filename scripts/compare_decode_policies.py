@@ -1,4 +1,4 @@
-"""Fixed performance-only 318-slab physical FEOL comparison, with rerun gate."""
+"""Fixed-performance 318-slab FEOL event-energy comparison, with exact rerun gates."""
 import csv
 import hashlib
 import json
@@ -11,6 +11,7 @@ import numpy as np
 from om3dthermal.architecture.feol_floorplan import resolve_feol_floorplan
 from om3dthermal.serving.decode_policy import CachedWorkload, DecodePolicyModel, ExecutionPolicy, llama31_models
 from om3dthermal.power.nmp_die_activity import group_service_seconds
+from om3dthermal.power.feol_energy import FEOLEnergyModel, sum_events, power_groups
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT/"runs/decode_policy_318_feol_v1"
@@ -45,7 +46,7 @@ def audit():
 
 def evaluate_chunk(task):
     name, start, stop = task
-    engine = DecodePolicyModel(llama31_models()[name], project_root=ROOT)
+    engine = DecodePolicyModel(llama31_models()[name], project_root=ROOT, record_energy=True)
     cases = {p:[] for p in ExecutionPolicy}
     for j, context in enumerate(range(start, stop)):
         for policy in ExecutionPolicy:
@@ -63,10 +64,13 @@ def evaluate(name, pool):
         for policy in ExecutionPolicy:
             cases[policy].extend(chunk[policy])
     digest = hashlib.sha256()
+    performance_digest = hashlib.sha256()
     for j in range(1000):
         for policy in ExecutionPolicy:
-            digest.update(json.dumps(cases[policy][j], sort_keys=True).encode())
-    return cases, digest.hexdigest()
+            point = cases[policy][j]
+            digest.update(json.dumps(point, sort_keys=True).encode())
+            performance_digest.update(json.dumps({k:v for k,v in point.items() if k != "energy_events"},sort_keys=True).encode())
+    return cases, digest.hexdigest(), performance_digest.hexdigest()
 
 
 def group_audit(engine):
@@ -96,20 +100,38 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT/"feol_floorplan_audit.json").write_text(json.dumps(setup, indent=2)+"\n", encoding="utf-8")
     summary, traffic_rows, bottlenecks, reruns, prefill_rows, groups = [], [], [], {}, {}, {}
+    energy_rows, breakdown_rows, event_rows, sram_rows, pref_energy_rows = [], [], [], [], []
+    baseline = json.loads((ROOT/"tests/data/feol_performance_993d3aa.json").read_text())
     for name, w in llama31_models().items():
         print("Building physical resident layout: "+name, flush=True)
-        engine = DecodePolicyModel(w, project_root=ROOT)
+        engine = DecodePolicyModel(w, project_root=ROOT, record_energy=True)
         pref = engine.prefill(CachedWorkload())
+        energy_model = FEOLEnergyModel(engine.floorplan,engine.platform)
+        if not energy_rows:
+            parameters = energy_model.audit()
+            (OUT/"energy_parameter_audit.json").write_text(json.dumps(parameters,indent=2)+"\n")
+            print("ENERGY PARAMETER AUDIT: "+json.dumps(parameters),flush=True)
+        pref_energy = energy_model.account(pref["energy_events"],pref["latency_s"],phase="prefill",policy="NO_NMP",total_flops=pref["ledger"]["total_flops"])
+        assert pref_energy == energy_model.account(pref["energy_events"],pref["latency_s"],phase="prefill",policy="MAC_NMP",total_flops=pref["ledger"]["total_flops"],adverse=True)
+        pc=pref_energy["components"]
+        pref_energy_rows.append(dict(model=name,prefill_s=pref["latency_s"],prefill_total_FLOPs=pref["ledger"]["total_flops"],
+            prefill_boundary_GB=pref["energy_events"]["interface_bits"]/8e9,prefill_total_J=pref_energy["total_J"],
+            prefill_GPU_dynamic_J=pc["gpu_dynamic_J"],prefill_GPU_static_J=pc["gpu_static_J"],
+            prefill_array_J=pc["array_read_J"]+pc["array_write_J"],prefill_selector_J=pc["row_select_J"]+pc["column_select_J"],
+            prefill_SA_J=pc["sense_amplifier_J"],prefill_write_driver_J=pc["write_driver_J"],prefill_MIV_J=pc["miv_J"],
+            prefill_FEOL_wire_J=pc["feol_wire_J"],prefill_interface_J=pc["interface_J"]))
         prefill_rows[name] = pref
         groups[name] = group_audit(engine)
         print("Capacity: "+json.dumps(groups[name]["conservation"]), flush=True)
         with ProcessPoolExecutor(max_workers=4) as pool:
-            cases, first_hash = evaluate(name, pool)
+            cases, first_hash, performance_hash = evaluate(name, pool)
+        assert performance_hash == baseline["step_hashes"][name], "PERFORMANCE_CHANGED_FROM_993d3aa"
         print("Deterministic fresh-layout rerun: "+name, flush=True)
-        fresh = DecodePolicyModel(w, project_root=ROOT)
+        fresh = DecodePolicyModel(w, project_root=ROOT, record_energy=True)
         assert fresh.prefill(CachedWorkload()) == pref
         with ProcessPoolExecutor(max_workers=4) as pool:
-            repeated, second_hash = evaluate(name, pool)
+            repeated, second_hash, repeated_performance_hash = evaluate(name, pool)
+        assert performance_hash == repeated_performance_hash
         assert first_hash == second_hash, "deterministic per-step rerun mismatch"
         del fresh, repeated
         reruns[name] = first_hash
@@ -152,7 +174,41 @@ def main():
             for cause,label in (("ARRAY","ARRAY"),("LOCAL_FABRIC","LOCAL_FABRIC"),("MAC","MAC"),
                                 ("INTER_REGION_NOC","INTER_REGION_NOC"),("EXTERNAL_BOUNDARY","EXTERNAL"),("GPU_COMPUTE","GPU")):
                 row["sum_"+label+"_component_s"] = sum(s["component_sums"][cause] for s in steps)
+            expected = next(r for r in baseline["summary"] if r["model"]==name and r["policy"]==policy)
+            for key in ("prefill_s","decode_s","decode_tok_s","e2e_tok_s","boundary_GB_per_token"):
+                assert row[key] == float(expected[key]), (name,policy,key,"PERFORMANCE_CHANGED")
             summary.append(row)
+            events=sum_events(s["energy_events"] for s in steps)
+            nominal=energy_model.account(events,seconds,phase="decode",policy=policy)
+            adverse=energy_model.account(events,seconds,phase="decode",policy=policy,adverse=True)
+            if policy == ExecutionPolicy.NO_NMP: assert nominal==adverse
+            er=dict(model=name,policy=policy,prefill_s=pref["latency_s"],prefill_J=pref_energy["total_J"],
+                decode_s=seconds,decode_tok_s=row["decode_tok_s"],decode_J=nominal["total_J"],
+                decode_J_per_token=nominal["total_J"]/1000,decode_tokens_per_J=1000/nominal["total_J"],
+                E2E_s=seconds+pref["latency_s"],E2E_tok_s=row["e2e_tok_s"],
+                E2E_total_J=nominal["total_J"]+pref_energy["total_J"],
+                E2E_J_per_generated_token=(nominal["total_J"]+pref_energy["total_J"])/1000,
+                E2E_generated_tokens_per_J=1000/(nominal["total_J"]+pref_energy["total_J"]),
+                average_decode_power_W=nominal["average_power_W"],
+                decode_J_per_token_nmp_adverse=adverse["total_J"]/1000,
+                decode_tokens_per_J_nmp_adverse=1000/adverse["total_J"],
+                E2E_J_per_generated_token_nmp_adverse=(adverse["total_J"]+pref_energy["total_J"])/1000,
+                E2E_generated_tokens_per_J_nmp_adverse=1000/(adverse["total_J"]+pref_energy["total_J"]))
+            energy_rows.append(er)
+            breakdown_rows.append(dict(model=name,policy=policy,**nominal["components"],**power_groups(nominal["components"],seconds)))
+            event_rows.append(dict(model=name,policy=policy,**{k:v for k,v in events.items() if not isinstance(v,list)},
+                **{k+"_"+str(i+1):x for k,v in events.items() if isinstance(v,list) for i,x in enumerate(v)}))
+            sram_rows.append(dict(model=name,policy=policy,activation_GB_per_token_staged_in_SRAM=events["activation_sram_bytes"]/1e12,
+                SRAM_read32_per_token=events["sram_read32_accesses"]/1000,SRAM_write32_per_token=events["sram_write32_accesses"]/1000,
+                SRAM_J_per_token=(nominal["components"]["sram_read_J"]+nominal["components"]["sram_write_J"])/1000,
+                weight_GB_per_token_bypassed_SRAM=events["weight_bypass_sram_bytes"]/1e12,
+                KV_GB_per_token_bypassed_SRAM=events["kv_bypass_sram_bytes"]/1e12,
+                **{k:v for k,v in events.items() if k.startswith("max_tile_")}))
+            print("ENERGY: "+json.dumps(er),flush=True)
+            if policy==ExecutionPolicy.MAC_NMP:
+                print("MAC ARITHMETIC: "+json.dumps(dict(model=name,MAC_operations_per_token=events["mac_operations"]/1000,MAC_J_per_token=nominal["components"]["mac_J"]/1000)),flush=True)
+            if name=="Llama-3.1-405B":
+                print("405B J/TOKEN: "+json.dumps({k:v/1000 for k,v in nominal["components"].items()}),flush=True)
             traffic = {k:sum(s["traffic_bytes"][k] for s in steps)/1000 for k in steps[0]["traffic_bytes"]}
             assert (traffic["historical_K"] > 0) == (policy == ExecutionPolicy.NO_NMP)
             assert (traffic["historical_V"] > 0) == (policy == ExecutionPolicy.NO_NMP)
@@ -169,6 +225,15 @@ def main():
         attention = next(r for r in summary if r["model"] == row["model"] and r["policy"] == ExecutionPolicy.ATTENTION_NMP)
         row["speedup_vs_no_nmp"] = base["decode_s"]/row["decode_s"]
         row["speedup_vs_attention_nmp"] = attention["decode_s"]/row["decode_s"]
+    for row in energy_rows:
+        base=next(r for r in energy_rows if r["model"]==row["model"] and r["policy"]==ExecutionPolicy.NO_NMP)
+        row["decode_energy_efficiency_vs_NO_NMP"]=base["decode_J"]/row["decode_J"]
+        row["E2E_energy_efficiency_vs_NO_NMP"]=base["E2E_total_J"]/row["E2E_total_J"]
+    write_csv("energy_summary.csv",energy_rows)
+    write_csv("energy_breakdown.csv",breakdown_rows)
+    write_csv("energy_events.csv",event_rows)
+    write_csv("prefill_energy_summary.csv",pref_energy_rows)
+    (OUT/"sram_staging_audit.json").write_text(json.dumps(sram_rows,indent=2)+"\n")
     write_csv("summary.csv", summary)
     write_csv("normalized.csv", [{k:r[k] for k in ("model", "policy", "speedup_vs_no_nmp", "speedup_vs_attention_nmp")} for r in summary])
     write_csv("traffic_bytes_per_token.csv", traffic_rows)

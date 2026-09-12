@@ -61,12 +61,13 @@ def llama31_models():
 
 class DecodePolicyModel:
     """One operator schedule, one physical resident placement, three executors."""
-    def __init__(self, workload, *, project_root: Path):
+    def __init__(self, workload, *, project_root: Path, record_energy=False):
+        self.record_energy = record_energy
         self.workload = workload
         self.floorplan = resolve_feol_floorplan(project_root)
         self.platform = load_platform_spec_file(project_root/"configs/platform/gpu_package_h200_reference.yaml")
         self.placement = PhysicalResidentPlacement(workload, self.floorplan)
-        self.physical = PhysicalStageModel(self.floorplan, self.platform, workload)
+        self.physical = PhysicalStageModel(self.floorplan, self.platform, workload, record_events=record_energy)
         self.static = {}
         self.dynamic = {}
         self.context = None
@@ -188,6 +189,9 @@ class DecodePolicyModel:
                    external_limit_counts={reason:sum(t["limiting_reason"]==reason for t in transfers) for reason in
                                           ("GLOBAL_THERMAL_CAP","PORT_SERIALIZATION","ROUTE_STARTUP")},
                    bottlenecks=bottlenecks)
+        if self.record_energy:
+            from om3dthermal.power.feol_energy import sum_events
+            row["energy_events"] = sum_events(s["energy_events"] for s in physical)
         if include_stages:
             row["stages"] = stages
         return row
@@ -202,6 +206,7 @@ class DecodePolicyModel:
         # Existing fused/tiled incremental Prefill ledger, GPU-only roofline.
         # Real resident groups service every weight and historical KV read.
         array_s = external_s = 0.0
+        bulk_events = []
         for (layer, op), entry in self.placement.operators.items():
             if op in ("OTHER_WEIGHT", "TOKEN_EMBED_LOOKUP"):
                 continue
@@ -209,8 +214,14 @@ class DecodePolicyModel:
             point = self.physical.evaluate(entry, atoms, nmp=False)
             array_s += point["array_service_s"]
             external_s += point["external_service_s"]
+            if self.record_energy: bulk_events.append(point["energy_events"])
         nonbulk = m.total_memory_bytes-m.active_weight_read_bytes-m.historical_cached_kv_read_bytes
         external_s += nonbulk/self.floorplan.external_Bps
-        return dict(latency_s=max(compute_s, array_s, external_s), compute_s=compute_s,
+        result = dict(latency_s=max(compute_s, array_s, external_s), compute_s=compute_s,
                     array_service_s=array_s, external_service_s=external_s,
                     external_bandwidth_cap_TBps=self.floorplan.external_Bps/1e12, ledger=m.model_dump())
+
+        if self.record_energy:
+            from om3dthermal.power.feol_energy import prefill_events
+            result["energy_events"] = prefill_events(self,workload,result["ledger"],bulk_events)
+        return result
