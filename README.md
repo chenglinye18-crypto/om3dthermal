@@ -173,12 +173,12 @@ audited orchestration-only revisions may reuse older numerical results.
 Prefill temporary bytes are cumulative traffic: legal free physical slots may
 be reused across streaming passes, without treating all accesses as residency.
 
-BALANCED preserves the proposed die-fastest/least-occupied-layer mapping and
+BALANCED preserves the historical die-fastest/least-occupied-layer mapping and
 projected-compute-plus-route tile objective. COMPACT_FIRST_FIT fills earlier
 slabs first, using simple fair capacity filling across legal group/layer slots
 inside each slab. UNIFORM_STRIPING cyclically distributes rows/vectors over all
 slabs/groups and fixed cyclic layers. Both baselines use deterministic cyclic
-tile assignment, without the proposed optimizer. Embedding lookup row=request
+tile assignment, without BALANCED's optimizer. Embedding lookup row=request
 id is a deterministic distinct-token assumption, not an extra resident copy.
 
 Each slab's energy is derived from its own raw events; GPU energy is separate.
@@ -196,6 +196,52 @@ as a wall-time breakdown. Checkpoints validate source/config fingerprints.
 
 B=1 BALANCED must exactly match the ae14f09 performance, energy and event
 fixture. Tests: `python -m pytest -q tests/test_placement_ablation.py tests/test_placement_runner.py tests/test_feol_energy.py tests/test_feol_ports.py tests/test_decode_policy.py`.
+
+### Critical-path-aware placement (B=1)
+
+The primary placement comparison is now UNIFORM_STRIPING versus
+CRITICAL_PATH_AWARE; the other policies and historical results remain intact.
+`python scripts/compare_critical_path_placement.py --workers 4` runs only the
+three new CPA cases in `runs/critical_path_placement_b1_v1/`. It supports
+`--phase performance` and `--phase thermal`, and loads the existing placement
+thermal setup directly without copying or rebuilding it.
+On cloud-synced workspaces, set `OM3DTHERMAL_STEP_CACHE` to a local ordinary
+directory (for example `$env:LOCALAPPDATA\om3dthermal\cpa_step_cache_v1` in
+PowerShell). Only rebuildable step checkpoints move there; canonical tables,
+case results and the existing thermal setup keep their documented locations.
+Atomic checkpoint replacement uses at most 9.5 seconds of retry waits for
+permission locks and still fails visibly if the filesystem stays unavailable.
+
+CPA starts from exact Uniform residency and tile assignment. One bounded
+resident pass tries integer group-stream chunks (one eighth, at least one
+whole atom) from tied critical regions to at most eight lightly serviced
+destination groups in the same slab. KV ownership migrations are paired.
+Then at most two tile refinement passes redistribute whole group compute
+streams among legal region-local tiles. Eight physical tile-pool candidates
+are evaluated against the original full stage equation, including array,
+fabric, MAC, NoC, external service and reduction. Only relative improvements
+of at least 1e-4 are accepted; this is an optimizer convergence tolerance,
+not a physical efficiency factor. No MILP, ML, cross-slab communication or
+hardware/energy coefficient changes are introduced. Rejected proposals leave
+Uniform unchanged. Audit distinguishes resident atom moves from consuming
+tile changes; a tile change does not imply movement of stored weights/KV.
+`accepted_moves` counts accepted synchronized refinement proposals; separate
+chunk/atom fields report their actual scope. Optimizer runtime is measured
+once when building the reusable plan, outside modeled inference latency.
+The plan is fixed for the entire Decode: attention is optimized at context
+126999 with an additional context-126000 acceptance check, then all 1000
+growing contexts are simulated. This is a bounded heuristic, not a claim of
+globally minimizing the complete 1000-step objective.
+
+`operator_before_after.csv` records accepted changes, actual component times,
+critical resource IDs and load ratios. Component sums overlap and are not an
+additive wall-time breakdown. The reported fixed-topology ideal is a limited
+resource-balancing relaxation, not a bound on every possible placement.
+`python -m pytest -q tests/test_critical_path_placement.py` checks independent
+920efd2 reference hashes, legality, determinism and energy conservation.
+`python scripts/verify_cpa_uniform.py` additionally verifies all 1000 Uniform
+steps for all three models, including exact aggregate energy/events and stage
+hashes; saved thermal results are reused after source-power equality.
 
 Formal experiments write stage JSON, tables, resolved inputs and a checksummed
 manifest under `results/`; nonempty output directories are rejected.

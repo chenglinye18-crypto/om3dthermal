@@ -1,5 +1,5 @@
 """MAC-NMP B1/B8 placement ablation; frozen event energy and slab thermal diagnostic."""
-import argparse,csv,hashlib,json,pickle,subprocess,time
+import argparse,csv,hashlib,json,os,pickle,subprocess,time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 import numpy as np
@@ -10,6 +10,17 @@ from om3dthermal.thermal.placement_diagnostic import PlacementThermalDiagnostic,
 
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"runs/placement_ablation_b1_b8_v1"
+
+
+def replace_checkpoint(temporary, cache):
+    """Keep atomic replacement; tolerate transient Windows sync-file locks."""
+    for attempt in range(20):
+        try:
+            temporary.replace(cache)
+            return
+        except PermissionError:
+            if attempt == 19: raise
+            time.sleep(0.5)
 
 
 def run_fingerprints():
@@ -33,7 +44,8 @@ def engine(name,batch,placement):
 def chunk(args):
     name,batch,placement,start,end,computation_fp=args
     runner_fp,_=run_fingerprints()
-    cache=OUT/"step_checkpoints"/f"{name}_B{batch}_{placement}"/f"{start}_{end}.pkl"
+    cache_root=Path(os.environ["OM3DTHERMAL_STEP_CACHE"]) if "OM3DTHERMAL_STEP_CACHE" in os.environ else OUT/"step_checkpoints"
+    cache=cache_root/f"{name}_B{batch}_{placement}"/f"{start}_{end}.pkl"
     rows=[]
     if cache.exists():
         with cache.open("rb") as stream:saved=pickle.load(stream)
@@ -48,7 +60,7 @@ def chunk(args):
         temporary=cache.with_suffix(".tmp")
         with temporary.open("wb") as stream:
             pickle.dump(dict(computation_fingerprint=computation_fp,runner_fingerprint=runner_fp,rows=rows),stream,protocol=pickle.HIGHEST_PROTOCOL)
-        temporary.replace(cache)
+        replace_checkpoint(temporary,cache)
     e=engine(name,batch,placement);started=time.perf_counter()
     for context in range(start+len(rows),end):
         s=e.step(context,ExecutionPolicy.MAC_NMP)

@@ -182,7 +182,7 @@ class PhysicalStageModel:
                   + self.service_prefix[group, starts, end_count % 8]
                   - self.service_prefix[group, starts, begin_count % 8])
         group_times = cycles*(entry.atom_bytes//32)*1e-9
-        if hasattr(entry,"segment_count"):
+        if hasattr(entry,"segment_count") or getattr(entry,"irregular_layers",False):
             group_times = group_service_seconds(entry.layer_bytes(atoms,begin=begin)[occupied],f.service_ns[group])
         array_s = float(group_times.max(initial=0))
         region_bytes = np.bincount(rid, weights=bytes_, minlength=n*4).reshape(n, 4)

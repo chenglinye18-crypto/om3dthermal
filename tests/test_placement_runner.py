@@ -8,6 +8,42 @@ import numpy as np
 import pytest
 
 
+def test_atomic_checkpoint_retries_transient_lock(runner,monkeypatch):
+    calls=[]
+    class Temporary:
+        def replace(self,target):
+            calls.append(target)
+            if len(calls)<3:raise PermissionError('sync lock')
+    sleeps=[]
+    monkeypatch.setattr(runner.time,'sleep',sleeps.append)
+    runner.replace_checkpoint(Temporary(),'target')
+    assert calls==['target']*3
+    assert sleeps==[.5,.5]
+
+
+def test_atomic_checkpoint_retry_is_bounded(runner,monkeypatch):
+    class Temporary:
+        def replace(self,target):raise PermissionError('persistent lock')
+    sleeps=[]
+    monkeypatch.setattr(runner.time,'sleep',sleeps.append)
+    with pytest.raises(PermissionError):runner.replace_checkpoint(Temporary(),'target')
+    assert sleeps==[.5]*19
+
+
+def test_step_cache_can_avoid_cloud_synced_output(runner,monkeypatch,tmp_path):
+    local=tmp_path/'local_cache'
+    monkeypatch.setenv('OM3DTHERMAL_STEP_CACHE',str(local))
+    class Engine:
+        def step(self,context,policy):
+            return dict(context=context,latency_s=1.,boundary_bytes=0.,energy_events={},
+                        slab_events={},slab_service_s=np.zeros(1),component_sums={})
+    monkeypatch.setattr(runner,'engine',lambda *args:Engine())
+    rows=runner.chunk(('model',1,'UNIFORM_STRIPING',126000,126001,'physical'))
+    assert len(rows)==1
+    assert (local/'model_B1_UNIFORM_STRIPING/126000_126001.pkl').is_file()
+    assert not (runner.OUT/'step_checkpoints').exists()
+
+
 @pytest.fixture
 def runner(tmp_path,monkeypatch):
     path=Path(__file__).resolve().parents[1]/"scripts/compare_placement_ablation.py"

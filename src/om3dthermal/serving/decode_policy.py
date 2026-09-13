@@ -69,6 +69,9 @@ class DecodePolicyModel:
         self.platform = load_platform_spec_file(project_root/"configs/platform/gpu_package_h200_reference.yaml")
         self.placement = PhysicalResidentPlacement(workload, self.floorplan, placement_policy)
         self.physical = PhysicalStageModel(self.floorplan, self.platform, workload, record_events=record_energy, record_slabs=record_slabs)
+        if self.placement.policy == PlacementPolicy.CRITICAL_PATH_AWARE:
+            from om3dthermal.placement.critical_path import refine
+            self.placement.optimizer_audit = refine(self.placement, self.platform)
         self.static = {}
         self.dynamic = {}
         self.context = None

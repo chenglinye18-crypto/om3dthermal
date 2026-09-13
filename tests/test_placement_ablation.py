@@ -84,7 +84,7 @@ def test_prefill_aggregate_and_generated_numerator(engines):
     assert engines[8].workload.batch_size*len(CachedWorkload().contexts)==8000
 
 
-@pytest.mark.parametrize("policy",list(PlacementPolicy))
+@pytest.mark.parametrize("policy",[PlacementPolicy.COMPACT_FIRST_FIT,PlacementPolicy.UNIFORM_STRIPING,PlacementPolicy.BALANCED])
 @pytest.mark.parametrize("batch",(1,8))
 def test_baseline_capacity_and_deterministic_mapping(policy,batch):
     w=llama31_models()["Llama-3.1-8B"].model_copy(update={"batch_size":batch})
@@ -152,7 +152,7 @@ def test_cached_thermal_selection_matches_canonical_mapping():
     expected=map_power_sources(cells,config).power_W
     np.testing.assert_array_equal(SlabPowerMapper(cells).power(74.,powers),expected)
 
-@pytest.mark.parametrize("policy",list(PlacementPolicy))
+@pytest.mark.parametrize("policy",[PlacementPolicy.COMPACT_FIRST_FIT,PlacementPolicy.UNIFORM_STRIPING,PlacementPolicy.BALANCED])
 def test_b8_deterministic_step_rerun(policy):
     import hashlib,json
     w=llama31_models()["Llama-3.1-8B"].model_copy(update={"batch_size":8})
