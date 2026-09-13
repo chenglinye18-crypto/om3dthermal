@@ -168,7 +168,7 @@ def test_compiled_service_equals_slot_sum(engines):
 
 def test_active_tile_compute_not_die_pool(engines):
     e = engines["Llama-3.1-8B"]
-    unit = SimpleNamespace(operator_type="Q", layer_id=0, local_flops=1024, activation_input_bytes=2, partial_output_bytes=2)
+    unit = SimpleNamespace(operator_type="Q", layer_id=0, local_flops=1024, activation_input_bytes=2, partial_output_bytes=2, shard_mode="ROW_PARALLEL")
     op = ResidentOperator(unit,32,1,0,np.array([0]),np.array([0]),np.array([0]),318)
     stage = e.physical.evaluate(op,1,nmp=True)
     assert stage["active_groups"] == stage["active_mac_tiles"] == 1

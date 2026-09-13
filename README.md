@@ -154,6 +154,49 @@ energy requires future thermal reclosure and no thermal solver runs here.
 
 Tests: `python -m pytest -q tests/test_feol_energy.py tests/test_feol_ports.py tests/test_decode_policy.py tests/test_feol_latency.py tests/test_physical_capacity.py tests/test_memory_bandwidth.py tests/test_m3d_100um_slab_architecture.py tests/test_llm_prefill.py tests/test_mixed_phase_e2e.py`.
 
+### MAC-NMP placement ablation (B=1,8)
+
+`python scripts/compare_placement_ablation.py` runs 18 MAC-NMP cases in
+`runs/placement_ablation_b1_b8_v1/`, leaving the frozen decode-policy run intact.
+Shared linear weights remain resident once and stream once per aggregate step;
+B activation consumers generate B times the MAC work and row outputs. KV and
+embedding lookups retain request identity. Concurrent request stages sum actual
+array/group, tile, fabric, NoC-link and port demand before computing completion.
+One aggregate step generates B tokens; E2E counts only 1000*B generated tokens.
+Use `--phase performance` or `--phase thermal` to run either phase explicitly.
+Thermal-only requires validated case checkpoints and the existing
+`runs/placement_ablation_b1_b8_v1/thermal_setup.pkl`; it never starts performance
+or silently rebuilds a missing/invalid setup. Performance workers checkpoint
+every 25 steps (resume with the same worker count). Full runner provenance and
+physical source/config hashes are checked independently; only explicitly
+audited orchestration-only revisions may reuse older numerical results.
+Prefill temporary bytes are cumulative traffic: legal free physical slots may
+be reused across streaming passes, without treating all accesses as residency.
+
+BALANCED preserves the proposed die-fastest/least-occupied-layer mapping and
+projected-compute-plus-route tile objective. COMPACT_FIRST_FIT fills earlier
+slabs first, using simple fair capacity filling across legal group/layer slots
+inside each slab. UNIFORM_STRIPING cyclically distributes rows/vectors over all
+slabs/groups and fixed cyclic layers. Both baselines use deterministic cyclic
+tile assignment, without the proposed optimizer. Embedding lookup row=request
+id is a deterministic distinct-token assumption, not an extra resident copy.
+
+Each slab's energy is derived from its own raw events; GPU energy is separate.
+`energy_breakdown.csv` reports Decode components; each case checkpoint also
+retains the Prefill FLOP/traffic ledger and its complete energy components.
+The existing unresolved budget remains 0.1 W per slab for the full Decode time.
+Power-source conservation includes GPU plus all 318 slabs. The thermal model
+is `SLAB_RESOLVED_BEOL_UNIFORM_DIAGNOSTIC`: each slab's complete memory/FEOL
+power is uniform over its own bitcell/BEOL volume, and GPU power goes to FEOL.
+It reuses the frozen 4.1 M3D mesh, boundary conditions, material definitions and
+FP64 GPU-PCG tolerances. It neither changes 4.1 nor performs a thermal-cap sweep
+or formal FEOL spatial reclosure. Local slab service diagnostics exclude GPU
+and global-cap waiting; accumulated component times overlap, so do not sum them
+as a wall-time breakdown. Checkpoints validate source/config fingerprints.
+
+B=1 BALANCED must exactly match the ae14f09 performance, energy and event
+fixture. Tests: `python -m pytest -q tests/test_placement_ablation.py tests/test_placement_runner.py tests/test_feol_energy.py tests/test_feol_ports.py tests/test_decode_policy.py`.
+
 Formal experiments write stage JSON, tables, resolved inputs and a checksummed
 manifest under `results/`; nonempty output directories are rejected.
 Evaluation scripts write JSON/CSV under their specified output directory.

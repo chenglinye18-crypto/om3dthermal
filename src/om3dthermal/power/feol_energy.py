@@ -45,8 +45,8 @@ def sram_events(tile_bytes, *, capacity_bytes, port_Bps, stage_s):
                 activation_sram_bytes=float(b.sum()),max_tile_activation_chunk_bytes=chunk,
                 max_tile_sram_utilization=chunk/capacity_bytes,max_tile_sram_port_utilization=utilization)
 
-def stage_events(f,w,entry,atoms,begin,write,nmp,result,occupied,counts,die,group,tiles,tile_active,noc_links):
-    e=memory_events(entry.layer_bytes(atoms,begin=begin)[occupied],write=write)
+def stage_events(f,w,entry,atoms,begin,write,nmp,result,occupied,counts,die,group,tiles,tile_active,noc_links,layer_bytes):
+    e=memory_events(layer_bytes,write=write)
     e["interface_bits"]=e["gpu_decode_proxy_bits"]=result["boundary_bytes"]*8
     for transfer in result["external_transfers"]:
         key="sa_to_edge_bit_um" if transfer["mode"]=="GROUP_DIRECT" else "root_to_port_bit_um"
@@ -67,7 +67,7 @@ def stage_events(f,w,entry,atoms,begin,write,nmp,result,occupied,counts,die,grou
         else:
             size=w.d_model*2 if op=="ATTENTION_QK" else entry.unit.activation_input_bytes
             inputs=tile_active*size if op!="TOKEN_EMBED_LOOKUP" else np.zeros_like(tile_active,dtype=float)
-            out_bytes=(counts*w.n_heads_q/w.n_heads_kv*2 if op=="ATTENTION_QK" else b if op=="TOKEN_EMBED_LOOKUP" else counts*2)
+            out_bytes=(counts*w.n_heads_q/w.n_heads_kv*2 if op=="ATTENTION_QK" else b if op=="TOKEN_EMBED_LOOKUP" else counts*2*w.batch_size)
             outputs=np.bincount(die*32+tiles,weights=out_bytes,minlength=tile_active.size).reshape(tile_active.shape)
         e["root_to_tile_bit_um"]=float(np.sum((inputs+outputs)*8*f.root_tile_um))
         e["router_bit_traversals"]+=float((inputs.sum()+outputs.sum()+noc_links.sum())*8)
@@ -81,6 +81,64 @@ def stage_events(f,w,entry,atoms,begin,write,nmp,result,occupied,counts,die,grou
         if op in ("ATTENTION_QK","ATTENTION_AV"): e["kv_bypass_sram_bytes"]=float(b.sum())
         elif op!="TOKEN_EMBED_LOOKUP": e["weight_bypass_sram_bytes"]=float(b.sum())
     return e
+
+
+def slab_stage_events(f,w,entry,atoms,begin,write,nmp,result,occupied,counts,die,group,tiles,tile_active,noc_links,layer_bytes):
+    """Same event definitions resolved by physical producer/consumer slab."""
+    n=f.layout.slab_count
+    e={k:np.zeros(n) for k in SCALARS+list(MAXIMA)}
+    e.update({k:np.zeros((n,8)) for k in LAYERS})
+    scatter=lambda x:np.bincount(die,weights=x,minlength=n)
+    lb=layer_bytes
+    services=scatter(((lb+31)//32).sum(axis=1))
+    bits=scatter(lb.sum(axis=1)*8)
+    e["write_services" if write else "read_services"]=services
+    e["array_write_bits" if write else "array_read_bits"]=bits
+    layer_key="miv_write_bits_by_layer" if write else "miv_read_bits_by_layer"
+    e[layer_key]=np.bincount((die[:,None]*8+np.arange(8)).ravel(),weights=(lb*8).ravel(),minlength=n*8).reshape(n,8)
+    e["row_select_events"]=e["column_select_events"]=services
+    e["write_driver_bits" if write else "sa_sensed_bits"]=bits if write else services*256
+    for transfer in result["external_transfers"]:
+        e["interface_bits"]+=transfer["resources"]["loads"].sum(axis=1)*8
+        key="sa_to_edge_bit_um" if transfer["mode"]=="GROUP_DIRECT" else "root_to_port_bit_um"
+        e[key]+=transfer["wire_bit_um_by_slab"]
+    e["gpu_decode_proxy_bits"]=e["interface_bits"].copy()
+    b=counts*entry.atom_bytes;op=entry.unit.operator_type
+    if write:
+        e["root_to_sa_bit_um"]=scatter(b*8*f.root_sa_um[group])
+    elif nmp:
+        e["sa_to_tile_bit_um"]=scatter(b*8*f.sa_tile_um[group,tiles])
+        e["router_bit_traversals"]+=scatter(b*8)
+        tc=tile_active.reshape(n,4,8).sum(axis=2)
+        if op=="ATTENTION_AV":
+            inputs=np.bincount(die*32+tiles,weights=counts*w.n_heads_q/w.n_heads_kv*2,minlength=n*32).reshape(n,32)
+            outputs=tile_active*w.d_model*4
+            e["fp32_reduction_adds"]=(np.maximum(tc-1,0).sum(axis=1)+np.maximum((tc>0).sum(axis=1)-1,0))*w.d_model
+        else:
+            size=w.d_model*2 if op=="ATTENTION_QK" else entry.unit.activation_input_bytes
+            inputs=tile_active*size if op!="TOKEN_EMBED_LOOKUP" else np.zeros((n,32))
+            ob=counts*w.n_heads_q/w.n_heads_kv*2 if op=="ATTENTION_QK" else b if op=="TOKEN_EMBED_LOOKUP" else counts*2*w.batch_size
+            outputs=np.bincount(die*32+tiles,weights=ob,minlength=n*32).reshape(n,32)
+        e["root_to_tile_bit_um"]=((inputs+outputs)*8*f.root_tile_um).sum(axis=1)
+        e["router_bit_traversals"]+=(inputs.sum(axis=1)+outputs.sum(axis=1)+noc_links.sum(axis=(1,2)))*8
+        e["noc_link_bit_um"]=(noc_links*np.array([l["length_um"] for l in f.links])[None,:,None]).sum(axis=(1,2))*8
+        e["pipeline_register_bit_stages"]=(noc_links*np.array([max(l["wire_pipeline_cycles"]-1,0) for l in f.links])[None,:,None]).sum(axis=(1,2))*8
+        e["mac_operations"]=result["resources"]["tile_loads"].sum(axis=1)/2
+        e["sram_read32_accesses"]=e["sram_write32_accesses"]=np.ceil(inputs/4).sum(axis=1)
+        e["activation_sram_bytes"]=inputs.sum(axis=1)
+        cap=f.energy_config["pe_sram_bytes"]*f.config["macs_per_tile"]
+        e["max_tile_activation_chunk_bytes"]=np.minimum(inputs.max(axis=1),cap)
+        e["max_tile_sram_utilization"]=e["max_tile_activation_chunk_bytes"]/cap
+        e["max_tile_sram_port_utilization"]=2*inputs.max(axis=1)/result["latency_s"]/64e9
+        if op in ("ATTENTION_QK","ATTENTION_AV"):e["kv_bypass_sram_bytes"]=scatter(b)
+        elif op!="TOKEN_EMBED_LOOKUP":e["weight_bypass_sram_bytes"]=scatter(b)
+    return e
+
+
+def sum_slab_events(events):
+    events=list(events)
+    return {k:np.maximum.reduce([e[k] for e in events]) if k in MAXIMA else np.sum([e[k] for e in events],axis=0)
+            for k in events[0]}
 
 class FEOLEnergyModel:
     def __init__(self,floorplan,platform):
@@ -151,10 +209,10 @@ def prefill_events(engine,workload,ledger,bulk_events):
     for layer in range(w.n_layers):
         for op in ("ATTENTION_QK","ATTENTION_AV"):
             entry=engine.placement.operators[layer,op]
-            events.append(engine.physical.evaluate(entry,(workload.history+workload.prompt)*w.n_heads_kv,
+            events.append(engine._evaluate_operator(op,layer,(workload.history+workload.prompt)*w.n_heads_kv,
                begin=workload.history*w.n_heads_kv,nmp=False,write=True)["energy_events"])
     embed=engine.placement.operators[-1,"TOKEN_EMBED_LOOKUP"]
-    events.append(engine.physical.evaluate(embed,1,nmp=False)["energy_events"])
+    events.append(engine._evaluate_operator("TOKEN_EMBED_LOOKUP",-1,1,nmp=False)["energy_events"])
     known=sum_events(events)
     for write,key in ((False,"total_read_bytes"),(True,"total_write_bytes")):
         bit_key="array_write_bits" if write else "array_read_bits"

@@ -25,7 +25,7 @@ def ingress_regions(f, active):
     return f.ingress_lookup[masks]
 
 
-def structured_noc(f, region_bytes, *, mode, vector_bytes=0):
+def structured_noc(f, region_bytes, *, mode, vector_bytes=0, record_resources=False):
     """Shortest-path multicast or balanced pairwise intra-slab reduction."""
     region_bytes = np.asarray(region_bytes, dtype=float)
     active = region_bytes > 0
@@ -33,6 +33,7 @@ def structured_noc(f, region_bytes, *, mode, vector_bytes=0):
     roots = ingress_regions(f, active)
     links = np.zeros((n, 3, 2))
     times = np.zeros(n)
+    rounds = np.zeros((n,2,3,2)); startup_rounds = np.zeros((n,2)); add_rounds = np.zeros((n,2,4))
     masks = active.astype(int) @ (1 << np.arange(4))
     positions = np.r_[0, np.cumsum([l["hop_ns"] for l in f.links])]
     for mask in np.unique(masks):
@@ -46,11 +47,14 @@ def structured_noc(f, region_bytes, *, mode, vector_bytes=0):
             assert np.all((region_bytes[sel] == 0) | (region_bytes[sel] == payload[:,None]))
             for edge in range(min(dest), max(dest)):
                 links[sel, edge, int(edge < root)] = payload
+                rounds[sel,0,edge,int(edge < root)] = payload
             if len(dest) > 1:
                 times[sel] = payload/f.link_Bps+max(abs(positions[root]-positions[d]) for d in dest)*1e-9
+                startup_rounds[sel,0] = max(abs(positions[root]-positions[d]) for d in dest)*1e-9
         elif mode == "reduce":
             assert np.all(region_bytes[sel][region_bytes[sel] > 0] == vector_bytes)
             partials = [(r, [r]) for r in dest]
+            round_id = 0
             while len(partials) > 1:
                 merged, round_s = [], 0.0
                 for i in range(0, len(partials), 2):
@@ -61,21 +65,27 @@ def structured_noc(f, region_bytes, *, mode, vector_bytes=0):
                     source = b if target == a else a
                     for edge in range(min(source,target), max(source,target)):
                         links[sel,edge,int(source > target)] += vector_bytes
+                        rounds[sel,round_id,edge,int(source > target)] += vector_bytes
+                    startup_rounds[sel,round_id] = np.maximum(startup_rounds[sel,round_id],abs(positions[source]-positions[target])*1e-9)
+                    add_rounds[sel,round_id,target] += vector_bytes/4/(f.config["reduction_adds_per_cycle"]*f.config["clock_hz"])
                     round_s = max(round_s, vector_bytes/f.link_Bps+abs(positions[source]-positions[target])*1e-9
                                   +vector_bytes/4/(f.config["reduction_adds_per_cycle"]*f.config["clock_hz"]))
                     merged.append((target,am+bm))
                 times[sel] += round_s
                 partials = merged
+                round_id += 1
         else:
             raise ValueError("only structured multicast/reduce is supported")
     if mode not in ("multicast", "reduce"):
         raise ValueError("only structured multicast/reduce is supported")
-    return dict(time_s=float(times.max(initial=0)), link_bytes=links, hop_bytes=float(links.sum()),
+    result = dict(time_s=float(times.max(initial=0)), link_bytes=links, hop_bytes=float(links.sum()),
                 endpoint_bytes=float(region_bytes.sum()), root_regions=roots,
                 max_link_busy_s=float(links.max(initial=0)/f.link_Bps))
+    if record_resources: result["resources"] = dict(rounds=rounds,startup=startup_rounds,adds=add_rounds,slab_s=times)
+    return result
 
 
-def external_service(f, payload_bytes, *, mode, details=False, record_events=False):
+def external_service(f, payload_bytes, *, mode, details=False, record_events=False, record_resources=False):
     """Explicit group routing, region striping, or one-copy broadcast ingress."""
     b = np.asarray(payload_bytes, dtype=float)
     if np.any(b < 0):
@@ -125,6 +135,11 @@ def external_service(f, payload_bytes, *, mode, details=False, record_events=Fal
             result["wire_bit_um"] = float(np.sum(b*f.sa_edge_um)*8)
         else:
             result["wire_bit_um"] = float(sum(np.sum(loads[:,ids]*f.root_port_route_um[r,ids]) for r,ids in enumerate(f.region_port_ids))*8)
+    if record_resources:
+        result["resources"] = dict(loads=loads,startup=startup)
+    if record_events and record_resources:
+        result["wire_bit_um_by_slab"] = ((b*f.sa_edge_um).sum(axis=1)*8 if mode == "GROUP_DIRECT" else
+            sum((loads[:,ids]*f.root_port_route_um[r,ids]).sum(axis=1) for r,ids in enumerate(f.region_port_ids))*8)
     if details:
         result["ports"] = [dict(slab=int(d), port=int(p), bytes=float(loads[d,p]), route_startup_s=float(startup[d,p]))
                            for d,p in zip(*np.nonzero(active))]
@@ -134,8 +149,9 @@ def external_service(f, payload_bytes, *, mode, details=False, record_events=Fal
 
 
 class PhysicalStageModel:
-    def __init__(self, floorplan, platform, workload, *, record_events=False):
+    def __init__(self, floorplan, platform, workload, *, record_events=False, record_slabs=False):
         self.record_events = record_events
+        self.record_slabs = record_slabs
         self.f = floorplan
         self.w = workload
         self.gpu_compute = platform.gpu_compute_power.peak_compute_BF16_dense_flops_per_s
@@ -145,8 +161,9 @@ class PhysicalStageModel:
             self.service_prefix[:, start, 1:] = np.cumsum(floorplan.service_ns[:, (np.arange(8)+start) % 8], axis=1)
         self.service_sum = floorplan.service_ns.sum(axis=1)
 
-    def evaluate(self, entry, atoms, *, nmp, begin=0, write=False, details=False):
+    def evaluate(self, entry, atoms, *, nmp, begin=0, write=False, details=False, resources=False):
         f, w = self.f, self.w
+        resources = resources or self.record_slabs
         n = f.layout.slab_count
         end_count = entry.prefix_counts(atoms)
         begin_count = entry.prefix_counts(begin) if begin else np.zeros_like(end_count)
@@ -165,6 +182,8 @@ class PhysicalStageModel:
                   + self.service_prefix[group, starts, end_count % 8]
                   - self.service_prefix[group, starts, begin_count % 8])
         group_times = cycles*(entry.atom_bytes//32)*1e-9
+        if hasattr(entry,"segment_count"):
+            group_times = group_service_seconds(entry.layer_bytes(atoms,begin=begin)[occupied],f.service_ns[group])
         array_s = float(group_times.max(initial=0))
         region_bytes = np.bincount(rid, weights=bytes_, minlength=n*4).reshape(n, 4)
         region_active = region_bytes > 0
@@ -174,6 +193,7 @@ class PhysicalStageModel:
         op = entry.unit.operator_type
         attention = op in ("ATTENTION_QK", "ATTENTION_AV")
         flop_atom = 2*w.n_heads_q*w.d_head/w.n_heads_kv if attention else entry.unit.local_flops/entry.atom_count
+        if entry.unit.shard_mode == "ROW_PARALLEL": flop_atom *= w.batch_size
         if write:
             flop_atom = 0
         flops = counts*flop_atom
@@ -185,6 +205,8 @@ class PhysicalStageModel:
         fabric_startup = np.zeros(n*4)
         np.maximum.at(fabric_startup, rid, f.sa_tile_ns[group, tiles_assigned]*1e-9)
         fabric_startup = fabric_startup.reshape(n, 4)
+        sa_startup = fabric_startup.copy()
+        root_startup = np.zeros_like(sa_startup)
         noc_s = noc_bytes = noc_busy = input_boundary = output_boundary = 0.0
         noc_link_bytes = np.zeros((n, 3, 2))
         boundary_s = 0.0
@@ -201,14 +223,14 @@ class PhysicalStageModel:
                 fabric_bytes += tile_counts*w.d_model*4
                 reduction_s = float(np.maximum(tile_counts-1, 0).max()*w.d_model/(8*f.config["clock_hz"]))
                 output_region = region_active*w.d_model*4
-                outgoing = structured_noc(f, output_region, mode="reduce", vector_bytes=w.d_model*4)
+                outgoing = structured_noc(f, output_region, mode="reduce", vector_bytes=w.d_model*4, record_resources=resources)
                 output_region = np.zeros((n,4))
                 output_region[np.arange(n),outgoing["root_regions"]] = active_dies*w.d_model*4
             else:
                 input_size = (w.d_model*2 if op == "ATTENTION_QK" else entry.unit.activation_input_bytes)
                 input_region = region_active*input_size
                 input_mode = "REGION_BROADCAST_INGRESS"
-                incoming = structured_noc(f, input_region, mode="multicast")
+                incoming = structured_noc(f, input_region, mode="multicast", record_resources=resources)
                 noc_in_s = incoming["time_s"]
                 noc_bytes += incoming["hop_bytes"]; noc_link_bytes += incoming["link_bytes"]
                 fabric_bytes += tile_counts*input_size
@@ -217,21 +239,22 @@ class PhysicalStageModel:
                 elif op == "TOKEN_EMBED_LOOKUP":
                     outputs = bytes_
                 else:
-                    outputs = counts*2
+                    outputs = counts*2*w.batch_size
                 output_region = np.bincount(rid, weights=outputs, minlength=n*4).reshape(n, 4)
                 fabric_bytes += output_region
                 outgoing = dict(time_s=0.0, hop_bytes=0.0, link_bytes=np.zeros_like(noc_link_bytes))
             noc_s = noc_in_s+outgoing["time_s"]
             noc_bytes += outgoing["hop_bytes"]; noc_link_bytes += outgoing["link_bytes"]
             noc_busy = float(noc_link_bytes.max()/f.link_Bps)
-            incoming_external = external_service(f, input_region, mode=input_mode, details=details, record_events=self.record_events)
-            outgoing_external = external_service(f, output_region, mode="REGION_DIRECT", details=details, record_events=self.record_events)
+            incoming_external = external_service(f, input_region, mode=input_mode, details=details, record_events=self.record_events, record_resources=resources)
+            outgoing_external = external_service(f, output_region, mode="REGION_DIRECT", details=details, record_events=self.record_events, record_resources=resources)
             external_stages = [incoming_external, outgoing_external]
             input_boundary = incoming_external["total_boundary_bytes"]
             output_boundary = outgoing_external["total_boundary_bytes"]
             boundary_s = sum(x["external_service_s"] for x in external_stages)
             if np.any(tile_active):
-                fabric_startup += (tile_active*f.root_tile_ns).reshape(n, 4, 8).max(axis=2)*1e-9
+                root_startup = (tile_active*f.root_tile_ns).reshape(n, 4, 8).max(axis=2)*1e-9
+                fabric_startup += root_startup
             fabric_times = fabric_bytes/f.fabric_Bps+fabric_startup
             fabric_s = float(fabric_times.max())
             compute_s = float(tile_loads.max()/f.tile_flops)
@@ -241,7 +264,7 @@ class PhysicalStageModel:
                               INTER_REGION_NOC=noc_s+reduction_s, EXTERNAL_BOUNDARY=boundary_s, GPU_COMPUTE=0.0)
         else:
             transfer = external_service(f, region_bytes if write else group_total,
-                                        mode="REGION_DIRECT" if write else "GROUP_DIRECT", details=details, record_events=self.record_events)
+                                        mode="REGION_DIRECT" if write else "GROUP_DIRECT", details=details, record_events=self.record_events, record_resources=resources)
             external_stages = [transfer]
             boundary_s, output_boundary = transfer["external_service_s"], transfer["total_boundary_bytes"]
             activation = entry.unit.activation_input_bytes+entry.unit.partial_output_bytes
@@ -268,10 +291,33 @@ class PhysicalStageModel:
             nmp_flops=float(flops.sum()) if nmp and not write else 0.0,
             nmp_peak_utilization=float(flops.sum())/core_s/(n*32*f.tile_flops) if nmp and not write else 0.0,
             active_dies=int(active_dies.sum()), max_buffer_chunks=int(np.ceil(fabric_bytes.max()/f.config["region_buffer_bytes"])) if nmp else 0)
+        if self.record_events or self.record_slabs:
+            event_layer_bytes=entry.layer_bytes(atoms,begin=begin,indices=occupied)
         if self.record_events:
             from .feol_energy import stage_events
             result["energy_events"] = stage_events(f,w,entry,atoms,begin,write,nmp,result,occupied,counts,die,group,
-                                                   tiles_assigned,tile_active,noc_link_bytes)
+                                                   tiles_assigned,tile_active,noc_link_bytes,event_layer_bytes)
+        if resources:
+            gt=np.zeros((n,70)); gt[die,group]=group_times
+            result["resources"]=dict(group_times=gt, tile_loads=tile_loads if nmp and not write else np.zeros_like(tile_loads),
+                fabric_bytes=fabric_bytes if nmp and not write else np.zeros_like(fabric_bytes),
+                fabric_startup=fabric_startup if nmp and not write else np.zeros_like(fabric_startup),
+                sa_startup=sa_startup if nmp and not write else np.zeros_like(sa_startup),
+                root_startup=root_startup,
+                tile_active=tile_active if nmp and not write else np.zeros_like(tile_active),
+                group_bytes=group_total, reduction_add_s=np.maximum(tile_counts-1,0)*w.d_model/(8*f.config["clock_hz"]) if op=="ATTENTION_AV" and nmp and not write else np.zeros((n,4)),
+                noc_in=incoming["resources"] if nmp and not write and op!="ATTENTION_AV" else None,
+                noc_out=outgoing.get("resources") if nmp and not write else None)
+        if resources:
+            staging=np.zeros((n,32))
+            if nmp and not write and op!="TOKEN_EMBED_LOOKUP":
+                staging=(np.bincount(die*32+tiles_assigned,weights=counts*w.n_heads_q/w.n_heads_kv*2,minlength=n*32).reshape(n,32)
+                         if op=="ATTENTION_AV" else tile_active*(w.d_model*2 if op=="ATTENTION_QK" else entry.unit.activation_input_bytes))
+            result["resources"]["sram_tile_bytes"]=staging
+        if self.record_slabs:
+            from .feol_energy import slab_stage_events
+            result["slab_events"] = slab_stage_events(f,w,entry,atoms,begin,write,nmp,result,occupied,counts,die,group,
+                                                     tiles_assigned,tile_active,noc_link_bytes,event_layer_bytes)
         if details:
             layer_bytes = entry.layer_bytes(atoms, begin=begin)[occupied]
             result["groups"] = [dict(die_id=int(d), group_id=int(g), active_read_bytes=int(b) if not write else 0,

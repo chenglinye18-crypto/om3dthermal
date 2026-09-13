@@ -180,6 +180,7 @@ def resolve_feol_floorplan(project_root: str | Path):
     # The existing MIV primitive is linear in effective per-layer capacitance.
     d = memory.diagnostics
     result.energy_config = energy_cfg
+    result.port_Bps = case.architecture.memory_service.coil.data_rate_gbps_per_link*1e9/8
     result.miv_pj_per_bit_by_layer = (np.array(d["miv_effective_capacitance_per_layer_pF"])
         *d["miv_access_energy_pJ_per_bit"]/d["miv_average_effective_capacitance_pF"])
     result.sa_tile_um = np.array([[manhattan(g["center_um"],t["center_um"]) for t in tiles] for g in groups])

@@ -7,7 +7,7 @@ from om3dthermal.platform import load_platform_spec_file
 from om3dthermal.workload import LLMDecodeInput, LLMPrefillInput, evaluate_cached_prefix_incremental_prefill
 from om3dthermal.workload.dense_decode_ledger import build_dense_decode_placement_units, build_dense_decode_small_ops
 from om3dthermal.architecture.feol_floorplan import resolve_feol_floorplan
-from om3dthermal.placement.nmp_load_balance import PhysicalResidentPlacement
+from om3dthermal.placement.nmp_load_balance import PhysicalResidentPlacement, PlacementPolicy
 from om3dthermal.power.nmp_die_activity import PhysicalStageModel
 
 class ExecutionPolicy(StrEnum):
@@ -61,23 +61,38 @@ def llama31_models():
 
 class DecodePolicyModel:
     """One operator schedule, one physical resident placement, three executors."""
-    def __init__(self, workload, *, project_root: Path, record_energy=False):
+    def __init__(self, workload, *, project_root: Path, record_energy=False, placement_policy=PlacementPolicy.BALANCED, record_slabs=False):
         self.record_energy = record_energy
+        self.record_slabs = record_slabs
         self.workload = workload
         self.floorplan = resolve_feol_floorplan(project_root)
         self.platform = load_platform_spec_file(project_root/"configs/platform/gpu_package_h200_reference.yaml")
-        self.placement = PhysicalResidentPlacement(workload, self.floorplan)
-        self.physical = PhysicalStageModel(self.floorplan, self.platform, workload, record_events=record_energy)
+        self.placement = PhysicalResidentPlacement(workload, self.floorplan, placement_policy)
+        self.physical = PhysicalStageModel(self.floorplan, self.platform, workload, record_events=record_energy, record_slabs=record_slabs)
         self.static = {}
         self.dynamic = {}
         self.context = None
         units = build_dense_decode_placement_units(workload)
-        owners = [tuple(sorted(set(self.placement.operators[u.layer_id, u.operator_type].lanes % self.floorplan.layout.slab_count))) for u in units]
+        owners = [tuple(sorted(set(self.placement.get(u.layer_id,u.operator_type,u.request_id).lanes % self.floorplan.layout.slab_count))) for u in units]
         self.small = build_dense_decode_small_ops(workload, units, owners, self.floorplan.layout.slab_count)
         self.small_bytes = {}
         for x in self.small:
             key = (x.operator, x.layer_id)
             self.small_bytes[key] = self.small_bytes.get(key, 0)+x.gpu_local_total_bytes
+
+    def _evaluate_operator(self, op, layer, atoms, *, nmp, begin=0, write=False):
+        from om3dthermal.power.batched_physical import merge_request_stages
+        local=op in ATTENTION or op=="TOKEN_EMBED_LOOKUP"
+        requests=range(self.workload.batch_size) if local else (None,)
+        rows=[]
+        for request in requests:
+            entry=self.placement.get(layer,op,request)
+            first=request if op=="TOKEN_EMBED_LOOKUP" else begin
+            last=first+1 if op=="TOKEN_EMBED_LOOKUP" else atoms
+            row=self.physical.evaluate(entry,last,nmp=nmp,begin=first,write=write,resources=len(requests)>1)
+            if self.workload.batch_size>1:row["request_id"]=request
+            rows.append(row)
+        return merge_request_stages(self.floorplan,rows)
 
     def _operator(self, op, layer, context, policy, *, write=False):
         entry = self.placement.operators[layer, op]
@@ -86,18 +101,21 @@ class DecodePolicyModel:
             atoms = context*self.workload.n_heads_kv
             key = (op, layer, nmp, write)
             if key not in self.dynamic:
-                self.dynamic[key] = self.physical.evaluate(entry, atoms+self.workload.n_heads_kv if write else atoms,
+                self.dynamic[key] = self._evaluate_operator(op, layer, atoms+self.workload.n_heads_kv if write else atoms,
                     nmp=nmp, begin=atoms if write else 0, write=write)
             return self.dynamic[key]
         key = (op, layer, nmp)
         if key not in self.static:
-            self.static[key] = self.physical.evaluate(entry, 1 if op == "TOKEN_EMBED_LOOKUP" else entry.atom_count, nmp=nmp)
+            self.static[key] = self._evaluate_operator(op, layer, 1 if op == "TOKEN_EMBED_LOOKUP" else entry.atom_count, nmp=nmp)
         return self.static[key]
 
     def _gpu_small(self, op, layer, context):
         w = self.workload
-        if op == "SOFTMAX":
-            count = w.n_heads_q*context*4
+        if op == "AV_REDUCTION":
+            av=self.dynamic["ATTENTION_AV",layer,True,False]
+            count=av["output_boundary_bytes"]+w.batch_size*w.d_model*2
+        elif op == "SOFTMAX":
+            count = w.batch_size*w.n_heads_q*context*4
         else:
             count = self.small_bytes.get((op, layer), 0)
         seconds = count/self.physical.gpu_bw
@@ -192,6 +210,11 @@ class DecodePolicyModel:
         if self.record_energy:
             from om3dthermal.power.feol_energy import sum_events
             row["energy_events"] = sum_events(s["energy_events"] for s in physical)
+        if self.record_slabs:
+            from om3dthermal.power.feol_energy import sum_slab_events
+            from om3dthermal.power.batched_physical import slab_service_seconds
+            row["slab_events"] = sum_slab_events(s["slab_events"] for s in physical)
+            row["slab_service_s"] = sum(slab_service_seconds(self.floorplan,s) for s in physical)
         if include_stages:
             row["stages"] = stages
         return row
@@ -211,7 +234,7 @@ class DecodePolicyModel:
             if op in ("OTHER_WEIGHT", "TOKEN_EMBED_LOOKUP"):
                 continue
             atoms = workload.history*w.n_heads_kv if op in ATTENTION else entry.atom_count
-            point = self.physical.evaluate(entry, atoms, nmp=False)
+            point = self._evaluate_operator(op, layer, atoms, nmp=False)
             array_s += point["array_service_s"]
             external_s += point["external_service_s"]
             if self.record_energy: bulk_events.append(point["energy_events"])
