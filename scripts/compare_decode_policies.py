@@ -118,7 +118,7 @@ def main():
             prefill_boundary_GB=pref["energy_events"]["interface_bits"]/8e9,prefill_total_J=pref_energy["total_J"],
             prefill_GPU_dynamic_J=pc["gpu_dynamic_J"],prefill_GPU_static_J=pc["gpu_static_J"],
             prefill_array_J=pc["array_read_J"]+pc["array_write_J"],prefill_selector_J=pc["row_select_J"]+pc["column_select_J"],
-            prefill_SA_J=pc["sense_amplifier_J"],prefill_write_driver_J=pc["write_driver_J"],prefill_MIV_J=pc["miv_J"],
+            prefill_read_peripheral_J=pc["read_peripheral_J"],prefill_write_driver_J=pc["write_driver_J"],prefill_MIV_J=pc["miv_J"],
             prefill_FEOL_wire_J=pc["feol_wire_J"],prefill_interface_J=pc["interface_J"]))
         prefill_rows[name] = pref
         groups[name] = group_audit(engine)

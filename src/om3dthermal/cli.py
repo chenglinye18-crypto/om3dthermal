@@ -61,12 +61,21 @@ def main(argv: list[str] | None = None) -> int:
         "thermal-sensitivity", help="run the four-curve No-NMP geometry comparison")
     sensitivity_parser.add_argument("--output-dir", type=Path, required=True)
     sensitivity_parser.add_argument("--nominal-cache-dir", type=Path)
+    sensitivity_parser.add_argument("--read-peripheral-reclosure", action="store_true")
+    sensitivity_parser.add_argument("--resume", action="store_true")
+    sensitivity_parser.add_argument("--historical-dir", type=Path, default=Path("runs/no_nmp_geometry_sensitivity"))
+    sensitivity_parser.add_argument("--thin-cache", type=Path, default=Path("runs/placement_ablation_b1_b8_v1/thermal_setup.pkl"))
+    sensitivity_parser.add_argument("--thick-cache", type=Path, default=Path("runs/no_nmp_geometry_sensitivity/cache/m3d_300um_cu.pkl"))
     args = parser.parse_args(argv)
     if args.command == "thermal-sensitivity":
-        from .thermal_sensitivity import run_thermal_sensitivity
-        print(json.dumps(run_thermal_sensitivity(
-            args.output_dir, project_root=Path.cwd(),
-            nominal_cache_dir=args.nominal_cache_dir), indent=2))
+        from .thermal_sensitivity import run_thermal_sensitivity, run_read_peripheral_reclosure
+        if args.read_peripheral_reclosure:
+            result=run_read_peripheral_reclosure(args.output_dir,project_root=Path.cwd(),
+                historical_dir=args.historical_dir,thin_cache=args.thin_cache,thick_cache=args.thick_cache,resume=args.resume)
+        else:
+            result=run_thermal_sensitivity(args.output_dir, project_root=Path.cwd(),
+                                          nominal_cache_dir=args.nominal_cache_dir)
+        print(json.dumps(result,indent=2))
     elif args.command == "prefill":
         from .experiment import load_platform_spec, load_prefill_workload_spec
         from .platform import (

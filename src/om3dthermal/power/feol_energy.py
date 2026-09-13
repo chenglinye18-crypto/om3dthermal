@@ -156,8 +156,12 @@ class FEOLEnergyModel:
         c={}
         c["array_read_J"]=e["array_read_bits"]*self.read_pj*1e-12
         c["array_write_J"]=e["array_write_bits"]*self.write_pj*1e-12
-        for name,event in (("row_select","row_select_events"),("column_select","column_select_events"),
-          ("sense_amplifier","sa_sensed_bits"),("write_driver","write_driver_bits"),
+        # Preserve physical event counts; read selection is included in the
+        # combined payload-bit budget, while writes retain their service charges.
+        c["read_peripheral_J"]=e["array_read_bits"]*p["read_peripheral"]*1e-12
+        c["row_select_J"]=e["write_services"]*p["row_select"]*1e-12
+        c["column_select_J"]=e["write_services"]*p["column_select"]*1e-12
+        for name,event in (("write_driver","write_driver_bits"),
           ("router","router_bit_traversals"),("pipeline_register","pipeline_register_bit_stages"),
           ("sram_read","sram_read32_accesses"),("sram_write","sram_write32_accesses"),
           ("mac","mac_operations"),("reduction","fp32_reduction_adds"),("interface","interface_bits")):
@@ -194,7 +198,7 @@ class FEOLEnergyModel:
 
 def power_groups(c,seconds):
     groups=dict(GPU=("gpu_dynamic","gpu_static"),M3D_array=("array_read","array_write"),
-       SA_selector=("sense_amplifier","row_select","column_select","write_driver"),
+       SA_selector=("read_peripheral","row_select","column_select","write_driver"),
        MIV_wire=("miv","feol_wire"),interface=("interface",),MAC=("mac",),SRAM=("sram_read","sram_write"),
        NoC_reduction=("router","pipeline_register","reduction"),FEOL_unresolved=("feol_unresolved",))
     result={k+"_W":sum(c[x+"_J"] for x in names)/seconds for k,names in groups.items()}

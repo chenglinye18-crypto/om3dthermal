@@ -1,0 +1,838 @@
+{
+  "orthogonal_m3d_igzo": {
+    "effective": {
+      "array_read_pJ_per_bit": 0.1843,
+      "read_peripheral_pJ_per_bit": 0.04,
+      "miv_effective_pJ_per_bit": 0.002445862111816407,
+      "feol_route_effective_pJ_per_bit": 0.1670563133452415,
+      "interface_pJ_per_bit": 0.5,
+      "total_memory_side_pJ_per_bit": 0.8938021754570579
+    },
+    "events": {
+      "read_services": 178080,
+      "write_services": 0.0,
+      "array_read_bits": 45588480.0,
+      "array_write_bits": 0.0,
+      "sa_sensed_bits": 45588480,
+      "row_select_events": 178080,
+      "column_select_events": 178080,
+      "write_driver_bits": 0.0,
+      "sa_to_tile_bit_um": 0.0,
+      "sa_to_edge_bit_um": 118997553122.08238,
+      "root_to_tile_bit_um": 0.0,
+      "root_to_port_bit_um": 0.0,
+      "root_to_sa_bit_um": 0.0,
+      "noc_link_bit_um": 0.0,
+      "router_bit_traversals": 0.0,
+      "pipeline_register_bit_stages": 0.0,
+      "sram_read32_accesses": 0.0,
+      "sram_write32_accesses": 0.0,
+      "mac_operations": 0.0,
+      "fp32_reduction_adds": 0.0,
+      "interface_bits": 45588480.0,
+      "gpu_decode_proxy_bits": 45588480.0,
+      "activation_sram_bytes": 0.0,
+      "weight_bypass_sram_bytes": 0.0,
+      "kv_bypass_sram_bytes": 0.0,
+      "max_tile_activation_chunk_bytes": 0.0,
+      "max_tile_sram_utilization": 0.0,
+      "max_tile_sram_port_utilization": 0.0,
+      "miv_read_bits_by_layer": [
+        5698560,
+        5698560,
+        5698560,
+        5698560,
+        5698560,
+        5698560,
+        5698560,
+        5698560
+      ],
+      "miv_write_bits_by_layer": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "parameters": {
+      "parameters": {
+        "read_peripheral": {
+          "value": 0.04,
+          "unit": "pJ/payload bit",
+          "classification": "USER_FROZEN_MODELING_CHOICE",
+          "source": "No-NMP bandwidth thermal reclosure specification",
+          "accounting_boundary": "Combined FEOL read sensing and read row/column selection",
+          "included_components": "FEOL read sensing, read row/column selection",
+          "excluded_components": "array, MIV, data routes, interface, router, MAC, SRAM, write driver"
+        },
+        "row_select": {
+          "value": 32,
+          "unit": "pJ/group service",
+          "classification": "MODELING_CHOICE_CONSERVATIVE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "FEOL selection each write service only",
+          "included_components": "FEOL write row selection",
+          "excluded_components": "BEOL local WL/BL switching"
+        },
+        "column_select": {
+          "value": 32,
+          "unit": "pJ/group service",
+          "classification": "MODELING_CHOICE_CONSERVATIVE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "FEOL selection each write service only",
+          "included_components": "FEOL write column selection",
+          "excluded_components": "BEOL local WL/BL switching"
+        },
+        "write_driver": {
+          "value": 0.1,
+          "unit": "pJ/written bit",
+          "classification": "CONSERVATIVE_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "FEOL write-driver internal switching",
+          "included_components": "FEOL write-driver internal switching",
+          "excluded_components": "cell/local lines"
+        },
+        "mac": {
+          "value": 2,
+          "unit": "pJ/MAC",
+          "classification": "CONSERVATIVE_MODELING_CHOICE",
+          "source": "User-supplied Stratum anchor: simulated 0.604 pJ/MAC, 7nm ASAP7, 0.7V, 1GHz; nominal 2 pJ is not measured",
+          "accounting_boundary": "FP16 arithmetic, operand registers, FP32 accumulator, short tile fanout",
+          "included_components": "FP16 arithmetic, operand registers, FP32 accumulator, short tile fanout",
+          "excluded_components": "SRAM, fabric, memory, interface"
+        },
+        "sram_read": {
+          "value": 12,
+          "unit": "pJ/32-bit access",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+          "included_components": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+          "excluded_components": "M3D SA, accumulator; reference budget, not measured 1KiB macro"
+        },
+        "sram_write": {
+          "value": 12,
+          "unit": "pJ/32-bit access",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+          "included_components": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+          "excluded_components": "M3D SA, accumulator; reference budget, not measured 1KiB macro"
+        },
+        "reduction": {
+          "value": 1,
+          "unit": "pJ/FP32 add",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "explicit tile/region partial reduction",
+          "included_components": "explicit tile/region partial reduction",
+          "excluded_components": "MAC accumulator updates"
+        },
+        "router": {
+          "value": 0.2,
+          "unit": "pJ/bit traversal",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "one switching traversal per local transfer and directed NoC hop",
+          "included_components": "one switching traversal per local transfer and directed NoC hop",
+          "excluded_components": "wire capacitance, interface"
+        },
+        "pipeline_register": {
+          "value": 0.02,
+          "unit": "pJ/bit stage",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "max(wire_pipeline_cycles-1,0) per long NoC link",
+          "included_components": "max(wire_pipeline_cycles-1,0) per long NoC link",
+          "excluded_components": "short local links"
+        },
+        "interface": {
+          "value": 0.5,
+          "unit": "pJ/boundary bit",
+          "classification": "USER_FROZEN_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "contactless boundary once",
+          "included_components": "contactless boundary once",
+          "excluded_components": "FEOL edge route, GPU"
+        },
+        "feol_unresolved": {
+          "value": 0.1,
+          "unit": "W/slab",
+          "classification": "EXPLICIT_UNRESOLVED_POWER_BUDGET",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "clock, control, SRAM leakage, idle references during entire NMP Decode",
+          "included_components": "clock, control, SRAM leakage, idle references during entire NMP Decode",
+          "excluded_components": "NO_NMP, Prefill; resolved dynamic events"
+        },
+        "array_read": {
+          "value": 0.1843,
+          "unit": "pJ/payload bit",
+          "classification": "USER_FROZEN_OPERATION_TABLE_BOUNDARY",
+          "source": "case.memory.cell_model.operations; 50:50",
+          "accounting_boundary": "BEOL cell/local WL/BL",
+          "included_components": "BEOL cell/local WL/BL",
+          "excluded_components": "FEOL SA, selection, routes, interface"
+        },
+        "array_write": {
+          "value": 0.0003725,
+          "unit": "pJ/payload bit",
+          "classification": "USER_FROZEN_OPERATION_TABLE_BOUNDARY",
+          "source": "case.memory.cell_model.operations; equal transitions",
+          "accounting_boundary": "BEOL cell/local WL/BL",
+          "included_components": "BEOL cell/local WL/BL",
+          "excluded_components": "FEOL write driver, selectors"
+        },
+        "gpu_decode": {
+          "value": 11.68,
+          "unit": "pJ/boundary bit",
+          "classification": "EXISTING_FROZEN_DECODE_PROXY",
+          "source": "configs/platform/gpu_package_h200_reference.yaml",
+          "accounting_boundary": "Decode dynamic proxy",
+          "included_components": "Decode dynamic proxy",
+          "excluded_components": "Prefill FLOPs; no additional small-op energy"
+        },
+        "gpu_static": {
+          "value": 74.0,
+          "unit": "W",
+          "classification": "EXISTING_FROZEN_DECODE_PROXY",
+          "source": "configs/platform/gpu_package_h200_reference.yaml",
+          "accounting_boundary": "GPU static during phase wall time",
+          "included_components": "GPU static during phase wall time",
+          "excluded_components": "dynamic"
+        },
+        "gpu_prefill": {
+          "value": 5.442142496210207e-13,
+          "unit": "J/FLOP",
+          "classification": "SOFTWARE_DERIVED_FROM_EXISTING_H200_COMPUTE_ENERGY_RANGE",
+          "source": "configs/platform/gpu_package_h200_reference.yaml",
+          "accounting_boundary": "midpoint FLOP energy",
+          "included_components": "midpoint FLOP energy",
+          "excluded_components": "Decode bit proxy"
+        },
+        "miv": {
+          "value": [
+            0.0008742511303710941,
+            0.001323282839355469,
+            0.0017723145483398443,
+            0.002221346257324219,
+            0.0026703779663085946,
+            0.0031194096752929696,
+            0.003568441384277344,
+            0.00401747309326172
+          ],
+          "unit": "pJ/bit by actual layer",
+          "classification": "EXISTING_LAYER_DEPENDENT_ELECTRICAL_MODEL",
+          "source": "DreamRAM length-scaled MIV primitive",
+          "accounting_boundary": "row/column/data MIV electrical delivery",
+          "included_components": "row/column/data MIV electrical delivery",
+          "excluded_components": "FEOL selection logic, lateral routing"
+        },
+        "wire": {
+          "value": {
+            "C_fF_um": 0.2,
+            "V": 0.8,
+            "activity": 0.5
+          },
+          "unit": "alpha*C*L*V^2",
+          "classification": "EXISTING_PHYSICAL_WIRE_MODEL",
+          "source": "case.architecture.feol_route.wire",
+          "accounting_boundary": "actual physical bit-um",
+          "included_components": "actual physical bit-um",
+          "excluded_components": "router, interface"
+        }
+      },
+      "config": {
+        "schema_version": 1,
+        "status": [
+          "PERFORMANCE_FIXED",
+          "ENERGY_MODEL_V1_COMPLETE",
+          "THERMAL_RECLOSURE_PENDING"
+        ],
+        "pe_sram_bytes": 1024,
+        "sram_access_width_bits": 32,
+        "sram_accesses_per_cycle": 1,
+        "psum_policy": "NO_PSUM_SPILL",
+        "parameters": {
+          "read_peripheral": {
+            "value": 0.04,
+            "unit": "pJ/payload bit",
+            "classification": "USER_FROZEN_MODELING_CHOICE",
+            "source": "No-NMP bandwidth thermal reclosure specification",
+            "accounting_boundary": "Combined FEOL read sensing and read row/column selection",
+            "included_components": "FEOL read sensing, read row/column selection",
+            "excluded_components": "array, MIV, data routes, interface, router, MAC, SRAM, write driver"
+          },
+          "row_select": {
+            "value": 32,
+            "unit": "pJ/group service",
+            "classification": "MODELING_CHOICE_CONSERVATIVE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "FEOL selection each write service only",
+            "included_components": "FEOL write row selection",
+            "excluded_components": "BEOL local WL/BL switching"
+          },
+          "column_select": {
+            "value": 32,
+            "unit": "pJ/group service",
+            "classification": "MODELING_CHOICE_CONSERVATIVE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "FEOL selection each write service only",
+            "included_components": "FEOL write column selection",
+            "excluded_components": "BEOL local WL/BL switching"
+          },
+          "write_driver": {
+            "value": 0.1,
+            "unit": "pJ/written bit",
+            "classification": "CONSERVATIVE_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "FEOL write-driver internal switching",
+            "included_components": "FEOL write-driver internal switching",
+            "excluded_components": "cell/local lines"
+          },
+          "mac": {
+            "value": 2,
+            "unit": "pJ/MAC",
+            "classification": "CONSERVATIVE_MODELING_CHOICE",
+            "source": "User-supplied Stratum anchor: simulated 0.604 pJ/MAC, 7nm ASAP7, 0.7V, 1GHz; nominal 2 pJ is not measured",
+            "accounting_boundary": "FP16 arithmetic, operand registers, FP32 accumulator, short tile fanout",
+            "included_components": "FP16 arithmetic, operand registers, FP32 accumulator, short tile fanout",
+            "excluded_components": "SRAM, fabric, memory, interface"
+          },
+          "sram_read": {
+            "value": 12,
+            "unit": "pJ/32-bit access",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+            "included_components": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+            "excluded_components": "M3D SA, accumulator; reference budget, not measured 1KiB macro"
+          },
+          "sram_write": {
+            "value": 12,
+            "unit": "pJ/32-bit access",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+            "included_components": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+            "excluded_components": "M3D SA, accumulator; reference budget, not measured 1KiB macro"
+          },
+          "reduction": {
+            "value": 1,
+            "unit": "pJ/FP32 add",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "explicit tile/region partial reduction",
+            "included_components": "explicit tile/region partial reduction",
+            "excluded_components": "MAC accumulator updates"
+          },
+          "router": {
+            "value": 0.2,
+            "unit": "pJ/bit traversal",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "one switching traversal per local transfer and directed NoC hop",
+            "included_components": "one switching traversal per local transfer and directed NoC hop",
+            "excluded_components": "wire capacitance, interface"
+          },
+          "pipeline_register": {
+            "value": 0.02,
+            "unit": "pJ/bit stage",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "max(wire_pipeline_cycles-1,0) per long NoC link",
+            "included_components": "max(wire_pipeline_cycles-1,0) per long NoC link",
+            "excluded_components": "short local links"
+          },
+          "interface": {
+            "value": 0.5,
+            "unit": "pJ/boundary bit",
+            "classification": "USER_FROZEN_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "contactless boundary once",
+            "included_components": "contactless boundary once",
+            "excluded_components": "FEOL edge route, GPU"
+          },
+          "feol_unresolved": {
+            "value": 0.1,
+            "unit": "W/slab",
+            "classification": "EXPLICIT_UNRESOLVED_POWER_BUDGET",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "clock, control, SRAM leakage, idle references during entire NMP Decode",
+            "included_components": "clock, control, SRAM leakage, idle references during entire NMP Decode",
+            "excluded_components": "NO_NMP, Prefill; resolved dynamic events"
+          }
+        },
+        "array_source": "case.memory.cell_model.operations",
+        "gpu_source": "configs/platform/gpu_package_h200_reference.yaml",
+        "read_probabilities": [
+          0.5,
+          0.5
+        ],
+        "write_probabilities": [
+          0.25,
+          0.25,
+          0.25,
+          0.25
+        ],
+        "memory_static_W": 0,
+        "refresh_background_W": 0,
+        "NMP_ADVERSE_V1": {
+          "mac": 4,
+          "sram_read": 24,
+          "sram_write": 24,
+          "router": 0.4,
+          "pipeline_register": 0.04,
+          "reduction": 3,
+          "feol_unresolved": 0.3
+        },
+        "shared_peripheral_stress_not_run": {
+          "row_select": 64,
+          "column_select": 64
+        },
+        "assumptions": {
+          "miv": "Existing linear capacitance primitive resolved per actual layer; same electrical switching convention for read/write.",
+          "router": "One traversal per local SA/tile or root/tile transfer; one per directed NoC hop, including replicated branches. GPU direct delivery has no NMP router.",
+          "prefill_workspace": "Only ledger activation bytes lacking resident ownership use balanced free group/layer slots from existing PhysicalResidentPlacement; no extra traffic or timing.",
+          "thermal": "3.4 TB/s retained from old NO_NMP closure; new FEOL power requires future thermal reclosure."
+        }
+      },
+      "pe_count": 162816,
+      "total_sram_bytes": 166723584
+    },
+    "slabs": 318,
+    "capacity_GB": 1493.84331264,
+    "activity": "UNIFORM_READ_SERVICES_PER_PHYSICAL_SLAB_GROUP_LAYER",
+    "gpu_static_W": 74.0,
+    "gpu_dynamic_pJ_per_bit": 11.68,
+    "legacy_aggregate_model": {
+      "E_memory_internal_pj_bit": 0.18575840021626297,
+      "E_vertical_pj_bit": 0.002445862111816407,
+      "E_base_route_pj_bit": 0.0,
+      "E_interface_pj_bit": 0.5,
+      "E_access_total_pj_bit": 0.8552605756733209,
+      "E_feol_route_pj_bit": 0.16705631334524151
+    }
+  },
+  "orthogonal_m3d_300um_sensitivity": {
+    "effective": {
+      "array_read_pJ_per_bit": 0.1843,
+      "read_peripheral_pJ_per_bit": 0.04,
+      "miv_effective_pJ_per_bit": 0.002445862111816407,
+      "feol_route_effective_pJ_per_bit": 0.16705631334524143,
+      "interface_pJ_per_bit": 0.5,
+      "total_memory_side_pJ_per_bit": 0.8938021754570579
+    },
+    "events": {
+      "read_services": 59360,
+      "write_services": 0.0,
+      "array_read_bits": 15196160.0,
+      "array_write_bits": 0.0,
+      "sa_sensed_bits": 15196160,
+      "row_select_events": 59360,
+      "column_select_events": 59360,
+      "write_driver_bits": 0.0,
+      "sa_to_tile_bit_um": 0.0,
+      "sa_to_edge_bit_um": 39665851040.69412,
+      "root_to_tile_bit_um": 0.0,
+      "root_to_port_bit_um": 0.0,
+      "root_to_sa_bit_um": 0.0,
+      "noc_link_bit_um": 0.0,
+      "router_bit_traversals": 0.0,
+      "pipeline_register_bit_stages": 0.0,
+      "sram_read32_accesses": 0.0,
+      "sram_write32_accesses": 0.0,
+      "mac_operations": 0.0,
+      "fp32_reduction_adds": 0.0,
+      "interface_bits": 15196160.0,
+      "gpu_decode_proxy_bits": 15196160.0,
+      "activation_sram_bytes": 0.0,
+      "weight_bypass_sram_bytes": 0.0,
+      "kv_bypass_sram_bytes": 0.0,
+      "max_tile_activation_chunk_bytes": 0.0,
+      "max_tile_sram_utilization": 0.0,
+      "max_tile_sram_port_utilization": 0.0,
+      "miv_read_bits_by_layer": [
+        1899520,
+        1899520,
+        1899520,
+        1899520,
+        1899520,
+        1899520,
+        1899520,
+        1899520
+      ],
+      "miv_write_bits_by_layer": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "parameters": {
+      "parameters": {
+        "read_peripheral": {
+          "value": 0.04,
+          "unit": "pJ/payload bit",
+          "classification": "USER_FROZEN_MODELING_CHOICE",
+          "source": "No-NMP bandwidth thermal reclosure specification",
+          "accounting_boundary": "Combined FEOL read sensing and read row/column selection",
+          "included_components": "FEOL read sensing, read row/column selection",
+          "excluded_components": "array, MIV, data routes, interface, router, MAC, SRAM, write driver"
+        },
+        "row_select": {
+          "value": 32,
+          "unit": "pJ/group service",
+          "classification": "MODELING_CHOICE_CONSERVATIVE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "FEOL selection each write service only",
+          "included_components": "FEOL write row selection",
+          "excluded_components": "BEOL local WL/BL switching"
+        },
+        "column_select": {
+          "value": 32,
+          "unit": "pJ/group service",
+          "classification": "MODELING_CHOICE_CONSERVATIVE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "FEOL selection each write service only",
+          "included_components": "FEOL write column selection",
+          "excluded_components": "BEOL local WL/BL switching"
+        },
+        "write_driver": {
+          "value": 0.1,
+          "unit": "pJ/written bit",
+          "classification": "CONSERVATIVE_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "FEOL write-driver internal switching",
+          "included_components": "FEOL write-driver internal switching",
+          "excluded_components": "cell/local lines"
+        },
+        "mac": {
+          "value": 2,
+          "unit": "pJ/MAC",
+          "classification": "CONSERVATIVE_MODELING_CHOICE",
+          "source": "User-supplied Stratum anchor: simulated 0.604 pJ/MAC, 7nm ASAP7, 0.7V, 1GHz; nominal 2 pJ is not measured",
+          "accounting_boundary": "FP16 arithmetic, operand registers, FP32 accumulator, short tile fanout",
+          "included_components": "FP16 arithmetic, operand registers, FP32 accumulator, short tile fanout",
+          "excluded_components": "SRAM, fabric, memory, interface"
+        },
+        "sram_read": {
+          "value": 12,
+          "unit": "pJ/32-bit access",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+          "included_components": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+          "excluded_components": "M3D SA, accumulator; reference budget, not measured 1KiB macro"
+        },
+        "sram_write": {
+          "value": 12,
+          "unit": "pJ/32-bit access",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+          "included_components": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+          "excluded_components": "M3D SA, accumulator; reference budget, not measured 1KiB macro"
+        },
+        "reduction": {
+          "value": 1,
+          "unit": "pJ/FP32 add",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "explicit tile/region partial reduction",
+          "included_components": "explicit tile/region partial reduction",
+          "excluded_components": "MAC accumulator updates"
+        },
+        "router": {
+          "value": 0.2,
+          "unit": "pJ/bit traversal",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "one switching traversal per local transfer and directed NoC hop",
+          "included_components": "one switching traversal per local transfer and directed NoC hop",
+          "excluded_components": "wire capacitance, interface"
+        },
+        "pipeline_register": {
+          "value": 0.02,
+          "unit": "pJ/bit stage",
+          "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "max(wire_pipeline_cycles-1,0) per long NoC link",
+          "included_components": "max(wire_pipeline_cycles-1,0) per long NoC link",
+          "excluded_components": "short local links"
+        },
+        "interface": {
+          "value": 0.5,
+          "unit": "pJ/boundary bit",
+          "classification": "USER_FROZEN_MODELING_CHOICE",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "contactless boundary once",
+          "included_components": "contactless boundary once",
+          "excluded_components": "FEOL edge route, GPU"
+        },
+        "feol_unresolved": {
+          "value": 0.1,
+          "unit": "W/slab",
+          "classification": "EXPLICIT_UNRESOLVED_POWER_BUDGET",
+          "source": "User-frozen FEOL energy v1 specification",
+          "accounting_boundary": "clock, control, SRAM leakage, idle references during entire NMP Decode",
+          "included_components": "clock, control, SRAM leakage, idle references during entire NMP Decode",
+          "excluded_components": "NO_NMP, Prefill; resolved dynamic events"
+        },
+        "array_read": {
+          "value": 0.1843,
+          "unit": "pJ/payload bit",
+          "classification": "USER_FROZEN_OPERATION_TABLE_BOUNDARY",
+          "source": "case.memory.cell_model.operations; 50:50",
+          "accounting_boundary": "BEOL cell/local WL/BL",
+          "included_components": "BEOL cell/local WL/BL",
+          "excluded_components": "FEOL SA, selection, routes, interface"
+        },
+        "array_write": {
+          "value": 0.0003725,
+          "unit": "pJ/payload bit",
+          "classification": "USER_FROZEN_OPERATION_TABLE_BOUNDARY",
+          "source": "case.memory.cell_model.operations; equal transitions",
+          "accounting_boundary": "BEOL cell/local WL/BL",
+          "included_components": "BEOL cell/local WL/BL",
+          "excluded_components": "FEOL write driver, selectors"
+        },
+        "gpu_decode": {
+          "value": 11.68,
+          "unit": "pJ/boundary bit",
+          "classification": "EXISTING_FROZEN_DECODE_PROXY",
+          "source": "configs/platform/gpu_package_h200_reference.yaml",
+          "accounting_boundary": "Decode dynamic proxy",
+          "included_components": "Decode dynamic proxy",
+          "excluded_components": "Prefill FLOPs; no additional small-op energy"
+        },
+        "gpu_static": {
+          "value": 74.0,
+          "unit": "W",
+          "classification": "EXISTING_FROZEN_DECODE_PROXY",
+          "source": "configs/platform/gpu_package_h200_reference.yaml",
+          "accounting_boundary": "GPU static during phase wall time",
+          "included_components": "GPU static during phase wall time",
+          "excluded_components": "dynamic"
+        },
+        "gpu_prefill": {
+          "value": 5.442142496210207e-13,
+          "unit": "J/FLOP",
+          "classification": "SOFTWARE_DERIVED_FROM_EXISTING_H200_COMPUTE_ENERGY_RANGE",
+          "source": "configs/platform/gpu_package_h200_reference.yaml",
+          "accounting_boundary": "midpoint FLOP energy",
+          "included_components": "midpoint FLOP energy",
+          "excluded_components": "Decode bit proxy"
+        },
+        "miv": {
+          "value": [
+            0.0008742511303710941,
+            0.001323282839355469,
+            0.0017723145483398443,
+            0.002221346257324219,
+            0.0026703779663085946,
+            0.0031194096752929696,
+            0.003568441384277344,
+            0.00401747309326172
+          ],
+          "unit": "pJ/bit by actual layer",
+          "classification": "EXISTING_LAYER_DEPENDENT_ELECTRICAL_MODEL",
+          "source": "DreamRAM length-scaled MIV primitive",
+          "accounting_boundary": "row/column/data MIV electrical delivery",
+          "included_components": "row/column/data MIV electrical delivery",
+          "excluded_components": "FEOL selection logic, lateral routing"
+        },
+        "wire": {
+          "value": {
+            "C_fF_um": 0.2,
+            "V": 0.8,
+            "activity": 0.5
+          },
+          "unit": "alpha*C*L*V^2",
+          "classification": "EXISTING_PHYSICAL_WIRE_MODEL",
+          "source": "case.architecture.feol_route.wire",
+          "accounting_boundary": "actual physical bit-um",
+          "included_components": "actual physical bit-um",
+          "excluded_components": "router, interface"
+        }
+      },
+      "config": {
+        "schema_version": 1,
+        "status": [
+          "PERFORMANCE_FIXED",
+          "ENERGY_MODEL_V1_COMPLETE",
+          "THERMAL_RECLOSURE_PENDING"
+        ],
+        "pe_sram_bytes": 1024,
+        "sram_access_width_bits": 32,
+        "sram_accesses_per_cycle": 1,
+        "psum_policy": "NO_PSUM_SPILL",
+        "parameters": {
+          "read_peripheral": {
+            "value": 0.04,
+            "unit": "pJ/payload bit",
+            "classification": "USER_FROZEN_MODELING_CHOICE",
+            "source": "No-NMP bandwidth thermal reclosure specification",
+            "accounting_boundary": "Combined FEOL read sensing and read row/column selection",
+            "included_components": "FEOL read sensing, read row/column selection",
+            "excluded_components": "array, MIV, data routes, interface, router, MAC, SRAM, write driver"
+          },
+          "row_select": {
+            "value": 32,
+            "unit": "pJ/group service",
+            "classification": "MODELING_CHOICE_CONSERVATIVE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "FEOL selection each write service only",
+            "included_components": "FEOL write row selection",
+            "excluded_components": "BEOL local WL/BL switching"
+          },
+          "column_select": {
+            "value": 32,
+            "unit": "pJ/group service",
+            "classification": "MODELING_CHOICE_CONSERVATIVE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "FEOL selection each write service only",
+            "included_components": "FEOL write column selection",
+            "excluded_components": "BEOL local WL/BL switching"
+          },
+          "write_driver": {
+            "value": 0.1,
+            "unit": "pJ/written bit",
+            "classification": "CONSERVATIVE_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "FEOL write-driver internal switching",
+            "included_components": "FEOL write-driver internal switching",
+            "excluded_components": "cell/local lines"
+          },
+          "mac": {
+            "value": 2,
+            "unit": "pJ/MAC",
+            "classification": "CONSERVATIVE_MODELING_CHOICE",
+            "source": "User-supplied Stratum anchor: simulated 0.604 pJ/MAC, 7nm ASAP7, 0.7V, 1GHz; nominal 2 pJ is not measured",
+            "accounting_boundary": "FP16 arithmetic, operand registers, FP32 accumulator, short tile fanout",
+            "included_components": "FP16 arithmetic, operand registers, FP32 accumulator, short tile fanout",
+            "excluded_components": "SRAM, fabric, memory, interface"
+          },
+          "sram_read": {
+            "value": 12,
+            "unit": "pJ/32-bit access",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+            "included_components": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+            "excluded_components": "M3D SA, accumulator; reference budget, not measured 1KiB macro"
+          },
+          "sram_write": {
+            "value": 12,
+            "unit": "pJ/32-bit access",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+            "included_components": "PE-local SRAM macro including internal decoder, BL/WL, SA/write peripheral",
+            "excluded_components": "M3D SA, accumulator; reference budget, not measured 1KiB macro"
+          },
+          "reduction": {
+            "value": 1,
+            "unit": "pJ/FP32 add",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "explicit tile/region partial reduction",
+            "included_components": "explicit tile/region partial reduction",
+            "excluded_components": "MAC accumulator updates"
+          },
+          "router": {
+            "value": 0.2,
+            "unit": "pJ/bit traversal",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "one switching traversal per local transfer and directed NoC hop",
+            "included_components": "one switching traversal per local transfer and directed NoC hop",
+            "excluded_components": "wire capacitance, interface"
+          },
+          "pipeline_register": {
+            "value": 0.02,
+            "unit": "pJ/bit stage",
+            "classification": "REFERENCE_ANCHORED_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "max(wire_pipeline_cycles-1,0) per long NoC link",
+            "included_components": "max(wire_pipeline_cycles-1,0) per long NoC link",
+            "excluded_components": "short local links"
+          },
+          "interface": {
+            "value": 0.5,
+            "unit": "pJ/boundary bit",
+            "classification": "USER_FROZEN_MODELING_CHOICE",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "contactless boundary once",
+            "included_components": "contactless boundary once",
+            "excluded_components": "FEOL edge route, GPU"
+          },
+          "feol_unresolved": {
+            "value": 0.1,
+            "unit": "W/slab",
+            "classification": "EXPLICIT_UNRESOLVED_POWER_BUDGET",
+            "source": "User-frozen FEOL energy v1 specification",
+            "accounting_boundary": "clock, control, SRAM leakage, idle references during entire NMP Decode",
+            "included_components": "clock, control, SRAM leakage, idle references during entire NMP Decode",
+            "excluded_components": "NO_NMP, Prefill; resolved dynamic events"
+          }
+        },
+        "array_source": "case.memory.cell_model.operations",
+        "gpu_source": "configs/platform/gpu_package_h200_reference.yaml",
+        "read_probabilities": [
+          0.5,
+          0.5
+        ],
+        "write_probabilities": [
+          0.25,
+          0.25,
+          0.25,
+          0.25
+        ],
+        "memory_static_W": 0,
+        "refresh_background_W": 0,
+        "NMP_ADVERSE_V1": {
+          "mac": 4,
+          "sram_read": 24,
+          "sram_write": 24,
+          "router": 0.4,
+          "pipeline_register": 0.04,
+          "reduction": 3,
+          "feol_unresolved": 0.3
+        },
+        "shared_peripheral_stress_not_run": {
+          "row_select": 64,
+          "column_select": 64
+        },
+        "assumptions": {
+          "miv": "Existing linear capacitance primitive resolved per actual layer; same electrical switching convention for read/write.",
+          "router": "One traversal per local SA/tile or root/tile transfer; one per directed NoC hop, including replicated branches. GPU direct delivery has no NMP router.",
+          "prefill_workspace": "Only ledger activation bytes lacking resident ownership use balanced free group/layer slots from existing PhysicalResidentPlacement; no extra traffic or timing.",
+          "thermal": "3.4 TB/s retained from old NO_NMP closure; new FEOL power requires future thermal reclosure."
+        }
+      },
+      "pe_count": 54272,
+      "total_sram_bytes": 55574528
+    },
+    "slabs": 106,
+    "capacity_GB": 497.94777088,
+    "activity": "UNIFORM_READ_SERVICES_PER_PHYSICAL_SLAB_GROUP_LAYER",
+    "gpu_static_W": 74.0,
+    "gpu_dynamic_pJ_per_bit": 11.68,
+    "legacy_aggregate_model": {
+      "E_memory_internal_pj_bit": 0.18575840021626297,
+      "E_vertical_pj_bit": 0.002445862111816407,
+      "E_base_route_pj_bit": 0.0,
+      "E_interface_pj_bit": 0.5,
+      "E_access_total_pj_bit": 0.8552605756733209,
+      "E_feol_route_pj_bit": 0.16705631334524151
+    }
+  }
+}

@@ -118,7 +118,7 @@ def test_gpu_proxy_unresolved_components_and_adverse(engines,name,policy):
         assert c["feol_unresolved_J"]==pytest.approx(31.8*t)
         assert b["components"]["feol_unresolved_J"]==pytest.approx(95.4*t)
         assert b["total_J"]>a["total_J"]
-        for k in ("array_read_J","sense_amplifier_J","miv_J","feol_wire_J","interface_J","gpu_dynamic_J"):
+        for k in ("array_read_J","read_peripheral_J","miv_J","feol_wire_J","interface_J","gpu_dynamic_J"):
             assert c[k]==b["components"][k]
     assert a==m.account(events,t,phase="decode",policy=policy)
 

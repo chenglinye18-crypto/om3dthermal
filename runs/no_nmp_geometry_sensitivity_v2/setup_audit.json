@@ -1,0 +1,62 @@
+{
+  "orthogonal_m3d_igzo": {
+    "setup_source": "E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\placement_ablation_b1_b8_v1\\thermal_setup.pkl",
+    "setup_reused": true,
+    "setup_load_s": 38.63539430001401,
+    "physical_signature": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+    "historical_signature": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+    "validation": "EXACT_COMBINED_GEOMETRY_MESH_MATERIAL_CONDUCTANCE_BC_SCHEMA_MATCH",
+    "geometry_hash": "4e1f5aae6e4e532e4e6ddb88268cb660c875130ccc5ee0550ff0acf6dc8170ef",
+    "mesh_hash": "e601daf0f691471a6be12959c0af0b662a71978c49d7f1a026b454343a88e1ac",
+    "material_hash": "174c70a50c0921c3cfacc14820bbfc8eba79bcf7bbf3f25b5ec875b95aa1795a",
+    "boundary_hash": "08b4d51e4e30b1c3d63b904df4e9fbfb0ac78031c80139581b36a8139d516e81",
+    "thermal_conductance_hash": "fc95ad3bcdea69212403f68c8557af1a453f0fe045e259f49db7c04f3175a881",
+    "solver_options": {
+      "backend": "gpu_pcg",
+      "rtol": 0.001,
+      "max_delta_t_K": 0.01,
+      "max_iterations": 100000,
+      "check_interval": 10,
+      "initial_temperature_K": 293.15
+    },
+    "cell_count": 4153720,
+    "operator_hash": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+    "power_in_cache_signature": false,
+    "gpu_operator_builds_this_session": 1,
+    "gpu_operator_prepare_s": 2.072276100021554,
+    "resumed_completed_points": 20,
+    "prior_setup_load_s": 39.60514920001151,
+    "average_solve_time_s": 8.057339119443592,
+    "solves": 36
+  },
+  "orthogonal_m3d_300um_sensitivity": {
+    "setup_source": "E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\no_nmp_geometry_sensitivity\\cache\\m3d_300um_cu.pkl",
+    "setup_reused": true,
+    "setup_load_s": 16.591812600003323,
+    "physical_signature": "722cc98be278d7886503bf4b9502a2cbc4151a51e1622154a762dc85daa17eca",
+    "historical_signature": "722cc98be278d7886503bf4b9502a2cbc4151a51e1622154a762dc85daa17eca",
+    "validation": "EXACT_COMBINED_GEOMETRY_MESH_MATERIAL_CONDUCTANCE_BC_SCHEMA_MATCH",
+    "geometry_hash": "aa12243c4e7efce246c546fcd58de4ed96f5d0236d2fbe8b9a82394b7f724c13",
+    "mesh_hash": "e601daf0f691471a6be12959c0af0b662a71978c49d7f1a026b454343a88e1ac",
+    "material_hash": "174c70a50c0921c3cfacc14820bbfc8eba79bcf7bbf3f25b5ec875b95aa1795a",
+    "boundary_hash": "08b4d51e4e30b1c3d63b904df4e9fbfb0ac78031c80139581b36a8139d516e81",
+    "thermal_conductance_hash": "fc95ad3bcdea69212403f68c8557af1a453f0fe045e259f49db7c04f3175a881",
+    "solver_options": {
+      "backend": "gpu_pcg",
+      "rtol": 0.001,
+      "max_delta_t_K": 0.01,
+      "max_iterations": 100000,
+      "check_interval": 10,
+      "initial_temperature_K": 293.15
+    },
+    "cell_count": 1651896,
+    "operator_hash": "722cc98be278d7886503bf4b9502a2cbc4151a51e1622154a762dc85daa17eca",
+    "power_in_cache_signature": false,
+    "gpu_operator_builds_this_session": 1,
+    "gpu_operator_prepare_s": 0.3417556000058539,
+    "resumed_completed_points": 0,
+    "prior_setup_load_s": null,
+    "average_solve_time_s": 1.2023704277752485,
+    "solves": 36
+  }
+}

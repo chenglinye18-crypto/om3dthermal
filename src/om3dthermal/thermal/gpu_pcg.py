@@ -78,6 +78,7 @@ class GPUPCGOperator:
     max_neighbors: int = MAX_NEIGHBORS_PER_CELL
     matvec_count: int = 0
     operator_h2d_copy_count: int = 5
+    cpu_fixed_arrays: tuple = ()
 
     @classmethod
     def from_cpu(cls, operator: MatrixFreeThermalOperator, cp_module):
@@ -146,6 +147,9 @@ class GPUPCGOperator:
             rhs_W=cp_module.asarray(operator.rhs_W, dtype=cp_module.float64),
             out=cp_module.empty(n, dtype=cp_module.float64),
             max_neighbors=max_deg,
+            cpu_fixed_arrays=(operator.internal_cell_a, operator.internal_cell_b,
+                operator.internal_conductance_W_K, operator.boundary_cell,
+                operator.boundary_conductance_W_K, operator.diagonal_W_K),
         )
 
     def apply(self, vector, cp_module):
@@ -174,6 +178,7 @@ def solve_pcg_gpu(
     max_temperature_update_tolerance: float = 1e-2,
     max_iterations: int = 100_000,
     check_interval: int = 10,
+    gpu_operator: GPUPCGOperator | None = None,
 ) -> SteadyStateResult:
     """Solve ``A T = b`` with Jacobi-preconditioned GPU PCG.
 
@@ -199,7 +204,18 @@ def solve_pcg_gpu(
 
     cp = require_cupy()
     started = time.perf_counter()
-    gpu = GPUPCGOperator.from_cpu(operator, cp)
+    if gpu_operator is None:
+        gpu = GPUPCGOperator.from_cpu(operator, cp)
+    else:
+        gpu = gpu_operator
+        fixed = (operator.internal_cell_a, operator.internal_cell_b,
+                 operator.internal_conductance_W_K, operator.boundary_cell,
+                 operator.boundary_conductance_W_K, operator.diagonal_W_K)
+        if len(gpu.cpu_fixed_arrays) != len(fixed) or any(a is not b for a,b in zip(gpu.cpu_fixed_arrays,fixed)):
+            raise ValueError('GPU operator reuse requires identical immutable fixed CPU arrays')
+        gpu.rhs_W.set(operator.rhs_W)
+        gpu.matvec_count = 0
+        gpu.operator_h2d_copy_count = 0
     x = cp.asarray(host_initial, dtype=cp.float64)
     r = gpu.rhs_W - gpu.apply(x, cp)
     z = gpu.diagonal_inverse_K_W * r

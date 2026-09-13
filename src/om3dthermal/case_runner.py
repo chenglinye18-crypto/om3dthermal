@@ -159,6 +159,7 @@ def run_steady_pipeline(
     backend: str = "gpu_pcg",
     setup_cache_path: str | Path | None = None,
     reusable_setup: ThermalSetupArtifacts | None = None,
+    gpu_operator=None,
 ) -> PipelineResult:
     """Run the full steady-state pipeline and return all artifacts.
 
@@ -276,6 +277,7 @@ def run_steady_pipeline(
         max_temperature_update_tolerance=max_delta_t_K,
         max_iterations=max_iterations,
         check_interval=check_interval,
+        gpu_operator=gpu_operator,
     )
 
     # Power-by-source breakdown.

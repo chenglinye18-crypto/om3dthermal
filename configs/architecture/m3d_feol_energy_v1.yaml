@@ -8,29 +8,29 @@ sram_access_width_bits: 32
 sram_accesses_per_cycle: 1
 psum_policy: NO_PSUM_SPILL
 parameters:
-  sense_amplifier:
-    value: 0.2
-    unit: pJ/sensed bit
-    classification: CONSERVATIVE_MODELING_CHOICE
-    source: User-frozen FEOL energy v1 specification
-    accounting_boundary: FEOL read SA only
-    included_components: FEOL read SA only
-    excluded_components: array, selectors, SRAM SA; no write sensing
+  read_peripheral:
+    value: 0.04
+    unit: pJ/payload bit
+    classification: USER_FROZEN_MODELING_CHOICE
+    source: No-NMP bandwidth thermal reclosure specification
+    accounting_boundary: Combined FEOL read sensing and read row/column selection
+    included_components: FEOL read sensing, read row/column selection
+    excluded_components: array, MIV, data routes, interface, router, MAC, SRAM, write driver
   row_select:
     value: 32
     unit: pJ/group service
     classification: MODELING_CHOICE_CONSERVATIVE
     source: User-frozen FEOL energy v1 specification
-    accounting_boundary: FEOL selection each read/write service
-    included_components: FEOL selection each read/write service
+    accounting_boundary: FEOL selection each write service only
+    included_components: FEOL write row selection
     excluded_components: BEOL local WL/BL switching
   column_select:
     value: 32
     unit: pJ/group service
     classification: MODELING_CHOICE_CONSERVATIVE
     source: User-frozen FEOL energy v1 specification
-    accounting_boundary: FEOL selection each read/write service
-    included_components: FEOL selection each read/write service
+    accounting_boundary: FEOL selection each write service only
+    included_components: FEOL write column selection
     excluded_components: BEOL local WL/BL switching
   write_driver:
     value: 0.1
@@ -138,7 +138,6 @@ NMP_ADVERSE_V1:
   reduction: 3
   feol_unresolved: 0.3
 shared_peripheral_stress_not_run:
-  sense_amplifier: 0.5
   row_select: 64
   column_select: 64
 assumptions:

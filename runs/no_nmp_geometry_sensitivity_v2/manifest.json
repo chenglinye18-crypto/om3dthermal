@@ -1,0 +1,69 @@
+{
+  "source_HEAD": "513e1ec162bf61a18d81312b896cf9076cffa76f",
+  "status": "NO_NMP_ARCHITECTURE_LEVEL_READ_STRESS_RECLOSURE",
+  "bandwidth_semantics": "PRESCRIBED_STRESS_NOT_ACHIEVABLE_THROUGHPUT",
+  "thermal_mapping": "EXISTING_GPU_FEOL_AND_UNIFORM_M3D_BEOL",
+  "HBM_status": "REUSED_UNCHANGED_MODEL",
+  "HBM_source": "E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\no_nmp_geometry_sensitivity\\curves.csv",
+  "HBM_source_sha256": "d65f23ac65d7ef22677cb5f38efbfb7c0e6dd80a269583d5e9c717fac3654de0",
+  "HBM_Bthermal_TBps": {
+    "conventional_hbm_2x1": 3.2973872924850354,
+    "conventional_hbm_24hi_sensitivity": 2.1202113257193096
+  },
+  "NMP_thermal": "OUT_OF_SCOPE",
+  "performance_model": "UNCHANGED",
+  "solver": {
+    "backend": "gpu_pcg",
+    "rtol": 0.001,
+    "max_delta_t_K": 0.01,
+    "max_iterations": 100000,
+    "check_interval": 10,
+    "initial_temperature_K": 293.15
+  },
+  "energy_config_sha256": "7d4b518003d99e9b8eac43a4fc434b07f5b7043048c321ddebcdaf914f564bca",
+  "regression_audit": {
+    "distinct_tests_passed": 189,
+    "physical_event_functions_AST_unchanged": [
+      "empty_events",
+      "sum_events",
+      "memory_events",
+      "stage_events",
+      "slab_stage_events",
+      "sum_slab_events",
+      "prefill_events"
+    ],
+    "performance_placement_files_unchanged": [
+      "src/om3dthermal/serving/decode_policy.py",
+      "src/om3dthermal/placement/nmp_load_balance.py",
+      "src/om3dthermal/placement/critical_path.py",
+      "src/om3dthermal/power/nmp_die_activity.py",
+      "configs/architecture/m3d_feol_execution.yaml"
+    ],
+    "HBM_rows_reused_exactly": 50,
+    "M3D_solves_converged": 72,
+    "power_conservation": true,
+    "production_setup_builds": 0,
+    "cached_vs_fresh_temperature_array_equal": true
+  },
+  "source_worktree_sha256": {
+    "README.md": "1582cf1e4c794c0c7c302b1dad8092ede309c81464e4b88bd2c4980691b800af",
+    "configs/architecture/m3d_feol_energy_v1.yaml": "7d4b518003d99e9b8eac43a4fc434b07f5b7043048c321ddebcdaf914f564bca",
+    "scripts/compare_decode_policies.py": "72490e41326d71ccb643e225afce05186a4a04c4c358dd4db58c90229cb070de",
+    "src/om3dthermal/case_runner.py": "3fc857287ad6d838841319f6301b99d37f8df34a8af7db56a945a25766fdf570",
+    "src/om3dthermal/cli.py": "1eed9b222596473a3f4b1401e3ef717e18a286f3c1b3694755405e44f114e884",
+    "src/om3dthermal/power/feol_energy.py": "17c6660eac5661298e54833ab82c9231590ecf10f2cd986f6778b9e7eefe1cae",
+    "src/om3dthermal/thermal/gpu_pcg.py": "b6f3d184a274bff84377a687f7dbb917fa7444893ae6ce273db1c4a0df3233f6",
+    "src/om3dthermal/thermal_sensitivity.py": "e846ad5a0bc64ada5c4681ac4a704aaecec2a0e2434f3bd8570a6f4c07ce0729",
+    "tests/test_feol_energy.py": "4ca352fc7ee78fdd657ab73858e74148115d500f7fe4b78c0d693c56db185cf4"
+  },
+  "convergence_audit": {
+    "orthogonal_m3d_igzo": {
+      "max_relative_residual": 0.0007199976108449692,
+      "converged": true
+    },
+    "orthogonal_m3d_300um_sensitivity": {
+      "max_relative_residual": 0.0005722660895693777,
+      "converged": true
+    }
+  }
+}
