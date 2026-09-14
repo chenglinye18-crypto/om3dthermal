@@ -86,12 +86,20 @@ def test_m3d_interface_and_logic_sensitivities_are_separate_and_close():
             operating_points["bandwidth_service_operating_point"]))
 
     assert result.status == "PARAMETRIC_SENSITIVITY"
+    # Power must follow the supplied operating point, not the retired 2.4
+    # TB/s reference. Check P = E/bit * payload bit/s independently.
+    rate = operating_points["bandwidth_service_operating_point"].sustained_bandwidth_bytes_per_s
     assert [row.interface_power_at_actual_bandwidth_W
-            for row in result.interface_rows] == pytest.approx((4.8, 9.6, 19.2))
-    assert [row.read_total_energy_pj_per_bit
             for row in result.interface_rows] == pytest.approx(
-                (0.6052605756733209, 0.8552605756733209,
-                 1.355260575673321))
+                [rate*8*value*1e-12 for value in (0.25, 0.5, 1.0)])
+    # At the unchanged nominal 0.5-pJ/bit interface the sensitivity must
+    # reproduce the independently resolved canonical system exactly. The
+    # other probes change only that coefficient, never array/peripheral energy.
+    nominal = system.memory_access_energy_pJ_per_bit
+    assert case.architecture.interface.energy_pj_per_bit == 0.5
+    assert result.interface_rows[1].read_total_energy_pj_per_bit == pytest.approx(nominal)
+    assert [row.read_total_energy_pj_per_bit - nominal
+            for row in result.interface_rows] == pytest.approx((-0.25, 0, 0.5))
     logic = result.logic_background_rows
     assert [row.memory_total_power_W - logic[0].memory_total_power_W
             for row in logic] == pytest.approx((0, 5, 10, 20))

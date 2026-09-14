@@ -86,10 +86,23 @@ def test_cross_slab_move_is_rejected(pair):
     with pytest.raises(AssertionError):MigratedOperator.build(e,[0],[destination],[1])
 
 
-def test_cpa_scope_does_not_expand_to_b8():
-    w=llama31_models()['Llama-3.1-8B'].model_copy(update={'batch_size':8})
-    with pytest.raises(ValueError,match='B=1'):
-        DecodePolicyModel(w,project_root=ROOT,placement_policy='CRITICAL_PATH_AWARE')
+def test_cpa_b8_uses_request_local_moves_and_new_context_endpoints():
+    w=llama31_models()['Llama-3.1-8B'].model_copy(update={'batch_size':8,'n_layers':1,'context_length':2768})
+    baseline=DecodePolicyModel(w,project_root=ROOT,placement_policy='UNIFORM_STRIPING')
+    proposed=DecodePolicyModel(w,project_root=ROOT,placement_policy='CRITICAL_PATH_AWARE',decode_start_context=2512)
+    repeated=DecodePolicyModel(w,project_root=ROOT,placement_policy='CRITICAL_PATH_AWARE',decode_start_context=2512)
+    np.testing.assert_array_equal(proposed.placement.slot_used,repeated.placement.slot_used)
+    for key,entry in proposed.placement.request_operators.items():
+        other=repeated.placement.request_operators[key]
+        np.testing.assert_array_equal(entry.tile_ids,other.tile_ids)
+        np.testing.assert_array_equal(entry.layer_bytes(entry.atom_count),other.layer_bytes(other.atom_count))
+    attention=[a for a in proposed.placement.optimizer_audit if a['operator']=='ATTENTION_QK']
+    assert {a['request_id'] for a in attention}==set(range(8))
+    for context in (2512,2767):
+        before=baseline.step(context,'MAC_NMP');after=proposed.step(context,'MAC_NMP')
+        assert after['latency_s']<=before['latency_s']
+        assert after['nmp_flops']==before['nmp_flops']
+        assert repeated.step(context,'MAC_NMP')['latency_s']==after['latency_s']
 
 
 def test_large_operator_candidate_does_not_overflow_int32():

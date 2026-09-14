@@ -1,0 +1,2 @@
+# Reviewed result manifests contain byte-level artifact digests.
+/runs/formal_iom3d_workload_sweep_v1/* -text whitespace=cr-at-eol

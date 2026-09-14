@@ -61,17 +61,23 @@ def llama31_models():
 
 class DecodePolicyModel:
     """One operator schedule, one physical resident placement, three executors."""
-    def __init__(self, workload, *, project_root: Path, record_energy=False, placement_policy=PlacementPolicy.BALANCED, record_slabs=False):
+    def __init__(self, workload, *, project_root: Path, record_energy=False, placement_policy=PlacementPolicy.BALANCED, record_slabs=False, decode_start_context=126000, external_bandwidth_cap=None):
         self.record_energy = record_energy
         self.record_slabs = record_slabs
         self.workload = workload
         self.floorplan = resolve_feol_floorplan(project_root)
+        if external_bandwidth_cap is not None:
+            from copy import copy, deepcopy
+            self.floorplan = copy(self.floorplan)
+            self.floorplan.config = deepcopy(self.floorplan.config)
+            self.floorplan.config['m3d_external_bandwidth']['thermal_cap_bytes_per_s'] = external_bandwidth_cap
         self.platform = load_platform_spec_file(project_root/"configs/platform/gpu_package_h200_reference.yaml")
         self.placement = PhysicalResidentPlacement(workload, self.floorplan, placement_policy)
         self.physical = PhysicalStageModel(self.floorplan, self.platform, workload, record_events=record_energy, record_slabs=record_slabs)
         if self.placement.policy == PlacementPolicy.CRITICAL_PATH_AWARE:
             from om3dthermal.placement.critical_path import refine
-            self.placement.optimizer_audit = refine(self.placement, self.platform)
+            self.placement.optimizer_audit = refine(self.placement, self.platform, first_context=decode_start_context,
+                                                    last_context=workload.context_length-1)
         self.static = {}
         self.dynamic = {}
         self.context = None

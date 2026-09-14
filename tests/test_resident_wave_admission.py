@@ -94,7 +94,13 @@ def test_qwen_d14_single_wave_has_exact_optimistic_rate(registry):
     assert result.admission_impact_classification == "LOW_IMPACT"
 
 
-def test_existing_optimistic_resident_wave_is_unchanged(registry):
+def test_existing_optimistic_resident_wave_is_unchanged(registry, monkeypatch):
+    import om3dthermal.serving.resident_wave as wave
+    backend = wave.resolve_conventional_hbm_backend(ROOT)
+    # The saved optimistic-wave golden used the legacy 2.4-TB/s service.
+    # Isolate that fixture; do not change the canonical platform or golden.
+    legacy = backend.model_copy(update={'sustained_bandwidth_bytes_per_s':2.4e12})
+    monkeypatch.setattr(wave,'resolve_conventional_hbm_backend',lambda root:legacy)
     result = evaluate_conventional_hbm_resident_wave_decode(
         project_root=ROOT, model=registry["llama31_8b"],
         case=_case("llama31_8b", prefill=1, decode=27))

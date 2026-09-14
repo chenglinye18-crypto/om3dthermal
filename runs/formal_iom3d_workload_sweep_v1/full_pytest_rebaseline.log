@@ -1,0 +1,27 @@
+........................................................................ [  6%]
+........................................................................ [ 13%]
+........................................................................ [ 20%]
+........................................................................ [ 27%]
+........................................................................ [ 33%]
+........................................................................ [ 40%]
+........................................................................ [ 47%]
+........................................................................ [ 54%]
+........................................................................ [ 61%]
+........................................................................ [ 67%]
+........................................................................ [ 74%]
+........................................................................ [ 81%]
+........................................................................ [ 88%]
+........................................................................ [ 95%]
+....................................................                     [100%]
+============================ slowest 10 durations =============================
+162.70s call     tests/test_die_local_e2e.py::test_domain_capacity_latency_and_dmax_global_closure
+147.91s setup    tests/test_cached_prefix_diagnostic.py::test_cached_prefix_does_not_recompute_history
+76.34s call     tests/test_feol_energy.py::test_observer_leaves_all_policies_and_prefill_identical[Llama-3.1-405B]
+42.66s call     tests/test_critical_path_placement.py::test_optimizer_deterministic
+40.67s setup    tests/test_critical_path_placement.py::test_capacity_atomic_locality_and_pairing
+32.60s call     tests/test_feol_energy.py::test_observer_leaves_all_policies_and_prefill_identical[Llama-3.1-70B]
+32.44s call     tests/test_host_kv_overflow.py::test_resident_only_wave_limit_is_horizon_safe
+22.60s call     tests/test_critical_path_placement.py::test_uniform_exact_reference[Llama-3.1-405B]
+20.44s call     tests/test_placement_ablation.py::test_b8_deterministic_step_rerun[BALANCED]
+20.22s call     tests/test_placement_ablation.py::test_frozen_b1_balanced_first_last_steps[Llama-3.1-405B]
+1060 passed in 1084.47s (0:18:04)

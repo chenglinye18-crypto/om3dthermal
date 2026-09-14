@@ -269,3 +269,81 @@ manifest under `results/`; nonempty output directories are rejected.
 Evaluation scripts write JSON/CSV under their specified output directory.
 Thermal setup caches contain the fixed operator, never workload power.
 `runs/`, `results/`, local figures and raw data are not committed.
+
+### Formal multi-turn workload matrix
+
+The current formal architecture comparison is **B=1/8 only**:
+`HBM_GPU`, `M3D_GPU`, and adaptive `M3D_MAC_NMP`. Run
+`python scripts/rebaseline_primary_workloads.py` to audit the reviewed local
+checkpoints and regenerate `primary_*.csv`, the consistency/selection/placement
+audits, manifest, and report under `runs/formal_iom3d_workload_sweep_v1/`.
+This entry point requires the original checkpoints and
+`rebaseline_integrity.json`; it fails closed if an audited physical dependency
+or preserved artifact changes. It never executes physical Decode or B32.
+
+M3D GPU execution shares the HBM active-weight/KV ledger and GPU roofline. Its
+streaming service is `Bytes / min(thermal, internal, boundary, GPU)` using the
+existing hierarchical full MAT/MIV/FEOL service cycle. Access latency included
+in that cycle is not added again. This aggregate GPU memory abstraction does
+not impose the NMP whole-row mapping and per-operator nearest-port schedule.
+The latter remains unchanged for physical NMP. All 18 audited Prefills are
+compute bound and retain their original latency and physical event energy.
+
+The proposed system chooses the smaller modeled Decode latency before
+dispatch, with ties selecting GPU. Selector inference latency/energy are zero.
+It copies the selected candidate's performance, traffic and energy exactly.
+GPU selection has no CPA or NMP activity; NMP selection uses the unchanged CPA
+result. Uniform appears only in the NMP placement ablation. Latency selection
+guarantees modeled speedup >= 1 versus M3D_GPU, not an energy-efficiency gain.
+Corrected B8 decisions are eight NMP selections and one GPU selection (8B W1).
+
+The original B32 results, numeric values, normalized rows and stopped statuses
+are frozen: `B32_STATUS = FROZEN_NOT_PART_OF_THIS_REBASELINE`. Original CSVs and
+physical checkpoints stay byte-identical. The previous manifest/report are
+preserved in `legacy_archive/`; they are historical, not the primary results.
+Small reviewed primary tables and integrity metadata are versioned; expensive
+checkpoints and raw artifacts remain local. Regression gates are in
+`tests/test_primary_execution.py`.
+
+The following legacy producer documentation describes the original sweep;
+these commands are not the current rebaseline entry point.
+`python scripts/run_formal_iom3d_workloads.py --workers 2` evaluates the
+108 logical rows defined in `configs/experiment/formal_iom3d_workload_sweep_v1.yaml`.
+The three cached-history workloads use decimal K, 512 new Prefill tokens,
+and growing Decode contexts; only the current turn is timed. B=1/8 are
+primary and B=32 is capacity stress. Weights are shared, KV is request-local,
+and generated-token throughput uses B times the Decode step count.
+
+Capacity gates include workspace and physical IOM3D group/layer slots.
+HBM uses the canonical 85 C thermal bandwidth, with 480 GB Grace overflow
+through the existing 416.34 GB/s C2C path. Static divisible state extents
+maximize avoided timed host bytes, reserving future KV locations without
+migration. HBM write energy remains unresolved, so its absolute tokens/J
+is deliberately empty. IOM3D NO-NMP loads the full-precision updated thermal
+bandwidth; MAC-NMP retains its physical FEOL cap and event energy model.
+No workload thermal solve is performed.
+
+CPA keeps its existing bounded objective and candidates. For this matrix its
+endpoint checks use the actual workload contexts; request-local candidates
+are evaluated against the aggregate concurrent physical stage. Uniform and
+the original B=1 workload retain their previous semantics.
+
+Results and per-step restart checkpoints are under
+`runs/formal_iom3d_workload_sweep_v1/`. Keys include the source/configuration
+fingerprint and model/workload/batch/system; incompatible checkpoints are
+not reused. B32 physical cases run one fresh worker at a time to bound RAM.
+Optimizer time is excluded from inference. `--capacity-only` performs gates
+without execution; `--system` and `--batch` select diagnostic subsets.
+
+For expensive cases, `scripts/run_formal_parallel_case.py --model Llama-3.1-8B
+--workload W3 --batch 32 --system IOM3D_NO_NMP --workers 4` produces the same
+checkpoint using context workers sharing a read-only engine through mmap.
+Do not schedule the same case concurrently in two runners. The ordinary
+runner remains the single CSV writer and consumes these checkpoints on resume.
+Runtime source hashes are recorded separately in `runtime_audit/`; the shared
+physical-result key continues to identify the unchanged scientific model.
+Exact equivalence is checked by `tests/test_formal_parallel_runtime.py`.
+Every context still executes the full physical/event model. CPU parallelism
+does not represent parallel autoregressive generation: modeled Decode wall
+time remains the ordered sum of all G steps. Shared files reside under local
+AppData and are removed after workers exit, without touching thermal caches.

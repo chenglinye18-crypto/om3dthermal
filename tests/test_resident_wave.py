@@ -88,7 +88,13 @@ def test_host_traffic_and_swap_overhead_are_excluded(registry):
     assert result.thermal is None
 
 
-def test_primary_host_offload_uses_gh200_rebaseline(registry):
+def test_primary_host_offload_uses_gh200_rebaseline(registry, monkeypatch):
+    import om3dthermal.serving.mixed_phase_e2e as mixed
+    backend = mixed.resolve_conventional_hbm_backend(ROOT)
+    # Keep the historical numeric regression at its explicit 2.4-TB/s GPU
+    # service input. Canonical direct service is covered independently.
+    legacy = backend.model_copy(update={'sustained_bandwidth_bytes_per_s':2.4e12})
+    monkeypatch.setattr(mixed,'resolve_conventional_hbm_backend',lambda root:legacy)
     case = MixedPhaseServingCase(
         model_id="llama31_8b", context_length=131072,
         batch_size=28, prefill_requests=1, decode_requests=27)

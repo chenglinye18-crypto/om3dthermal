@@ -125,8 +125,13 @@ def test_capacity_and_nmp_gain_labels_are_separate(setup):
             ("CONVENTIONAL_HBM_GPU", "RESIDENT_ONLY_QUEUE_TO_FIT"),
             ("CONVENTIONAL_HBM_GPU", "HOST_KV_OFFLOAD"),
             ("ORTHOGONAL_M3D_IGZO_MEMORY_ONLY", "FULLY_LOCAL"),
-            ("IOM3D_FEOL_NMP", "FULLY_LOCAL"),
         ))]
+    # Test the legacy table-label helper with a synthetic candidate. The
+    # die-only NMP executor has been explicitly retired; do not revive it
+    # merely to exercise report formatting.
+    nmp_row = dict(rows[-1], system="IOM3D_FEOL_NMP",
+                   decode_tokens_per_s=2*rows[-1]["decode_tokens_per_s"])
+    rows.append(nmp_row)
     _add_speedups(rows)
     keys = set(rows[0])
     assert any(key.startswith("capacity_gain_vs_resident_only__") for key in keys)
@@ -136,4 +141,10 @@ def test_capacity_and_nmp_gain_labels_are_separate(setup):
     assert "capacity_gain_vs_host_offload__host_traffic_reduction_fraction" in keys
     assert not math.isnan(rows[0][
         "pure_nmp_gain_vs_m3d_only__decode_throughput_speedup"])
+    assert rows[0]["pure_nmp_gain_vs_m3d_only__decode_throughput_speedup"] == 2
     assert _ratio("", "") is None
+
+
+def test_retired_die_only_nmp_executor_is_rejected(setup):
+    with pytest.raises(ValueError, match="Die-only formal NMP model retired"):
+        _evaluate(setup, B=1, G=2, system="IOM3D_FEOL_NMP", policy="FULLY_LOCAL")

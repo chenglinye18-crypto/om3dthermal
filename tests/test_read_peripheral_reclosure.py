@@ -80,6 +80,19 @@ def test_crossing_requires_bracket():
     with pytest.raises(ValueError):crossing_85(rows[:2])
 
 
+def test_read_stress_resizing_is_independent_of_warmed_canonical_routes():
+    from om3dthermal.power.nmp_die_activity import external_service
+    f=resolve_feol_floorplan(ROOT)
+    case,_,memory,*_=prepare_case(ROOT,SENSITIVITY_ARCHITECTURES[3])
+    cold=no_nmp_read_energy(ROOT,case,memory)
+    external_service(f,np.full((318,70),32),mode='GROUP_DIRECT')
+    original_ids=f.group_port_ids.copy()
+    warm=no_nmp_read_energy(ROOT,case,memory)
+    assert warm==cold
+    assert f.layout.slab_count==318
+    np.testing.assert_array_equal(f.group_port_ids,original_ids)
+
+
 def test_cached_and_fresh_power_solve_equivalent(tmp_path):
     from om3dthermal.config import load_config
     from om3dthermal.config import CellSizeConfig

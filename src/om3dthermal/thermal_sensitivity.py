@@ -48,6 +48,10 @@ def no_nmp_read_energy(root, case, memory):
                           [g['center_um'] for g in f.clusters])
     assert np.array_equal(route.feol_io_channel_coordinates_um, f.ports)
     f.case, f.layout = case, memory.physical_capacity_layout
+    # A warmed canonical floorplan may contain slab-indexed routing caches.
+    # The sensitivity copy has a different slab count; rebuild only its maps.
+    f.__dict__.pop('group_ports', None)
+    f.__dict__.pop('group_port_ids', None)
     d = memory.diagnostics
     f.miv_pj_per_bit_by_layer = (np.array(d['miv_effective_capacitance_per_layer_pF'])
         * d['miv_access_energy_pJ_per_bit'] / d['miv_average_effective_capacitance_pF'])

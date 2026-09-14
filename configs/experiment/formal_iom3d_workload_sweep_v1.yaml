@@ -1,0 +1,14 @@
+schema_version: 1
+models: [Llama-3.1-8B, Llama-3.1-70B, Llama-3.1-405B]
+workloads:
+  W1: {history: 2000, prompt: 512, generated: 256}
+  W2: {history: 20000, prompt: 512, generated: 256}
+  W3: {history: 126000, prompt: 512, generated: 512}
+primary_batches: [1, 8]
+stress_batches: [32]
+systems: [HBM_GRACE_C2C, IOM3D_NO_NMP, IOM3D_MAC_NMP_UNIFORM, IOM3D_MAC_NMP_CPA]
+grace_capacity_bytes: 480000000000
+workspace_source: configs/experiment/gh200_host_offload_rebaseline.yaml
+thermal_limits_source: runs/no_nmp_geometry_sensitivity_v2/thermal_limits.csv
+hbm_thermal_source: runs/no_nmp_geometry_sensitivity_v2/manifest.json
+thermal_status: NO_WORKLOAD_THERMAL_CLOSURE

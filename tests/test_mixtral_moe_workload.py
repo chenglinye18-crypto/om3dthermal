@@ -195,7 +195,13 @@ def test_n1_n8_n16_m3d_capacity_closure(
     metrics = evaluate_moe_decode(resolved)
     assert physical_layout.total_capacity_gib == 1391.25  # rev v3
     assert physical_layout.slot_capacity_bytes == 2 * MIB
-    assert physical_layout.physical_slot_count == 237_440  # rev v2
+    # Canonical rev-v3 geometry was already frozen at 318 slabs. Keeping the
+    # rev-v2 106-slab slot count alongside 1391.25 GiB is contradictory.
+    expected_slots = 318 * 280 * 8
+    assert (physical_layout.slab_count, physical_layout.clusters_per_slab,
+            physical_layout.layers_per_cluster) == (318, 280, 8)
+    assert physical_layout.physical_slot_count == expected_slots
+    assert expected_slots * 2 * MIB == physical_layout.total_capacity_bytes
     assert result.expert_object_count == 256
     assert result.weight_logical_bytes == 93_405_585_408
     assert result.kv_logical_bytes == requests * 4 * GIB
@@ -204,7 +210,7 @@ def test_n1_n8_n16_m3d_capacity_closure(
     assert result.page_layout.page_count == expected_pages
     assert result.page_rounded_allocated_bytes / GIB == expected_allocated_gib
     assert result.occupancy_fraction == pytest.approx(
-        expected_pages / 237_440)  # rev v2
+        expected_pages / expected_slots)
     assert result.capacity_status == "M3D_ONLY_PAGE_ALLOCATED_CAPACITY_PASS"
     assert result.residency_semantics == "ALL_EXPERTS_STORED_TOP_K_EXPERTS_ACCESSED"
 
@@ -223,6 +229,11 @@ def test_oversize_page_rounded_workload_fails_without_spill(
 
 def test_dense_analytical_outputs_remain_exact() -> None:
     dense = load_workload_spec(DENSE, project_root=ROOT).decode
+    # Preserve the original analytical full-footprint regression explicitly.
+    # The canonical workload now selects dimension-derived active operators;
+    # its independent traffic regression lives in test_primary_execution.
+    assert dense.weight_activity_model == "dimension_derived_active_operators"
+    dense = dense.model_copy(update={"weight_activity_model": "full_footprint"})
     metrics = evaluate_llm_decode(dense)
     assert metrics.weight_footprint_bytes == 16_000_000_000
     assert metrics.weight_active_per_step_bytes == 16_000_000_000

@@ -152,8 +152,8 @@ def test_capacity_path_does_not_invoke_thermal(
 
     monkeypatch.setattr(
         architecture_comparison, "compile_canonical_thermal_case", forbidden)
-    monkeypatch.setattr(
-        architecture_comparison, "run_steady_pipeline", forbidden)
+    # The comparison module no longer re-exports the runner. Guard its
+    # actual owner below; a stale alias would fail before testing capacity.
     monkeypatch.setattr(case_runner, "run_steady_pipeline", forbidden)
     monkeypatch.setattr(gpu_pcg, "solve_pcg_gpu", forbidden)
 

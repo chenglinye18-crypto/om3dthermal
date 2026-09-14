@@ -1,0 +1,474 @@
+{
+  "status": "PASS",
+  "primary_operating_points": 18,
+  "architecture_rows": 54,
+  "NMP_physical_Decode_checkpoints_reused": 36,
+  "NMP_physical_Decode_steps_reused": 12288,
+  "Prefill_recomposed_cases": 0,
+  "Prefill_unchanged_operating_points": 18,
+  "GPU_only_recomputed_cases": 18,
+  "B8_NMP_selected": 8,
+  "B8_GPU_selected": 1,
+  "physical_source_config_unchanged": true,
+  "all_legacy_artifacts_byte_identical": true,
+  "reviewed_non_decode_source_changes": {
+    "src/om3dthermal/thermal_sensitivity.py": {
+      "original_sha256_LF": "e846ad5a0bc64ada5c4681ac4a704aaecec2a0e2434f3bd8570a6f4c07ce0729",
+      "reviewed_sha256_LF": "06d253b105a4f1668d9ee6d70bfaf6382aed94fc9fa14ff2359070c89adff503",
+      "scope": "THERMAL_READ_STRESS_DIAGNOSTIC_ONLY__NOT_CALLED_BY_NMP_DECODE_OR_CPA",
+      "reason": "A shallow copied resized floorplan inherited warmed slab-indexed routing maps; discard only the copy maps before rebuilding. Equations, energy events and all existing artifacts remain unchanged."
+    }
+  },
+  "CPA_saved_objective_checks": "PASS_NON_INCREASING",
+  "B32_STATUS": "FROZEN_NOT_PART_OF_THIS_REBASELINE",
+  "checkpoint_audits": [
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W1_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "1f48f00b80fda8b7e339e6b8a87459639af4b860ac6bb15598bba8be799d710f",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W1_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "27fd9c16d31ae64748313dee553998a0d2a746f4c772a6e74448d3e464037d2e",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W1_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "4b792ced717bfdf22b67a6d63723f2c41695d67dcf1f0e8eb2c68d92833fb053",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W1_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "f5c8f9bccc63105bc7ca30b1702c7d276de15c8fd40419b2d9467cc996339a4d",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W1_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "a411134003367594dd5ea00a273c3ba17ad6949c4afed73c8d4b98412af68255",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W1_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "e30f795a84db547c055a7c4141e158411fdad4d4c82a5ef0cfbc5f37c6fbf6bb",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W1_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "a595f08ad1692f5136579119054503d2567a23fcab2d167f2fdf8f7f5a8b4a73",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W1_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "e0ba86e6ed975e7bb74cc1b6d78390a7bb4edf1bbc6d61bc8f3149608d31ecdd",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W2_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "f1473580ecbfd4c548a5b121faf0db960523fe36f1bac3ccc9234d41591b4a07",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W2_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "82e9c47b2ad44c6814e44c95f7a8c18121552bc2a8cc0b8b5a4ad6efed07bf74",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W2_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "66325dfef9a9feedc8fde3d204eae1de565a3104b6bb714d6b684bd9a56399c3",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W2_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "fbf198e93ada4923d09e5afdcfb2660a14e122d603980c1722a0561f884faf0a",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W2_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "e966286b97cb500bcddd552bbbab3b7c96a3c8bd4daabb03933dfdac952b44ff",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W2_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "42587b5a0c00e24dc9aa641e43b01bab1d3b926fe116629ca6f27645905801b5",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W2_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "6ca669aad8738dbb1fbeddff2b6b3a256f80321f6e78c174bcb5d39f796e5ac3",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W2_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "5103b264c6ece55837488883a1207169a3cb4b1e0cbfd0c478f9ff674d9f3d1e",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W3_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "b32baee9d0a84d9b20e459a58431da6b8869dfb62e18306ac9d12294e017b296",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W3_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "11c8de5aa1326fdc0b9b1e6513a280808a6c2ad568e28ac1e335890ceefba477",
+      "steps": 512,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W3_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "f8fed5bc25b59b54e2e20c0a1d64373ba27cb8659eae01b35b41ea0e3031b9d7",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W3_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "375318a4e2cc130c901d5529c22a687fa9f13e02427eaec7bb2da5ed14006444",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W3_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "c65a89c4431f05dc05dd9defeaa718a8298cd63d5993341899dbd3b9182e8a5a",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W3_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "0000d28c6bdf70230e4592087f124c91317d69efed08e49206d8d8e67a37a2bd",
+      "steps": 512,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W3_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "2adef50f593a8e23356a0cdd67b63c2fa3297241baf3dcad7670f9d3fdcd252a",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-8B_W3_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "c51a9aa431a29b31f1a1bd6c4094090d10cf131de810a642f51a7af3e84453f2",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W1_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "2c82ce2a5fd3c476dafbd57246d15312acf4941c7c617e320287363ab7acae93",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W1_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "032734331d27aacd16b93b1c7c3852c3ca3edfeed101ab384fa907a1500d7d5b",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W1_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "027f12ee3ff55b72f5940a49a81f43897c15523e777adf3be02389559225b817",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W1_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "b4c333dd5c03bbbfdd598061cce44e53474f10b80e328192d2428075ae44452f",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W1_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "f30558079318484bca8c822d405d2a947a45d37ad128abfc947502f39392ffe8",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W1_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "0a1d964725e26cec0708c03f03ba455d271a81d52a1bfa8772ce3bd690a19d37",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W1_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "3be765b2d6cd297d07cda9f487806f585be9cc831062c13051d8a31f45d92e64",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W1_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "9895a7530c47736ea2331be28835fb018b77ba4a8afa48869e3687dcb9d72a89",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W2_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "68ffae6c733a050d33d3bed5b319641da27e827f7ae13ba477daa1649f4e14ec",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W2_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "0e5d69738f5c2b40c83090792625a55fb99452323b5c87d8e8caffc81562dcf8",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W2_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "7169631c09039c80ca95d3a391ed1ce32b329d5beab1c398add84a70c8722098",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W2_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "18e21ba733a311ededce56186093dfd9b8979b6f716b56c02705a33b419daa43",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W2_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "e280acf667833adb1745132b1fb8583a06d671de73712186a0e211bbfe936409",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W2_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "5f32b4e403fd848eee0aec644ae9d5da6ae0b909e20efe62e9279f55f37547ab",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W2_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "e6c0bf511a3ae92ea70370aa4ce44925fd8c946325e6180be77bcbc2d67764f3",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W2_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "083357fbad00a6182cd0cc4dd9c23753bfc2584f9ef46ad2d7b9c274ac6cef41",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W3_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "1614b8bb961d53d005784258f46ac36021da31cf84a3d7968a01b95aaefd5060",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W3_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "a1ab4b00a1ec9c5a8f3fcf7c6c72deb7d91c0a787cfe71fe6adf524bd4917b05",
+      "steps": 512,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W3_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "9a7bb2c4da82192ca3221be6be03566f516244fa5a2f08d6cda2127589c3c558",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W3_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "9911832095c48a0a29a7b55bf967934de9c1ca189dbd49573f68cbe58646476e",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W3_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "ec9aaad8a42c366765bebd2f1b96e3b6170cb4138fc3196d53736dba82c84052",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W3_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "73f6070ce8ab7547f157cc60ed49f8cbbc098917c5bd038f8d3bf946499e4b10",
+      "steps": 512,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W3_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "91df90536ad316b53f34171b62beaa93831ae0cd73187e7e8731243a7dec360b",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-70B_W3_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "719378c505ba2393aa59ed223da78135006f77795cf49b27d533cacf7ab4a4a9",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W1_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "47e6688b8330a35f19cd02e0f2dae97977d9257d6273528eec7d06cecc55bbc2",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W1_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "98db03635a20bd80048749955341e50118849d0024b986a998433b93c75ace24",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W1_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "d46d8977578494ecc05b72dc45af06468216d69d9815f53ff04ec0c193ee1822",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W1_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "1e1ab09b04375aa8f2cac707989060537026003a42b98e0df79b6805a53d5782",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W1_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "8391f7158960758c33ee96a6bd2a413558b1c37a1f7afd6e0be31f7c3d859c22",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W1_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "04d9bb4d90bf43d6c5935838b4040d916fe6ba6cb9e2c74f2396a97de5f6319f",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W1_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "5b2c44a9a8c2b597a757fc13b2266fb27e80820272765b3b1db8a07656605e7a",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W1_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "a942c7f43a3bbc36dac4f4dc6c986d3e9922e9b8bf7b35aef2584dc28bb2140b",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W2_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "bddfc75199ea9e577a038b97d1981d081fb8c913dfb4b3a200b2a2b49c18fb27",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W2_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "6913ae14c1fdcfe356436c6e9b46e135f8c2d24cb833b3bedcd90b3d28b3bb5c",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W2_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "b807e7d1e3d2cff13c67b3ebe1e76d456c03776d10d5334a56217ea338bb13ef",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W2_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "8fd44f26f5d28b7daf6f9705e9b8530b446c2bc2c9b78d1810c94fda8224808e",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W2_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "012250702f7e8d72f924879fce9a93ce6f97cd00a531c79b46a2a5758a14d1c1",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W2_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "c78090f15d9a6f697cd1011c758f5e5952da6f5dc9e31ea124938d2b3610795f",
+      "steps": 256,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W2_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "3eaf6b3db1215b4070315b3ad32fe3146a19e41411164d235c6969cf7d7d2ef9",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W2_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "adad36dae6e8ecf791e04a609e33b0d977569d576e172535f01e98dcc7417dc1",
+      "steps": 256,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W3_B1_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "99766c47c8622572adf765acb538d63e72d64232e237353fcaa7da48bd62a1c3",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W3_B1_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "02da986823f14f8ec922851b680e4a394dd966a7ada5ed6f1b4daa8cb41c93da",
+      "steps": 512,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W3_B1_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "ed8845b29ff8aa9314f71a081b1897ad61f949a5926edaddb0307d407f857cbf",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W3_B1_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "d6ec4aa13ddacd3e6f18df6f3e823ff0e92f30059a71d3f7ade9878f3916cd76",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W3_B8_HBM_GRACE_C2C_3370eb49f016a411.json",
+      "sha256": "c210e5af111b7a632ef4f941b00388d76344bbee9eb41793883199a8cc9349cb",
+      "steps": 0,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W3_B8_IOM3D_NO_NMP_3370eb49f016a411.json",
+      "sha256": "164a4e5534a152e205aebc387d7e07f56a560da8d637fc0c9ba21312b2e10773",
+      "steps": 512,
+      "verdict": "PASS_EVENTS__RECOMPUTE_GPU_TIMING"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W3_B8_IOM3D_MAC_NMP_UNIFORM_3370eb49f016a411.json",
+      "sha256": "5d2cd8687792a63e50467b800cfd5764d9c1601e545025f01be5df66cfcd9ce4",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    },
+    {
+      "checkpoint": "runs/formal_iom3d_workload_sweep_v1/checkpoints/Llama-3.1-405B_W3_B8_IOM3D_MAC_NMP_CPA_3370eb49f016a411.json",
+      "sha256": "8f6b7a42cd329f31652620727d77925daaa402b5d7b48c745f89c93eafb875a7",
+      "steps": 512,
+      "verdict": "PASS_REUSE"
+    }
+  ],
+  "tests": {
+    "status": "PASS",
+    "command": "python -u -m pytest -q --durations=10",
+    "passed": 1060,
+    "failed": 0,
+    "duration_s": 1084.47,
+    "python_executable": "C:\\Users\\Leslie\\Miniconda3\\envs\\om3dthermal\\python.exe",
+    "python_version": "3.11.15",
+    "environment": "Native Windows Conda om3dthermal",
+    "final_targeted_pass_counts": [
+      61,
+      60
+    ],
+    "log": "full_pytest_rebaseline.log",
+    "log_sha256": "4122889a189c492f5f24f465d02d2882177419e9d1e46f39565cf5d67eb9b51c"
+  }
+}

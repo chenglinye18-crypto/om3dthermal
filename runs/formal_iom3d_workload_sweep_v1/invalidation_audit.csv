@@ -1,0 +1,9 @@
+result_family,batch_scope,old_status,audit_verdict,reason,action,checkpoint_reused,recomputed
+M3D_GPU,B1/B8,EXISTING,INVALIDATED_TIMING,NMP row/port operator timing used in aggregate GPU memory benchmark,RECOMPUTE_GPU_TIMING_STATIC_ENERGY,True,18
+NMP_CPA Decode,B1/B8,EXISTING,UNCHANGED_VALID,Physical source/config and events unchanged,REUSE,True,0
+NMP_UNIFORM Decode,B1/B8,EXISTING,UNCHANGED_VALID,Physical source/config and events unchanged,REUSE,True,0
+NMP Prefill,B1/B8,EXISTING,UNCHANGED_VALID,All 18 operating points compute bound; exact Prefill timing and events retained,REUSE,True,0
+HBM_GPU,B1/B8,EXISTING,UNCHANGED_VALID,Unchanged conventional function and full dependency digest,REUSE,True,0
+M3D_MAC_NMP,B1/B8,NOT_PRESENT,NEW_ADAPTIVE_COMPOSITION,Minimum modeled Decode latency; selected energy unchanged,COMPOSE,True,18
+Thermal read-stress diagnostic,NOT_A_BENCHMARK_RUN,EXISTING,INDEPENDENT_CORRECTNESS_FIX,Resized floorplan copy inherited warmed slab-indexed route map; Decode never calls this helper,REBUILD_COPY_ROUTE_MAP_ONLY,False,0
+All systems,B32,FROZEN,FROZEN,Outside scope; original files and statuses byte preserved,NO_ACTION,False,0

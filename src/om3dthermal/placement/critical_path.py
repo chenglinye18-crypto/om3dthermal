@@ -111,7 +111,7 @@ def diagnostic(stage, floorplan):
                 fixed_topology_ideal_s=fixed+ideal_core)
 
 
-def proposal(entry, stage, f, tile_count):
+def proposal(entry, stage, f, tile_count, *, batch_size=1):
     """Critical-resource-guided list scheduling over legal region tile pools."""
     result = entry.tile_ids.copy()
     if stage["bottleneck"] == "EXTERNAL_BOUNDARY":
@@ -133,6 +133,7 @@ def proposal(entry, stage, f, tile_count):
             if not len(ids): continue
             dies = entry.die_ids[ids]
             work = counts[ids].astype(float)*(entry.unit.local_flops/entry.atom_count)
+            if entry.unit.shard_mode == 'ROW_PARALLEL': work *= batch_size
             costs = (loads[dies[:,None],pool]+work[:,None])/f.tile_flops + f.sa_tile_ns[g,pool]*1e-9
             target = pool[np.argmin(costs,axis=1)]
             result[ids] = target
@@ -140,23 +141,54 @@ def proposal(entry, stage, f, tile_count):
     return result
 
 
-def refine(placement, platform):
-    if placement.workload.batch_size != 1:
-        raise ValueError("CPA experiment scope is B=1")
+class AggregateCandidateModel:
+    """Evaluate one legal request-local move against concurrent stage demand."""
+    def __init__(self, placement, model):
+        self.placement, self.model = placement, model
+        self.cache = {}
+        self.scope = None
+
+    def evaluate(self, entry, atoms, **kwargs):
+        from om3dthermal.power.batched_physical import merge_request_stages
+        u = entry.unit
+        if u.request_id is None:
+            return self.model.evaluate(entry, atoms, **kwargs)
+        scope = (u.layer_id,u.operator_type)
+        if u.layer_id != self.scope:
+            self.cache.clear(); self.scope = u.layer_id
+        rows=[]
+        for request in range(self.placement.workload.batch_size):
+            peer = entry if request == u.request_id else self.placement.get(*scope,request)
+            options={**kwargs,'resources':True}
+            if peer is entry:
+                rows.append(self.model.evaluate(peer,atoms,**options))
+                continue
+            key=(id(peer),peer.tile_ids.tobytes(),atoms,tuple(sorted(options.items())))
+            if key not in self.cache:
+                self.cache[key]=(peer,self.model.evaluate(peer,atoms,**options))
+            rows.append(self.cache[key][1])
+        return merge_request_stages(self.placement.floorplan,rows)
+
+
+def refine(placement, platform, *, first_context=126000, last_context=126999):
     model = PhysicalStageModel(placement.floorplan,platform,placement.workload)
+    batched = placement.workload.batch_size > 1
+    if batched: model = AggregateCandidateModel(placement,model)
     audit = []
-    for (layer,op),entry in list(placement.operators.items()):
+    entries=list(placement.request_operators.values()) if batched else list(placement.operators.values())
+    for entry in entries:
+        layer,op,request=entry.unit.layer_id,entry.unit.operator_type,entry.unit.request_id
         if op not in OPERATORS: continue
-        entry = placement.operators[layer,op]
+        entry = placement.get(layer,op,request)
         started = perf_counter()
         # Optimize the final resident prefix, and reject endpoint regressions.
-        atoms = 126999*placement.workload.n_heads_kv if op.startswith("ATTENTION") else entry.atom_count
+        atoms = last_context*placement.workload.n_heads_kv if op.startswith("ATTENTION") else entry.atom_count
         before = model.evaluate(entry,atoms,nmp=True,resources=True)
         resident_moved = 0
         resident_evaluations = 0
         # A single bounded resident pass; AV ownership follows the QK move.
         if op != "ATTENTION_AV":
-            partner = placement.operators[layer,"ATTENTION_AV"] if op == "ATTENTION_QK" else None
+            partner = placement.get(layer,"ATTENTION_AV",request) if op == "ATTENTION_QK" else None
             partner_before = model.evaluate(partner,atoms,nmp=True) if partner is not None else None
             best_resident = None
             for rank in range(8):
@@ -177,7 +209,7 @@ def refine(placement, platform):
                     # Keep append completion and the first attention step safe.
                     valid = True
                     for old,new in ((entry,candidate),(partner,cp)):
-                        for context in (126000,126999):
+                        for context in (first_context,last_context):
                             n = context*placement.workload.n_heads_kv
                             for write in (False,True):
                                 kw = dict(nmp=not write,write=write,begin=n if write else 0)
@@ -190,10 +222,10 @@ def refine(placement, platform):
             if best_resident is not None:
                 trial,candidate,cp,delta = best_resident
                 placement.slot_used[entry.lanes] += delta//4
-                placement.operators[layer,op] = candidate
+                if request in (None,0): placement.operators[layer,op] = candidate
                 placement.request_operators[layer,op,entry.unit.request_id] = candidate
                 if cp is not None:
-                    placement.operators[layer,"ATTENTION_AV"] = cp
+                    if request in (None,0): placement.operators[layer,"ATTENTION_AV"] = cp
                     placement.request_operators[layer,"ATTENTION_AV",partner.unit.request_id] = cp
                 resident_moved = int(candidate.move_count.sum())
                 entry = candidate
@@ -206,7 +238,7 @@ def refine(placement, platform):
             best = None
             for size in range(1,9):
                 candidate = copy(entry)
-                candidate.tile_ids = proposal(entry,current,placement.floorplan,size)
+                candidate.tile_ids = proposal(entry,current,placement.floorplan,size,batch_size=placement.workload.batch_size)
                 if np.array_equal(candidate.tile_ids,entry.tile_ids): continue
                 trial = model.evaluate(candidate,atoms,nmp=True,resources=True)
                 evaluations += 1
@@ -216,7 +248,7 @@ def refine(placement, platform):
             if best is None: break
             trial,candidate = best
             if op.startswith("ATTENTION"):
-                first = 126000*placement.workload.n_heads_kv
+                first = first_context*placement.workload.n_heads_kv
                 evaluations += 2
                 if model.evaluate(candidate,first,nmp=True)["latency_s"] > model.evaluate(entry,first,nmp=True)["latency_s"]:
                     break
@@ -235,4 +267,5 @@ def refine(placement, platform):
                           before_components=before["components"],after_components=current["components"],
                           before_diagnostic=diagnostic(before,placement.floorplan),
                           after_diagnostic=diagnostic(current,placement.floorplan),accepted_history=history))
+        if batched: audit[-1]['request_id'] = request
     return audit

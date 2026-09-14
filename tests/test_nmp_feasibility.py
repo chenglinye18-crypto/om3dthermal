@@ -118,6 +118,16 @@ def n1(architecture):
     return _evaluate(architecture, 1)
 
 
+@pytest.fixture(scope="module")
+def legacy_rev2(architecture):
+    """Explicit 106-slab fixture for the unchanged rev-v2 numeric goldens."""
+    case,geometry,power,topology,feol,latency,_,_,base,profile,compute,matched = architecture
+    layout=calculate_physical_capacity_layout(topology,latency,slab_count=106,
+        expected_total_bits=power.diagnostics['total_stored_bits']//3)
+    bandwidth=derive_architecture_bandwidth(case.architecture.memory_service,layout,topology)
+    return case,geometry,power,topology,feol,latency,layout,bandwidth,base,profile,compute,min(matched,bandwidth.coil_bandwidth_bits_per_s)
+
+
 def test_tflops_unit_and_parameter_provenance(n1):
     *_, result = n1
     assert result.effective_nmp_tflops == 32.0
@@ -154,7 +164,11 @@ def test_arithmetic_intensity_and_balance_closure(n1):
 
 def test_roofline_max_and_bottleneck_classification(architecture):
     *_, low = _evaluate(architecture, 1, tflops=8.0)
-    *_, high = _evaluate(architecture, 1, tflops=32.0)
+    # A fixed 32-TFLOP/s probe no longer crosses the memory roofline after
+    # the frozen 318-slab revision. Choose a synthetic probe above every
+    # placement's balance point; leave the production/default 32 unchanged.
+    high_tflops = 2*max(p.expert_balance_tflops for p in (low.p0, low.p1, low.p2))
+    *_, high = _evaluate(architecture, 1, tflops=high_tflops)
     for point in (low.p0, low.p1, low.p2):
         assert point.nmp_expert_bottleneck == "COMPUTE"
         assert point.expert_nmp_time_ms == point.expert_compute_time_ms
@@ -217,7 +231,8 @@ def test_shared_and_kv_traffic_are_not_removed(n1):
             + point.expert_nmp_time_ms)
 
 
-def test_gpu_only_baseline_is_reused_unchanged(n1):
+def test_gpu_only_baseline_is_reused_unchanged(legacy_rev2):
+    n1 = _evaluate(legacy_rev2, 1)
     _, _, gpu_only, result = n1
     pairs = (
         (gpu_only.random_timing, result.gpu_only_p0),
@@ -253,7 +268,8 @@ def test_p0_p1_p2_internal_bandwidth_is_propagated(n1):
     ) < result.p2.internal_bandwidth_bytes_per_s
 
 
-def test_batch_sweep_regimes_and_determinism(architecture):
+def test_batch_sweep_regimes_and_determinism(legacy_rev2):
+    architecture = legacy_rev2
     summaries = []
     # Rev v2 re-frozen: higher aggregate internal bandwidth moves the
     # memory-saturation boundary up (batch 1: 16->32 TFLOPS; batch 8:

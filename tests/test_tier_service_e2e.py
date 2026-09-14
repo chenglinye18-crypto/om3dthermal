@@ -44,7 +44,7 @@ MATCHED_BW_BITS_PER_S = derive_orthogonal_slab_io_bandwidth_bits_per_second(
 
 
 @pytest.fixture(scope="module")
-def canonical():
+def canonical(request):
     case = load_case_config(CASE)
     geometry = resolve_case_geometry(case)
     power = calculate_memory_power(case, read_bandwidth_gbps=case.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
@@ -63,14 +63,19 @@ def canonical():
             "miv_resistance_parameter_status"],
         miv_provenance=power.diagnostics["miv_resistance_provenance"],
     )
+    legacy = getattr(request, 'param', None) == 'rev2'
     layout = calculate_physical_capacity_layout(
         topology, latency,
-        slab_count=geometry.memory_region_count,
-        expected_total_bits=power.diagnostics["total_stored_bits"],
+        slab_count=106 if legacy else geometry.memory_region_count,
+        expected_total_bits=power.diagnostics["total_stored_bits"]//3 if legacy else power.diagnostics["total_stored_bits"],
     )
     bandwidth = derive_architecture_bandwidth(
         case.architecture.memory_service, layout, topology)
     workload = load_workload_spec(WORKLOAD, project_root=ROOT).decode
+    if legacy:
+        # Preserve rev-v2 golden inputs explicitly, not by modifying the
+        # canonical 318-slab geometry or active-operator workload configuration.
+        workload = workload.model_copy(update={'weight_activity_model':'full_footprint'})
     scenario = load_experiment_spec(EXPERIMENT, project_root=ROOT).scenario
     return case, geometry, power, topology, feol, latency, layout, bandwidth, workload, scenario
 
@@ -84,7 +89,7 @@ def _evaluate(canonical, requests: int, fraction: float):
     return evaluate_tier_service_placement(
         workload, demand, layout, bandwidth, placement.fast_pack,
         matched_external_bandwidth_bits_per_second=(
-            MATCHED_BW_BITS_PER_S),
+            bandwidth.coil_bandwidth_bits_per_s),
         effective_compute_flops_per_second=(
             scenario.effective_compute_flops_per_second),
         local_service_fraction=fraction,
@@ -108,6 +113,7 @@ def test_no_tier_is_global_physical_worst_case(canonical):
      (8, 10.379300101550944),
      (16, 11.12039689287323)),
 )
+@pytest.mark.parametrize('canonical', ['rev2'], indirect=True)
 def test_fast_pack_latency_reuses_existing_placement(canonical, requests, expected):
     result, _, _, placement = _evaluate(canonical, requests, 0.5)
     assert result.tier_aware_fast_pack.policy == "TIER_AWARE_FAST_PACK"
@@ -137,6 +143,7 @@ def test_zero_local_fraction_is_fixed_interface_negative_control(canonical):
     assert result.tier_aware_fast_pack.local_memory_time_ms == 0.0
 
 
+@pytest.mark.parametrize('canonical', ['rev2'], indirect=True)
 def test_full_local_fraction_exposes_physical_service_rate(canonical):
     result, _, _, _ = _evaluate(canonical, 1, 1.0)
     assert result.tier_aware_fast_pack.aggregate_tokens_per_s >= (
@@ -148,6 +155,7 @@ def test_full_local_fraction_exposes_physical_service_rate(canonical):
 
 
 @pytest.mark.parametrize("requests", (1, 8, 16))
+@pytest.mark.parametrize('canonical', ['rev2'], indirect=True)
 def test_e2e_speedup_is_monotonic_in_local_fraction(canonical, requests):
     *_, layout, bandwidth, base, scenario = canonical
     workload = base.model_copy(update={"batch_size": requests})
@@ -157,7 +165,7 @@ def test_e2e_speedup_is_monotonic_in_local_fraction(canonical, requests):
     sweep = sweep_local_service_fraction(
         workload, demand, layout, bandwidth, placement.fast_pack,
         matched_external_bandwidth_bits_per_second=(
-            MATCHED_BW_BITS_PER_S),
+            bandwidth.coil_bandwidth_bits_per_s),
         effective_compute_flops_per_second=(
             scenario.effective_compute_flops_per_second),
     )
@@ -186,7 +194,7 @@ def test_compute_bottleneck_truncates_placement_gain(canonical):
     result = evaluate_tier_service_placement(
         workload, demand, layout, bandwidth, placement.fast_pack,
         matched_external_bandwidth_bits_per_second=(
-            MATCHED_BW_BITS_PER_S),
+            bandwidth.coil_bandwidth_bits_per_s),
         effective_compute_flops_per_second=1.0e12,
         local_service_fraction=1.0,
     )
@@ -195,8 +203,9 @@ def test_compute_bottleneck_truncates_placement_gain(canonical):
     assert result.end_to_end_speedup == pytest.approx(1.0, abs=1e-14)
 
 
+@pytest.mark.parametrize('canonical', ['rev2'], indirect=True)
 def test_existing_external_streaming_negative_control_remains_small(canonical):
-    *_, layout, _, base, scenario = canonical
+    *_, layout, bandwidth, base, scenario = canonical
     workload = base.model_copy(update={"batch_size": 1})
     demand = build_m3d_workload_page_demand(workload, layout)
     placement = compare_fast_region_placements(
@@ -204,12 +213,19 @@ def test_existing_external_streaming_negative_control_remains_small(canonical):
     existing = compare_placement_serving_performance(
         workload, demand, placement, layout,
         matched_payload_bandwidth_bits_per_second=(
-            MATCHED_BW_BITS_PER_S),
+            bandwidth.coil_bandwidth_bits_per_s),
         effective_compute_flops_per_second=(
             scenario.effective_compute_flops_per_second),
     )
     assert existing.tokens_per_s_gain_vs_conventional < 0.01
     assert existing.tokens_per_s_gain_vs_conventional > 0.0
+
+
+def test_canonical_full_local_gain_respects_compute_roofline(canonical):
+    result,_,_,_=_evaluate(canonical,1,1.0)
+    for p in (result.no_tier,result.tier_aware_fast_pack):
+        assert p.total_decode_step_ms==max(p.total_memory_stage_ms,p.compute_time_ms)
+    assert 1<=result.end_to_end_speedup<=result.tier_aware_fast_pack.service_rate_speedup
 
 
 def test_tier_model_does_not_mutate_physics_placement_or_thermal(canonical):

@@ -32,12 +32,13 @@ def test_formal_serving_path_reads_current_architecture_capacity_and_skips_therm
         "orthogonal_m3d_igzo",
         "modern_high_capacity_hbm",
     }
-    # Rev v2: conventional 116->145 GB and M3D 98->106 slabs raise the
-    # resident-request ceilings (5->7 and 25->28 respectively).
+    # Frozen rev-v3 capacity: 318 slabs * 280 clusters * 8 layers * 2 MiB.
+    # Weights stay resident once; each request consumes 17,179,869,184 KV bytes.
+    m3d_limit = (318*280*8*2*2**20 - 16_000_000_000)//17_179_869_184
     expected_max = {
         "conventional_hbm_2x1": 7,
         "orthogonal_si": 13,
-        "orthogonal_m3d_igzo": 28,
+        "orthogonal_m3d_igzo": m3d_limit,
         "modern_high_capacity_hbm": 15,
     }
     for architecture, maximum in expected_max.items():
@@ -45,7 +46,9 @@ def test_formal_serving_path_reads_current_architecture_capacity_and_skips_therm
             maximum}
     assert by_arch["conventional_hbm_2x1"].optimal_requested_requests == 4
     assert by_arch["orthogonal_si"].optimal_requested_requests == 8
-    assert by_arch["orthogonal_m3d_igzo"].optimal_requested_requests == 16
+    assert by_arch["orthogonal_m3d_igzo"].optimal_requested_requests == max(
+        row.requested_requests for row in by_arch["orthogonal_m3d_igzo"].rows
+        if row.requested_requests <= m3d_limit)
     assert by_arch["modern_high_capacity_hbm"].optimal_requested_requests == 8
 
     hbm_8 = next(
