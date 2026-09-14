@@ -1,0 +1,12 @@
+{
+  "start_epoch": 1789395814.2295566,
+  "additional_case_processes": 2,
+  "maximum_outer_processes": 6,
+  "inner_workers": 1,
+  "cases": [
+    "Llama-3.1-405B/LC20K/B8/CPA",
+    "Llama-3.1-405B/LC126K/B8/CPA"
+  ],
+  "reason": "Longest CPA planning first; atomic case locks prevent duplicate execution",
+  "available_RAM_GB_at_start": 12.43
+}

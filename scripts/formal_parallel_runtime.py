@@ -65,7 +65,7 @@ class ParallelDecodeModel(DecodePolicyModel):
             # Warm shared linear stages once. No context is approximated.
             first=super().step(context,policy)
             self.dynamic.clear();self.context=None
-            parent=Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'om3dthermal'/'formal_shared'
+            parent=Path(os.environ['OM3DTHERMAL_SHARED_ROOT']) if 'OM3DTHERMAL_SHARED_ROOT' in os.environ else Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'om3dthermal'/'formal_shared'
             parent.mkdir(parents=True,exist_ok=True)
             self._directory=Path(tempfile.mkdtemp(prefix='engine_',dir=parent))
             frozen=copy(self);frozen.__class__=DecodePolicyModel
@@ -93,7 +93,7 @@ class ParallelDecodeModel(DecodePolicyModel):
             del self._pool
         if hasattr(self,'_directory') and self._directory.exists():
             target=self._directory.resolve()
-            expected=Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir())).resolve()/'om3dthermal'/'formal_shared'
+            expected=Path(os.environ['OM3DTHERMAL_SHARED_ROOT']) if 'OM3DTHERMAL_SHARED_ROOT' in os.environ else Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir())).resolve()/'om3dthermal'/'formal_shared'
             assert target.parent==expected.resolve() and target.name.startswith('engine_')
             shutil.rmtree(target)
         self.active.discard(self)

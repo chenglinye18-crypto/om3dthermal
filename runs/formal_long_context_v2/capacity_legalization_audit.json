@@ -1,0 +1,93 @@
+[
+  {
+    "model": "Llama-3.1-405B",
+    "context": "LC64K",
+    "batch": 8,
+    "fingerprint": "6e6808c77dd8daa5ddcd01c21d5ed32feb76c03796e330f396abe65396926070",
+    "max_slot_bytes": 1546504,
+    "slot_capacity_bytes": 2097152,
+    "legalization": {
+      "fallback_triggered": true,
+      "failing_operator": "layer.90.FFN_DOWN",
+      "lanes_moved": 49878391,
+      "bytes_moved_between_layers": 942037182656,
+      "die_changes": 0,
+      "group_changes": 0,
+      "layer_changes": 49878391,
+      "route_objective_used": false,
+      "latency_objective_used": false,
+      "CPA_objective_used": false
+    },
+    "physical_capacity": {
+      "max_slot_bytes": 1546504,
+      "slot_capacity_bytes": 2097152,
+      "slot_capacity_violations": 0,
+      "max_group_bytes": 48847200,
+      "group_capacity_bytes": 67108864,
+      "max_die_bytes": 3385767904,
+      "die_capacity_bytes": 4697620480,
+      "resident_bytes": 1076608532480,
+      "total_capacity_bytes": 1493843312640
+    }
+  },
+  {
+    "model": "Llama-3.1-8B",
+    "context": "LC64K",
+    "batch": 8,
+    "fingerprint": "7a5caedb59e8f23fa216df467c8bb0f973e630d78dcf4a2725a67b05862cc1d9",
+    "max_slot_bytes": 129216,
+    "slot_capacity_bytes": 2097152,
+    "legalization": {
+      "fallback_triggered": false,
+      "failing_operator": "",
+      "lanes_moved": 0,
+      "bytes_moved_between_layers": 0,
+      "die_changes": 0,
+      "group_changes": 0,
+      "layer_changes": 0,
+      "route_objective_used": false,
+      "latency_objective_used": false,
+      "CPA_objective_used": false
+    }
+  },
+  {
+    "model": "Llama-3.1-70B",
+    "context": "LC126K",
+    "batch": 8,
+    "fingerprint": "f57f515a0f71878b09072d91555f7b844828f08b1b145fec229496ffb32f2277",
+    "max_slot_bytes": 722440,
+    "slot_capacity_bytes": 2097152,
+    "legalization": {
+      "fallback_triggered": false,
+      "failing_operator": "",
+      "lanes_moved": 0,
+      "bytes_moved_between_layers": 0,
+      "die_changes": 0,
+      "group_changes": 0,
+      "layer_changes": 0,
+      "route_objective_used": false,
+      "latency_objective_used": false,
+      "CPA_objective_used": false
+    }
+  },
+  {
+    "model": "Llama-3.1-405B",
+    "context": "LC126K",
+    "batch": 8,
+    "fingerprint": "f143ee61d21064c45d98a392dcefdddb91d92451839602c93d16587d7a9e2597",
+    "max_slot_bytes": 2012304,
+    "slot_capacity_bytes": 2097152,
+    "legalization": {
+      "fallback_triggered": false,
+      "failing_operator": "",
+      "lanes_moved": 0,
+      "bytes_moved_between_layers": 0,
+      "die_changes": 0,
+      "group_changes": 0,
+      "layer_changes": 0,
+      "route_objective_used": false,
+      "latency_objective_used": false,
+      "CPA_objective_used": false
+    }
+  }
+]

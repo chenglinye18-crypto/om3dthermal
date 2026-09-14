@@ -82,6 +82,16 @@ class PhysicalResidentPlacement:
     physical clusters. Arrays describe counts, never materialized tensors.
     """
     def __init__(self, workload, floorplan, policy=PlacementPolicy.BALANCED):
+        try:
+            self._initialize(workload, floorplan, policy)
+        except ValueError as exc:
+            if not str(exc).startswith('physical slot capacity exceeded:') or PlacementPolicy(policy) not in (PlacementPolicy.UNIFORM_STRIPING, PlacementPolicy.CRITICAL_PATH_AWARE):
+                raise
+            failed = str(exc).split(': ',1)[1]
+            self._initialize(workload, floorplan, policy, legalize=True)
+            self.capacity_legalization['failing_operator'] = failed
+
+    def _initialize(self, workload, floorplan, policy, *, legalize=False):
         self.policy = PlacementPolicy(policy)
         if (workload.weight_bits, workload.kv_bits) != (16, 16):
             raise ValueError("physical execution currently requires 16-bit storage")
@@ -92,6 +102,10 @@ class PhysicalResidentPlacement:
         self.slot_used = np.zeros((n, 8), dtype=np.int64)  # bytes per member cluster
         self.operators = {}
         self.request_operators = {}
+        self.capacity_legalization = dict(fallback_triggered=False, failing_operator='',
+            lanes_moved=0, bytes_moved_between_layers=0, die_changes=0, group_changes=0,
+            layer_changes=0, route_objective_used=False, latency_objective_used=False,
+            CPA_objective_used=False)
         cursor = 0
         paired = {}
         units = build_dense_decode_placement_units(workload)
@@ -123,13 +137,44 @@ class PhysicalResidentPlacement:
             if u.operator_type == "ATTENTION_QK":
                 paired[u.layer_id,u.request_id] = offset
             lanes = (np.arange(min(count, n), dtype=np.int32)+offset) % n
-            starts = (np.argmin(self.slot_used[lanes], axis=1) if self.policy == PlacementPolicy.BALANCED
+            starts = (np.argmin(self.slot_used[lanes], axis=1) if self.policy == PlacementPolicy.BALANCED or legalize
                       else (np.arange(len(lanes))+cursor//n)%8).astype(np.uint8)
             entry = ResidentOperator(u, atom, count, offset, lanes, starts, np.zeros(len(lanes), dtype=np.int32), self.dies)
             if self.policy == PlacementPolicy.COMPACT_FIRST_FIT:
                 entry = self._compact(u,atom,count)
                 lanes = entry.lanes
             allocated = entry.layer_bytes(count)
+            overflow = np.any(self.slot_used[lanes] + allocated//4 > floorplan.layout.slot_capacity_bytes, axis=1)
+            if np.any(overflow) and legalize:
+                # Capacity-only fallback: keep each atom's die/group and try the
+                # next cyclic start layer only on overflowing lanes.
+                audit = self.capacity_legalization
+                audit['fallback_triggered'] = True
+                if not audit['failing_operator']: audit['failing_operator'] = u.unit_id
+                before = allocated.copy()
+                original_starts = entry.start_layers.copy()
+                for shift in range(1, 8):
+                    indices = np.flatnonzero(overflow)
+                    if not len(indices): break
+                    candidate = np.roll(before[indices], shift, axis=1)
+                    fits = np.all(self.slot_used[lanes[indices]] + candidate//4 <= floorplan.layout.slot_capacity_bytes, axis=1)
+                    chosen = indices[fits]
+                    allocated[chosen] = candidate[fits]
+                    entry.start_layers[chosen] = (original_starts[chosen]+shift)%8
+                    overflow[chosen] = False
+                if np.any(overflow):
+                    raise ValueError(f"physical slot capacity exceeded after layer-only legalization: {u.unit_id}")
+                entry.__post_init__()
+                assert np.array_equal(entry.layer_bytes(count), allocated)
+            if legalize:
+                audit=self.capacity_legalization
+                audit['fallback_triggered']=True
+                cyclic=(np.arange(len(lanes))+cursor//n)%8
+                moved=entry.start_layers!=cyclic
+                audit['lanes_moved']+=int(moved.sum())
+                audit['layer_changes']+=int(moved.sum())
+                audit['bytes_moved_between_layers']+=int(allocated[moved].sum())
+                self.initial_placement_provenance = 'UNIFORM_STRIPING_CAPACITY_LEGALIZED'
             self.slot_used[lanes] += allocated//4
             if np.any(self.slot_used[lanes] > floorplan.layout.slot_capacity_bytes):
                 raise ValueError(f"physical slot capacity exceeded: {u.unit_id}")

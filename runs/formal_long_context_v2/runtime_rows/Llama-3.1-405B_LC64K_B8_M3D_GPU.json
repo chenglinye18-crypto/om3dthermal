@@ -1,0 +1,10 @@
+{
+  "model": "Llama-3.1-405B",
+  "context": "LC64K",
+  "batch": 8,
+  "path": "M3D_GPU",
+  "elapsed_s": 66.67248629999813,
+  "inner_workers": 4,
+  "execution_checkpoint_reused": false,
+  "same_task_recovery": "Resumed first 31 completed contexts after temporary-cache close path assertion; no previous-workload reuse"
+}

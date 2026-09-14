@@ -1,0 +1,1 @@
+{"model": "Llama-3.1-8B", "context": "LC126K", "batch": 1, "path": "M3D_NMP_UNIFORM", "elapsed_s": 7.560527900001034, "inner_workers": 4, "execution_checkpoint_reused": false}

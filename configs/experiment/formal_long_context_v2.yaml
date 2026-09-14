@@ -1,0 +1,15 @@
+benchmark_id: formal_long_context_v2
+models: [Llama-3.1-8B, Llama-3.1-70B, Llama-3.1-405B]
+contexts: {LC20K: 20000, LC64K: 64000, LC126K: 126000}
+incremental_prefill_tokens: 128
+generated_tokens: 32
+batches: [1, 8]
+paths: [HBM_GPU, M3D_GPU, M3D_NMP_UNIFORM, M3D_NMP_CPA]
+thermal:
+  design_point_C: 85.0
+  GPU_metric: THERMAL_CLOSED_DESIGN_POINT
+  NMP_metric: WORKLOAD_SPECIFIC_STEADY_STATE
+  NMP_phase: DECODE
+  mapping: DIE_GROUPED_BEOL_UNIFORM
+  operator_cache: runs/formal_long_context_v2/thermal_setup.pkl
+operating_point_source: configs/architecture/m3d_feol_execution.yaml

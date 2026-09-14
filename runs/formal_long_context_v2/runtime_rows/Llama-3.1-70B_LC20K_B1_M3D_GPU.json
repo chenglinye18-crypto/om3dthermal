@@ -1,0 +1,1 @@
+{"model": "Llama-3.1-70B", "context": "LC20K", "batch": 1, "path": "M3D_GPU", "elapsed_s": 14.841147199971601, "inner_workers": 4, "execution_checkpoint_reused": false}

@@ -1,0 +1,1 @@
+{"model": "Llama-3.1-8B", "context": "LC126K", "batch": 8, "path": "HBM_GPU", "elapsed_s": 0.39870939997490495, "inner_workers": 4, "execution_checkpoint_reused": false}

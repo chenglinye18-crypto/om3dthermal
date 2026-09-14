@@ -1,0 +1,1 @@
+{"model": "Llama-3.1-405B", "context": "LC20K", "batch": 1, "path": "HBM_GPU", "elapsed_s": 0.427083499962464, "inner_workers": 4, "execution_checkpoint_reused": false}
