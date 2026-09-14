@@ -1,0 +1,90 @@
+{
+  "model": "Llama-3.1-8B",
+  "cached_history": 20000,
+  "batch": 1,
+  "decode_context": 20128,
+  "executor": "NO_NMP",
+  "physical_stage_count": 580,
+  "boundary_reason_counts": {
+    "PORT_SERIALIZATION": 225,
+    "GLOBAL_THERMAL_CAP": 129
+  },
+  "operator_totals": {
+    "TOKEN_EMBED_LOOKUP": {
+      "boundary_s": 8.192649022755636e-06,
+      "cap_only_s": 2.4124034585226444e-09,
+      "port_s": 8.192e-06,
+      "route_startup_s": 6.490227556353761e-10
+    },
+    "Q": {
+      "boundary_s": 0.0005244555507563862,
+      "cap_only_s": 0.00031619854611548,
+      "port_s": 0.0005242879999999999,
+      "route_startup_s": 1.677244668816621e-07
+    },
+    "K": {
+      "boundary_s": 0.0005244506352655174,
+      "cap_only_s": 7.904963652887e-05,
+      "port_s": 0.0005242879999999999,
+      "route_startup_s": 1.646797696706385e-07
+    },
+    "V": {
+      "boundary_s": 0.0005244505991586871,
+      "cap_only_s": 7.904963652887e-05,
+      "port_s": 0.0005242879999999999,
+      "route_startup_s": 1.6444159031619367e-07
+    },
+    "KV_APPEND": {
+      "boundary_s": 1.922458896416035e-06,
+      "cap_only_s": 3.859845533636227e-08,
+      "port_s": 1.3128205128205132e-06,
+      "route_startup_s": 6.096383835955207e-07
+    },
+    "ATTENTION_QK": {
+      "boundary_s": 0.00038845485450515044,
+      "cap_only_s": 0.00038845485450515044,
+      "port_s": 0.00013107199999999998,
+      "route_startup_s": 1.6872283756244654e-07
+    },
+    "ATTENTION_AV": {
+      "boundary_s": 0.00038845485450515044,
+      "cap_only_s": 0.00038845485450515044,
+      "port_s": 0.00013107199999999998,
+      "route_startup_s": 1.6872283756244654e-07
+    },
+    "O": {
+      "boundary_s": 0.0005244554832301289,
+      "cap_only_s": 0.00031619854611548,
+      "port_s": 0.0005242879999999999,
+      "route_startup_s": 1.6761801337173217e-07
+    },
+    "FFN_GATE": {
+      "boundary_s": 0.0011066949114041799,
+      "cap_only_s": 0.0011066949114041799,
+      "port_s": 0.0005242879999999999,
+      "route_startup_s": 1.6862965759537125e-07
+    },
+    "FFN_UP": {
+      "boundary_s": 0.0011066949114041799,
+      "cap_only_s": 0.0011066949114041799,
+      "port_s": 0.0005242879999999999,
+      "route_startup_s": 1.6862965759537122e-07
+    },
+    "FFN_DOWN": {
+      "boundary_s": 0.0018351754916308375,
+      "cap_only_s": 0.0011066949114041799,
+      "port_s": 0.0018350079999999993,
+      "route_startup_s": 1.675784048057341e-07
+    },
+    "LM_HEAD": {
+      "boundary_s": 0.00030940521797628026,
+      "cap_only_s": 0.00030940521797628026,
+      "port_s": 9.8304e-05,
+      "route_startup_s": 5.272588673826454e-09
+    }
+  },
+  "decode_step_s": 0.007264610212720924,
+  "boundary_s": 0.007242807617755675,
+  "cap_only_s": 0.005196937037346616,
+  "route_startup_sum_s": 2.122307230386577e-06
+}

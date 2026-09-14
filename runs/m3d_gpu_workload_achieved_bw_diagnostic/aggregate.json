@@ -1,0 +1,98 @@
+{
+  "all": {
+    "count": 18,
+    "degradation_min_pct": 5.080194738753363,
+    "degradation_max_pct": 28.4148490408895,
+    "degradation_geomean_pct": 8.379569970995185,
+    "degradation_from_geomean_TPS_ratio_pct": 10.152228952916275,
+    "utilization_min_pct": 71.75540597601852,
+    "utilization_max_pct": 96.8646837645229,
+    "utilization_geomean_pct": 90.3959945415695
+  },
+  "batch": {
+    "1": {
+      "count": 9,
+      "degradation_min_pct": 5.5753964593381,
+      "degradation_max_pct": 28.4148490408895,
+      "degradation_geomean_pct": 10.447382233511167,
+      "degradation_from_geomean_TPS_ratio_pct": 12.947501215698987,
+      "utilization_min_pct": 71.75540597601852,
+      "utilization_max_pct": 94.8100319126784,
+      "utilization_geomean_pct": 87.25571642024693
+    },
+    "8": {
+      "count": 9,
+      "degradation_min_pct": 5.080194738753363,
+      "degradation_max_pct": 15.74565328274059,
+      "degradation_geomean_pct": 6.721032248018518,
+      "degradation_from_geomean_TPS_ratio_pct": 7.267199967096339,
+      "utilization_min_pct": 83.87507466422178,
+      "utilization_max_pct": 96.8646837645229,
+      "utilization_geomean_pct": 93.64928928900912
+    }
+  },
+  "model": {
+    "Llama-3.1-8B": {
+      "count": 6,
+      "degradation_min_pct": 5.848119352681913,
+      "degradation_max_pct": 28.4148490408895,
+      "degradation_geomean_pct": 14.518646611975347,
+      "degradation_from_geomean_TPS_ratio_pct": 16.967482963370117,
+      "utilization_min_pct": 71.75540597601852,
+      "utilization_max_pct": 95.49320911796985,
+      "utilization_geomean_pct": 83.33535828968746
+    },
+    "Llama-3.1-70B": {
+      "count": 6,
+      "degradation_min_pct": 5.246707601566747,
+      "degradation_max_pct": 9.625022221727997,
+      "degradation_geomean_pct": 7.417922979990409,
+      "degradation_from_geomean_TPS_ratio_pct": 7.595499659245042,
+      "utilization_min_pct": 90.55107208745873,
+      "utilization_max_pct": 96.8646837645229,
+      "utilization_geomean_pct": 93.12753081926049
+    },
+    "Llama-3.1-405B": {
+      "count": 6,
+      "degradation_min_pct": 5.080194738753363,
+      "degradation_max_pct": 5.686524257188397,
+      "degradation_geomean_pct": 5.463321283651436,
+      "degradation_from_geomean_TPS_ratio_pct": 5.467619060645323,
+      "utilization_min_pct": 94.48204673234954,
+      "utilization_max_pct": 96.52780272133526,
+      "utilization_geomean_pct": 95.1787872015915
+    }
+  },
+  "cached_history": {
+    "20000": {
+      "count": 6,
+      "degradation_min_pct": 5.080194738753363,
+      "degradation_max_pct": 28.4148490408895,
+      "degradation_geomean_pct": 9.849872947734395,
+      "degradation_from_geomean_TPS_ratio_pct": 12.394550176384689,
+      "utilization_min_pct": 71.75540597601852,
+      "utilization_max_pct": 94.91032340514167,
+      "utilization_geomean_pct": 87.6308413967437
+    },
+    "64000": {
+      "count": 6,
+      "degradation_min_pct": 5.313704586925327,
+      "degradation_max_pct": 22.842838899780283,
+      "degradation_geomean_pct": 8.273518976520645,
+      "degradation_from_geomean_TPS_ratio_pct": 9.79215640294403,
+      "utilization_min_pct": 77.12000480541056,
+      "utilization_max_pct": 95.73580575382503,
+      "utilization_geomean_pct": 90.80562463120287
+    },
+    "126000": {
+      "count": 6,
+      "degradation_min_pct": 5.246707601566747,
+      "degradation_max_pct": 18.12861917819635,
+      "degradation_geomean_pct": 7.220118064602711,
+      "degradation_from_geomean_TPS_ratio_pct": 8.220328792211395,
+      "utilization_min_pct": 81.95060551661511,
+      "utilization_max_pct": 96.8646837645229,
+      "utilization_geomean_pct": 92.82775128053439
+    }
+  }
+}
