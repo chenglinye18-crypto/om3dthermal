@@ -1,0 +1,32 @@
+{
+  "base_HEAD": "b5f98baa692eacdc0897c094c4d25611a4d38856",
+  "python_environment": "C:\\Users\\Leslie\\Miniconda3\\envs\\om3dthermal\\python.exe",
+  "targeted_tests": {
+    "passed": 29,
+    "failed": 0,
+    "duration_s": 27.97
+  },
+  "full_tests": {
+    "passed": 1100,
+    "failed": 0,
+    "duration_s": 1154.27
+  },
+  "frozen_integrity_reference": "runs/attention_nmp_probe_8b_w1_b8/frozen_integrity.json",
+  "frozen_integrity_regression": "PASS; historical results including B32 and src/config hashes preserved",
+  "old_NMP_checkpoints_reused": 24,
+  "old_NMP_decode_steps_reused": 9216,
+  "new_NMP_checkpoints": 12,
+  "new_NMP_decode_steps": 6144,
+  "new_GPU_event_observation_checkpoints": 6,
+  "new_GPU_event_observation_steps": 3072,
+  "thermal_rows": 72,
+  "above_85C": {
+    "HBM_GPU": 8,
+    "M3D_GPU": 18,
+    "M3D_NMP_UNIFORM": 0,
+    "M3D_NMP_CPA": 0
+  },
+  "HBM_operator_builds": 1,
+  "M3D_operator_builds": 0,
+  "thermal_feasibility_closed": false
+}

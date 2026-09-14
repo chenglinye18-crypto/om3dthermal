@@ -1,0 +1,112 @@
+{
+  "base_HEAD": "b5f98baa692eacdc0897c094c4d25611a4d38856",
+  "primary_models": [
+    "Llama-3.1-8B",
+    "Llama-3.1-70B",
+    "Llama-3.1-405B"
+  ],
+  "primary_contexts": [
+    "LC20K",
+    "LC64K",
+    "LC126K"
+  ],
+  "primary_batches": [
+    1,
+    8
+  ],
+  "context_mapping": {
+    "LC20K": {
+      "internal_id": "W2",
+      "H": 20000,
+      "P": 512,
+      "G": 256,
+      "origin": "old W2"
+    },
+    "LC64K": {
+      "internal_id": "W64",
+      "H": 64000,
+      "P": 512,
+      "G": 512,
+      "origin": "new workload"
+    },
+    "LC126K": {
+      "internal_id": "W3",
+      "H": 126000,
+      "P": 512,
+      "G": 512,
+      "origin": "old W3"
+    }
+  },
+  "evaluation_paths": [
+    "HBM_GPU",
+    "M3D_GPU",
+    "M3D_NMP_UNIFORM",
+    "M3D_NMP_CPA"
+  ],
+  "primary_cases": 18,
+  "excluded_from_primary": {
+    "W1_SHORT_CONTEXT": "SHORT_CONTEXT_BOUNDARY_EXPERIMENT",
+    "B32_HIGH_CONCURRENCY_STRESS": "HIGH_CONCURRENCY_STRESS_ARCHIVED"
+  },
+  "external_capacity_mode": "SUFFICIENTLY_PROVISIONED_FOR_FORMAL_BASELINE",
+  "hbm_access_energy_pj_per_bit": 1.9955,
+  "HBM_energy_status": "HBM_ENERGY_CLOSED",
+  "HBM_access_provenance": "Representative measured access/transferred-bit energy; arithmetic mean (0.978+3.013)/2; applied to read+write by user instruction",
+  "C2C_bandwidth_GBps": 416.34,
+  "external_access_energy_pj_per_bit": 5.3,
+  "HBM_thermal_bandwidth_TBps": 3.2973872924850354,
+  "M3D_GPU_thermal_bandwidth_TBps": 3.3957835581187483,
+  "HBM_static_W": 0,
+  "Grace_static_W": 0,
+  "NMP_FEOL_background_budget_W_per_slab": 0.1,
+  "thermal_convention": "USER_CONFIRMED_DIE_GROUPED_BEOL_UNIFORM__E2E_EQUIVALENT_STEADY_STATE",
+  "hotspot_coordinate_units": "m",
+  "NMP_power_W_definition": "MAC + SRAM + Fabric + NoC + reduction; subset of memory_power_W. FEOL background and shared interface remain in memory_power_W.",
+  "HBM_thermal_boundary": "GPU + local HBM package; external Grace and off-package link energy excluded; no new C2C mapper",
+  "thermal_setup": {
+    "M3D": "EXISTING_VALIDATED_OPERATOR_REUSED",
+    "HBM": "USER_AUTHORIZED_REBUILD_ONCE_OF_MISSING_IDENTICAL_OPERATOR"
+  },
+  "f_NMP_thermal_closure_mechanism": "NOT_IMPLEMENTED_IN_REPOSITORY; NO_DVFS_ADDED",
+  "physical_fingerprint": "305b2f538b1c8279065c32a439248829e59dd72a7b93883d04161e321e7c26ad",
+  "existing_operating_points_reused": 12,
+  "existing_NMP_case_checkpoints_reused": 24,
+  "existing_NMP_Decode_steps_reused": 9216,
+  "new_LC64K_operating_points": 6,
+  "new_NMP_case_checkpoints": 12,
+  "new_NMP_Decode_steps": 6144,
+  "new_GPU_observation_steps": 3072,
+  "new_LC64K_summed_job_runtime_s": 16570.9,
+  "simulation_worker_changes": [
+    {
+      "model": "Llama-3.1-405B",
+      "checkpoint_boundary": "LC64K B1 GPU COMPLETE",
+      "previous_workers": 2,
+      "next_workers": 6,
+      "mode": "SIMULATION_HOST_PARALLELISM_ONLY",
+      "timestamp": "2026-09-14T15:36:33.2913054+08:00"
+    },
+    {
+      "model": "Llama-3.1-70B",
+      "checkpoint_boundary": "LC64K B8 UNIFORM COMPLETE",
+      "previous_workers": 2,
+      "next_workers": 4,
+      "mode": "SIMULATION_HOST_PARALLELISM_ONLY",
+      "timestamp": "2026-09-14T15:47:29.4562803+08:00"
+    }
+  ],
+  "CPA_wins": 18,
+  "GPU_wins": 0,
+  "ties": 0,
+  "adaptive_clipping": false,
+  "closure": {
+    "matrix": true,
+    "tokens_per_s": true,
+    "tokens_per_J": true,
+    "Tmax_computed": true,
+    "all_paths_thermal_feasible": false
+  },
+  "canonical_data_source": "runs/formal_long_context_v1/final_e2e_metrics.csv",
+  "validation": "validation.json",
+  "full_pytest_passed": 1100
+}

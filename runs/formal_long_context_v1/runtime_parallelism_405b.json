@@ -1,0 +1,8 @@
+{
+  "model": "Llama-3.1-405B",
+  "checkpoint_boundary": "LC64K B1 GPU COMPLETE",
+  "previous_workers": 2,
+  "next_workers": 6,
+  "mode": "SIMULATION_HOST_PARALLELISM_ONLY",
+  "timestamp": "2026-09-14T15:36:33.2913054+08:00"
+}

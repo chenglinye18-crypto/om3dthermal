@@ -2,3 +2,4 @@
 /runs/formal_iom3d_workload_sweep_v1/* -text whitespace=cr-at-eol
 /runs/attention_nmp_probe_8b_w1_b8/* -text whitespace=cr-at-eol
 /scripts/probe_attention_nmp.py -text
+/runs/formal_long_context_v1/** -text whitespace=cr-at-eol

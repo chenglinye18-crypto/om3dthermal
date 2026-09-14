@@ -270,9 +270,59 @@ Evaluation scripts write JSON/CSV under their specified output directory.
 Thermal setup caches contain the fixed operator, never workload power.
 `runs/`, `results/`, local figures and raw data are not committed.
 
-### Formal multi-turn workload matrix
+### Formal long-context four-path evaluation
 
-The current formal architecture comparison is **B=1/8 only**:
+The canonical paper plotting source is
+[`runs/formal_long_context_v1/final_e2e_metrics.csv`](runs/formal_long_context_v1/final_e2e_metrics.csv).
+It contains 18 operating points: Llama-3.1 8B/70B/405B, B=1/8, and
+LC20K=(20000,512,256), LC64K=(64000,512,512), LC126K=(126000,512,512)
+for (history, new prompt, generated tokens). Four raw evaluation paths are
+reported together: HBM_GPU, M3D_GPU, M3D_NMP_UNIFORM, M3D_NMP_CPA.
+Uniform/CPA compare placement within NMP; ratios are not adaptively clipped.
+W1 remains historical short-context boundary evidence; B32 remains archived
+stress. Their results and checkpoints are preserved.
+
+Only the six LC64K points execute new physical Decode. In the native Conda
+environment, run these PowerShell commands to resume their exact checkpoints
+and retain the runtime logs consumed by finalization:
+
+```powershell
+python -u scripts/run_formal_long_context.py --model Llama-3.1-8B --workers 4 *>> runs/formal_long_context_execution_8b.log
+python -u scripts/run_formal_long_context.py --model Llama-3.1-70B --workers 4 *>> runs/formal_long_context_execution_70b.log
+python -u scripts/run_formal_long_context.py --model Llama-3.1-405B --workers 6 *>> runs/formal_long_context_execution_405b.log
+```
+
+Existing LC20K and
+LC126K M3D performance/energy are reused. Then use
+`python scripts/compose_formal_long_context.py`,
+`python scripts/thermal_formal_long_context.py --family HBM` and
+`--family M3D`, followed by `python scripts/finalize_formal_long_context.py`.
+Finalization requires all 72 candidate and temperature rows. Large physical
+checkpoints, restored placement plans, and thermal operators remain local.
+GPU observation checkpoints/logs retain legacy per-stage timing for event
+accounting diagnostics. Final GPU timing and static energy use the frozen
+corrected aggregate streaming helper; use the canonical CSV for metrics.
+
+The formal HBM baseline has sufficiently provisioned external capacity,
+unchanged traffic-minimizing residency and max(local, external) overlap,
+416.34 GB/s C2C, 1.9955 pJ/bit local read+write access energy and 5.3 pJ/bit
+external access energy. Frozen HBM/Grace memory static power remains zero.
+The legacy 480 GB gate remains confined to historical producers.
+
+Temperatures are workload-specific E2E-equivalent steady state. The approved
+mapping groups actual memory energy by die and distributes each die's power
+uniformly in its BEOL, with GPU power in GPU FEOL. Uniform/CPA retain their
+distinct per-die activity. This does not claim tile-resolved FEOL hotspots.
+HBM package temperature excludes external Grace and off-package link energy;
+system tokens/J includes both. The existing M3D thermal operator is reused;
+the missing identical HBM operator was rebuilt once with user authorization.
+Rows above 85 C explicitly carry `THERMAL_CLOSURE_REQUIRED`: nominal metrics
+must not be described as thermally feasible. No DVFS or hardware change is
+introduced. See the canonical report and `tests/test_formal_long_context.py`.
+
+### Historical multi-turn workload rebaseline
+
+The previous architecture comparison was **B=1/8 only**:
 `HBM_GPU`, `M3D_GPU`, and adaptive `M3D_MAC_NMP`. Run
 `python scripts/rebaseline_primary_workloads.py` to audit the reviewed local
 checkpoints and regenerate `primary_*.csv`, the consistency/selection/placement

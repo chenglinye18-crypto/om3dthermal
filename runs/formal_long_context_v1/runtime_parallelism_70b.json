@@ -1,0 +1,8 @@
+{
+  "model": "Llama-3.1-70B",
+  "checkpoint_boundary": "LC64K B8 UNIFORM COMPLETE",
+  "previous_workers": 2,
+  "next_workers": 4,
+  "mode": "SIMULATION_HOST_PARALLELISM_ONLY",
+  "timestamp": "2026-09-14T15:47:29.4562803+08:00"
+}
