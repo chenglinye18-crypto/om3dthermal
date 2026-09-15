@@ -1,0 +1,19 @@
+{
+  "old_HEAD": "d4a6cd5f0e47eede5175c82315365e35ee63952b",
+  "HBM_GPU": "18/18 updated",
+  "M3D_GPU": "18/18 updated",
+  "M3D_NMP_UNIFORM": "18/18 unchanged",
+  "M3D_NMP_CPA": "18/18 unchanged",
+  "protected_artifact_count": 250,
+  "candidate_bytes": "IDENTICAL",
+  "all_NMP_row_fields": "IDENTICAL",
+  "status": "PASS",
+  "refresh_checks": {
+    "targeted_tests_passed": 31,
+    "full_pytest_run": false,
+    "thermal_solver_run": false,
+    "plot_command": "python scripts/plot_formal_long_context_v2.py",
+    "plots": "3 SVG + 3 PDF; 72 rows; HBM normalization=1"
+  },
+  "pytest_run": true
+}

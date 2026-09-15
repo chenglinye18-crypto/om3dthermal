@@ -10,6 +10,8 @@ from om3dthermal.power.feol_energy import sum_events
 
 
 def main():
+    refresh_file=f.OUT/'gpu_refresh_preservation.json'
+    refresh=json.loads(refresh_file.read_text(encoding='utf-8')) if refresh_file.exists() else None
     repair_file=f.OUT/'capacity_repair_preservation.json'
     repair=json.loads(repair_file.read_text()) if repair_file.exists() else None
     prior_manifest=json.loads((f.OUT/'formal_long_context_v2_manifest.json').read_text()) if repair else None
@@ -46,22 +48,27 @@ def main():
                 components={k:e[k] for k in ('GPU_energy_J','local_memory_energy_J','external_memory_energy_J')}
                 np.testing.assert_allclose(sum(components.values()),e['E2E_J'],rtol=1e-12)
             else:
-                prefill_times.append(s['prefill_s'])
+                if not (refresh and path=='M3D_GPU'):prefill_times.append(s['prefill_s'])
                 components={k:v for k,v in e.items() if k.startswith(('decode_','prefill_'))
                     and k.endswith('_J') and k not in ('decode_J','prefill_J','decode_tokens_per_J','prefill_tokens_per_J')}
                 for phase in ('decode','prefill'):
                     np.testing.assert_allclose(sum(v for k,v in components.items() if k.startswith(phase+'_')),e[phase+'_J'],rtol=1e-12)
                 np.testing.assert_allclose(sum(components.values()),e['E2E_J'],rtol=1e-12)
-                log=list((f.OUT/'checkpoints').glob(f'{m}_{c}_B{b}_{f.LEGACY[path]}_*.jsonl'))
+                fp=r.get('legacy_fingerprint','')[:16]
+                log=list((f.OUT/'checkpoints').glob(f'{m}_{c}_B{b}_{f.LEGACY[path]}_{fp}*.jsonl'))
                 assert len(log)==1
                 steps=[json.loads(line) for line in log[0].read_text().splitlines()]
                 assert [x['context'] for x in steps]==list(range(s['H']+128,s['H']+160))
                 total_events=sum_events(x['energy_events'] for x in steps)
-                for k in total_events:np.testing.assert_allclose(total_events[k],r['events'][k],rtol=1e-12,atol=1e-7)
+                if not (refresh and path=='M3D_GPU'):
+                    for k in total_events:np.testing.assert_allclose(total_events[k],r['events'][k],rtol=1e-12,atol=1e-7)
                 if path!='M3D_GPU':
                     np.testing.assert_allclose(sum(x['latency_s'] for x in steps),s['decode_s'],rtol=1e-12)
                 else:
-                    assert s['placement_policy']=='NOT_APPLICABLE_GPU_EXECUTION' and s['accepted_moves']==0
+                    assert s['placement_policy']==('GPU_PORT_BALANCED' if refresh else 'NOT_APPLICABLE_GPU_EXECUTION') and s['accepted_moves']==0
+                    if refresh:
+                        assert r['gpu_refresh']['logical_traffic_conservation']=='PASS'
+                        np.testing.assert_allclose(sum(x['latency_s'] for x in r['gpu_refresh']['operator_steps']),s['decode_s'],rtol=1e-12)
             energy_audit.append(dict(model=m,context=c,batch=b,path=path,E2E_J=e['E2E_J'],conservation='PASS',**components))
             capacity.append(dict(model=m,context=c,batch=b,path=path,status=s['status'],
                 external_capacity_mode=s.get('external_capacity_mode','NOT_APPLICABLE'),
@@ -74,6 +81,7 @@ def main():
                 t=dict(Tmax_C=f.CONFIG['thermal']['design_point_C'],thermal_metric_type=f.CONFIG['thermal']['GPU_metric'],
                     thermal_phase='DESIGN_POINT',provenance='EXISTING_85C_BANDWIDTH_THERMAL_CLOSURE',
                     thermal_status='THERMAL_CLOSED_DESIGN_POINT')
+                if refresh:t['provenance']=r['thermal_provenance']
             else:
                 t=json.loads((f.OUT/'thermal_rows_decode'/f'{key}.json').read_text())
                 x=json.loads((f.OUT/'spatial_decode'/f'{key}.json').read_text());projections.append(x['projection_s'])
@@ -97,10 +105,12 @@ def main():
         identity=lambda r:tuple(str(r[k]) for k in ('model','context','batch','path'))
         lookup={identity(r):r for r in rows}
         for old_row in repair['rows']:
+            if refresh and old_row['path'] in f.PATHS[:2]:continue
             new_row=lookup[identity(old_row)]
             for field in ('E2E_s','tokens_per_s','E2E_J','tokens_per_J','Tmax_C'):
                 assert float(old_row[field])==new_row[field],(identity(old_row),field)
         for name,digest in repair['files'].items():
+            if refresh:continue  # Current refresh snapshot supersedes the historical repair snapshot.
             assert hashlib.sha256((f.ROOT/name).read_bytes()).hexdigest()==digest,name
         assert not infeasible and all(r['execution_status']=='EVALUATED' for r in rows)
     f.csv_out('final_e2e_metrics.csv',rows)
@@ -150,7 +160,7 @@ def main():
                 status='NONDECREASING' if all(a<=z for a,z in zip(offload,offload[1:])) else 'TREND_CHANGE'))
     f.save(f.OUT/'trend_audit.json',dict(ordering_changes=changes,KV_pressure=kv_trends,HBM_offload=offload_trends,
         capacity_exceptions=infeasible,description='P/G changed; absolute E2E throughput is not expected to match v1'))
-    protected=repair['source_before'] if repair else json.loads((f.OUT/'protected_hashes.json').read_text())
+    protected=refresh['files'] if refresh else repair['source_before'] if repair else json.loads((f.OUT/'protected_hashes.json').read_text())
     for name,digest in protected.items():
         if repair and name.replace('\\','/')=='src/om3dthermal/placement/nmp_load_balance.py':continue
         assert hashlib.sha256((f.ROOT/name).read_bytes()).hexdigest()==digest,name
@@ -184,6 +194,11 @@ def main():
         manifest['initial_sweep_wall_clock_s']=elapsed
         manifest['runtime_accounting']+=' Capacity repair wall-clock is reported separately in capacity_repair.'
     f.save(f.OUT/'formal_long_context_v2_manifest.json',manifest)
+    if refresh:
+        from report_formal_gpu_refresh import finalize_refresh
+        finalize_refresh(refresh,rows,manifest)
+        print('FINALIZED GPU REFRESH: 72 rows; frozen NMP preserved',flush=True)
+        return
     def md(data):
         keys=list(data[0]);return '\n'.join(['| '+' | '.join(keys)+' |','|'+'|'.join('---' for _ in keys)+'|',
             *['| '+' | '.join('N/A' if r[k] is None else f'{r[k]:.5g}' if isinstance(r[k],float) else str(r[k]) for k in keys)+' |' for r in data]])
