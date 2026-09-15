@@ -55,7 +55,7 @@ def test_system_scope_capacity_and_refresh_close():
 
 
 def test_access_energy_regressions_and_system_bandwidth_are_frozen():
-    expected = (1.9955, 1.3676557831180527,
+    expected = (3.0, 1.3676557831180527,
                 0.8552605756733209)
     for name, energy in zip(NAMES, expected):
         _, _, system = _resolved(name)

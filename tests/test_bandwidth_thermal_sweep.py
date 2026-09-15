@@ -32,8 +32,8 @@ def test_2p4_power_closure_and_geometry(spec_index: int) -> None:
     assert sum(source.total_power for source in sources.sources) == (
         pytest.approx(gpu + memory_power))
     if spec_index == 0:
-        assert memory.E_access_total_pj_bit == pytest.approx(1.9955)
-        assert memory_power == pytest.approx(38.3136)
+        assert memory.E_access_total_pj_bit == pytest.approx(3.0)
+        assert memory_power == pytest.approx(57.6)
     else:
         assert case.thermal["edge_strip_material"] == "Cu"
         assert memory_power == pytest.approx(16.42100305292776)

@@ -95,6 +95,7 @@ SOLVER_OPTIONS = dict(backend="gpu_pcg", rtol=1e-3, max_delta_t_K=1e-2,
 
 def resolve_hbm_row_mean(case, project_root: Path):
     """Run both row states without the nominal energy override; average components."""
+    target = case.memory.nominal_read_energy
     case = case.model_copy(update={"memory": case.memory.model_copy(
         update={"nominal_read_energy": None})})
     geometry = resolve_case_geometry(case)
@@ -120,9 +121,21 @@ def resolve_hbm_row_mean(case, project_root: Path):
         full_row_pj_per_bit=full.E_access_total_pj_bit,
         closed_row_pj_per_bit=closed.E_access_total_pj_bit,
         aggregation="ARITHMETIC_MEAN", **fields)
+    raw_mean = mean
+    factor = 1.0 if target is None else target.nominal_pj_per_bit / mean.nominal_pj_per_bit
+    if target is not None:
+        mean = HBMNominalReadEnergyInput(**{
+            key: value * factor if isinstance(value, float) else value
+            for key, value in raw_mean.model_dump().items()})
+        if any(abs(getattr(mean, key) - getattr(target, key)) >= 1e-12
+               for key in fields):
+            raise ValueError("24H frozen components differ from normalized DreamRAM proportions")
     resolved = case.model_copy(update={"memory": case.memory.model_copy(
         update={"nominal_read_energy": mean})})
     return resolved, {"full_row": full.as_dict(), "closed_row": closed.as_dict(),
+                      "raw_mean": raw_mean.model_dump(),
+                      "raw_DreamRAM_pj_per_bit": raw_mean.nominal_pj_per_bit,
+                      "calibration_factor": factor,
                       "mean": mean.model_dump(), "mean_pj_per_bit": mean.nominal_pj_per_bit,
                       "status": "DREAMRAM_AVERAGE_CROSSED_LAYER_SCALING_NOT_PRODUCT_VALIDATED"}
 

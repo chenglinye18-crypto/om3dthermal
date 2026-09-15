@@ -61,7 +61,7 @@ def test_24hi_changes_only_depth_and_doubles_capacity(cases):
 def test_hbm_row_states_recompute_dreamram_at_24hi(cases):
     case, _, memory, _, row = cases[1]
     raw = load_case_config(ROOT / "configs/cases" / SENSITIVITY_ARCHITECTURES[1].case_file)
-    assert raw.memory.nominal_read_energy is None
+    assert raw.memory.nominal_read_energy.nominal_pj_per_bit == 4.04
     full, closed = row["full_row"], row["closed_row"]
     for state in (full, closed):
         assert state["diagnostics"]["electrical_resolved_stack_die_count"] == 24
@@ -70,8 +70,12 @@ def test_hbm_row_states_recompute_dreamram_at_24hi(cases):
     assert closed["diagnostics"]["effective_rd_per_act"] == 1
     assert full["E_access_total_pj_bit"] == pytest.approx(1.419208075375544)
     assert closed["E_access_total_pj_bit"] == pytest.approx(3.9551503687074323)
-    assert memory.E_access_total_pj_bit == pytest.approx(
+    assert row["raw_DreamRAM_pj_per_bit"] == pytest.approx(
         (full["E_access_total_pj_bit"] + closed["E_access_total_pj_bit"]) / 2)
+    assert abs(memory.E_access_total_pj_bit - 4.04) < 1e-12
+    for key, value in row["raw_mean"].items():
+        if isinstance(value, float):
+            assert row["mean"][key] == pytest.approx(value * row["calibration_factor"], abs=1e-12)
     assert memory.E_access_total_pj_bit != pytest.approx(1.9955)
     assert case.memory.nominal_read_energy.nominal_pj_per_bit == memory.E_access_total_pj_bit
 

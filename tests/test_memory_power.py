@@ -48,7 +48,7 @@ def test_active_cases_parse_and_resolve_system_power():
     assert hbm.P_refresh_W == pytest.approx(0.9614665609424703)
     assert hbm.diagnostics["total_stored_bits"] == 1159641169920  # rev v2: 135 GiB
     assert hbm.E_base_route_pj_bit == pytest.approx(
-        0.15710373866310487, abs=0.0)
+        0.15710373866310487 * (3.0 / ((0.978 + 3.013) / 2)), abs=0.0)
     assert hbm.E_vertical_pj_bit > 0.0
     assert hbm.diagnostics["dies_stacked"] == 8
     assert hbm.diagnostics["physical_stack_count"] == 4
@@ -56,13 +56,13 @@ def test_active_cases_parse_and_resolve_system_power():
     # Rev v2: 12.2x11.8 mm HBM3E-class die packs 180 banks (was 144).
     assert hbm.diagnostics["packed_banks_per_die"] == 180
     assert hbm.E_memory_internal_pj_bit == pytest.approx(
-        1.2392882489481523, abs=0.0)
+        1.2392882489481523 * (3.0 / ((0.978 + 3.013) / 2)), abs=0.0)
     assert hbm.E_vertical_pj_bit == pytest.approx(
-        0.5490276175199488, abs=0.0)
+        0.5490276175199488 * (3.0 / ((0.978 + 3.013) / 2)), abs=0.0)
     assert hbm.E_interface_pj_bit == pytest.approx(
-        0.05008039486879381, abs=0.0)
+        0.05008039486879381 * (3.0 / ((0.978 + 3.013) / 2)), abs=0.0)
     assert hbm.E_access_total_pj_bit == pytest.approx(
-        (0.978 + 3.013) / 2, abs=0.0)
+        3.0, abs=0.0)
     assert hbm.diagnostics["hbm_read_energy_status"] == (
         "FROZEN_ROW_STATE_ARITHMETIC_MEAN")
     assert hbm.diagnostics["geometry_feasible"] is True
@@ -203,7 +203,7 @@ def test_conventional_full_row_same_boundary_remains_stable():
     geometry = resolve_case_geometry(full)
     result = calculate_memory_power(full, read_bandwidth_gbps=full.workload.read_bandwidth_gbps, project_root=ROOT, geometry=geometry)
     assert result.diagnostics["effective_rd_per_act"] == 64.0
-    assert result.E_access_total_pj_bit == pytest.approx(1.9955)
+    assert result.E_access_total_pj_bit == pytest.approx(3.0)
     # Refresh is deliberately enabled in the active case; the old split
     # logic-removed power input predated refresh accounting.
     # Rev v2: refresh scales with capacity 116.0 -> 145.0 GB.
@@ -221,8 +221,8 @@ def test_conventional_12hi_preserves_frozen_nominal_total():
     assert geometry_12hi.memory_dies_per_region == 12
     assert result_12hi.diagnostics["total_stored_bits"] == 1159641169920  # rev v2
     assert result_12hi.P_refresh_W == pytest.approx(0.9614665609424703)  # rev v2
-    assert result_12hi.E_access_total_pj_bit == pytest.approx(1.9955)
-    assert result_8hi.E_access_total_pj_bit == pytest.approx(1.9955)
+    assert result_12hi.E_access_total_pj_bit == pytest.approx(3.0)
+    assert result_8hi.E_access_total_pj_bit == pytest.approx(3.0)
     assert result_12hi.E_base_route_pj_bit > 0.0
     diagnostics = result_12hi.diagnostics
     assert diagnostics["electrical_reference_stack_die_count"] == 8

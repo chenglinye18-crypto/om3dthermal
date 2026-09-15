@@ -58,5 +58,61 @@
     "prior_setup_load_s": null,
     "average_solve_time_s": 1.2023704277752485,
     "solves": 36
+  },
+  "conventional_hbm_2x1": {
+    "physical_signature": "d5c3af03d38021a6c43869ae442195160499a566aa85d7001aedea0df3252a51",
+    "historical_signature": "d5c3af03d38021a6c43869ae442195160499a566aa85d7001aedea0df3252a51",
+    "setup_source": "E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\no_nmp_geometry_sensitivity_v2\\cache\\conventional_hbm_2x1.pkl",
+    "setup_reused": false,
+    "setup_load_s": 15.630252599999949,
+    "solver_options": {
+      "backend": "gpu_pcg",
+      "rtol": 0.001,
+      "max_delta_t_K": 0.01,
+      "max_iterations": 100000,
+      "check_interval": 10,
+      "initial_temperature_K": 293.15
+    },
+    "cell_count": 1582884,
+    "solves": 25,
+    "production_setup_builds": 1,
+    "validation": "EXACT_PHYSICAL_SIGNATURE_MATCH",
+    "source_mapping": {
+      "gpu": "GPU_FEOL",
+      "dram": "DRAM_BEOL_PER_VISIBLE_GROUP",
+      "base_route": "HBM_BASE_BEOL_PER_VISIBLE_GROUP",
+      "base_logic_feol": "NOT_SEPARATELY_MODELED",
+      "approximation": "MODELING_CHOICE_COMPONENT_AWARE_COARSE_BEOL"
+    },
+    "converged": true,
+    "max_relative_residual": 0.00019105745267624389
+  },
+  "conventional_hbm_24hi_sensitivity": {
+    "physical_signature": "c456e4f7b9aab43bd98b6ff4449adefeb24c7e7a6ceb75290683bdf2094ed6ba",
+    "historical_signature": "c456e4f7b9aab43bd98b6ff4449adefeb24c7e7a6ceb75290683bdf2094ed6ba",
+    "setup_source": "E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\no_nmp_geometry_sensitivity\\cache\\hbm_24hi.pkl",
+    "setup_reused": true,
+    "setup_load_s": 22.898718200000076,
+    "solver_options": {
+      "backend": "gpu_pcg",
+      "rtol": 0.001,
+      "max_delta_t_K": 0.01,
+      "max_iterations": 100000,
+      "check_interval": 10,
+      "initial_temperature_K": 293.15
+    },
+    "cell_count": 2308644,
+    "solves": 25,
+    "production_setup_builds": 0,
+    "validation": "EXACT_PHYSICAL_SIGNATURE_MATCH",
+    "source_mapping": {
+      "gpu": "GPU_FEOL",
+      "dram": "DRAM_BEOL_PER_VISIBLE_GROUP",
+      "base_route": "HBM_BASE_BEOL_PER_VISIBLE_GROUP",
+      "base_logic_feol": "NOT_SEPARATELY_MODELED",
+      "approximation": "MODELING_CHOICE_COMPONENT_AWARE_COARSE_BEOL"
+    },
+    "converged": true,
+    "max_relative_residual": 0.0001848006002324607
   }
 }

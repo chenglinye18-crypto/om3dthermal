@@ -30,6 +30,14 @@ memory:
   dreamram:
     memory_config: third_party/DreamRAM/configs/mem/baseline/hbm3_baseline.json
     technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
+  nominal_read_energy:
+    full_row_pj_per_bit: 2.13368746583315
+    closed_row_pj_per_bit: 5.94631253416685
+    aggregation: ARITHMETIC_MEAN
+    memory_internal_pj_per_bit: 2.2019505175256566
+    vertical_pj_per_bit: 1.5591680870378197
+    base_route_pj_per_bit: 0.22616719653304154
+    interface_pj_per_bit: 0.05271419890348237
 architecture:
   vertical:
     type: tsv
@@ -135,4 +143,6 @@ provenance:
   power_parameters: docs/research/frozen_model_parameters.md
   sensitivity_status: HYPOTHETICAL_NO_NMP_GEOMETRY_SENSITIVITY_NOT_A_PRODUCT
   sensitivity_base: configs/cases/conventional_hbm_2x1.yaml
-  read_energy_policy: RECOMPUTE_DREAMRAM_FULL_AND_CLOSED_ROW_ARITHMETIC_MEAN_AT_PHYSICAL_24HI
+  read_energy_policy: DREAMRAM_24HI_COMPONENT_PROPORTIONS_NORMALIZED_TO_4P04_PJ_PER_BIT
+  hbm_energy_rebaseline: HBM_ENERGY_REBASELINE_ONLY
+  read_energy_anchor: USER_SUPPLIED_LITERATURE_ANCHORED_TARGET_NOT_STRICT_REPRODUCTION

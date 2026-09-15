@@ -22,13 +22,13 @@ memory:
     memory_config: third_party/DreamRAM/configs/mem/baseline/hbm3_baseline.json
     technology_config: third_party/DreamRAM/configs/tech/scaled/16nm_scaled.json
   nominal_read_energy:
-    full_row_pj_per_bit: 0.978
-    closed_row_pj_per_bit: 3.013
+    full_row_pj_per_bit: 1.4703081934352293
+    closed_row_pj_per_bit: 4.529691806564771
     aggregation: ARITHMETIC_MEAN
-    memory_internal_pj_per_bit: 1.2392882489481523
-    vertical_pj_per_bit: 0.5490276175199488
-    base_route_pj_per_bit: 0.15710373866310487
-    interface_pj_per_bit: 0.05008039486879381
+    memory_internal_pj_per_bit: 1.8631244033297205
+    vertical_pj_per_bit: 0.8253985730693292
+    base_route_pj_per_bit: 0.23618702880947864
+    interface_pj_per_bit: 0.07528999479147153
 
 architecture:
   vertical: {type: tsv, source: dreamram}
@@ -102,3 +102,5 @@ provenance:
   platform_revision: REV_V2_H200_ANCHORED_2026_09_06
   capacity_model: GEOMETRY_DRIVEN_INTEGER_BANK_PACKING
   power_parameters: docs/research/frozen_model_parameters.md
+  hbm_energy_rebaseline: HBM_ENERGY_REBASELINE_ONLY
+  read_energy_anchor: USER_SUPPLIED_LITERATURE_ANCHORED_TARGET_NOT_STRICT_REPRODUCTION
