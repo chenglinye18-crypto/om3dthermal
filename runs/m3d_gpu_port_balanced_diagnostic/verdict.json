@@ -1,0 +1,39 @@
+{
+  "verdict": "PORT_BALANCED_PLACEMENT_EFFECTIVE",
+  "improved_cases": 18,
+  "regressions": 0,
+  "port_totals": {
+    "old": {
+      "transfer_count": 503808.0,
+      "PORT_SERIALIZATION": 201792.0,
+      "GLOBAL_THERMAL_CAP": 302016.0,
+      "ROUTE_STARTUP": 0.0,
+      "boundary_s": 75.7153417344292,
+      "cap_only_s": 71.76258439251004,
+      "PORT_SERIALIZATION_boundary_s": 4.947148194786201,
+      "active_ports_transfer_mean": 5833.058299987297,
+      "max_port_bytes_transfer_mean": 65960.31524911536,
+      "mean_active_port_bytes_transfer_mean": 58001.137745285516,
+      "max_mean_load_ratio_transfer_mean": 1.1601689996660753,
+      "max_port_utilization_transfer_mean": 0.6181958061000977,
+      "mean_active_port_utilization_transfer_mean": 0.5357295544038412
+    },
+    "new": {
+      "transfer_count": 503808.0,
+      "PORT_SERIALIZATION": 183360.0,
+      "GLOBAL_THERMAL_CAP": 320448.0,
+      "ROUTE_STARTUP": 0.0,
+      "boundary_s": 73.31646244665936,
+      "cap_only_s": 71.76258439251004,
+      "PORT_SERIALIZATION_boundary_s": 2.2143632423159265,
+      "active_ports_transfer_mean": 6757.33899422002,
+      "max_port_bytes_transfer_mean": 54161.78833124847,
+      "mean_active_port_bytes_transfer_mean": 48516.28164898907,
+      "max_mean_load_ratio_transfer_mean": 1.1731072218799043,
+      "max_port_utilization_transfer_mean": 0.5999981003284838,
+      "mean_active_port_utilization_transfer_mean": 0.524222403586985
+    }
+  },
+  "old_HEAD": "ea5aa97867214f9a73bff7563b683813a9f2a3c5",
+  "status": "DIAGNOSTIC_ONLY"
+}

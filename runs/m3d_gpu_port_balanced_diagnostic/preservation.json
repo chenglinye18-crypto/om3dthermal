@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "protected_files": 89,
+  "formal_updated": false,
+  "old_diagnostic_updated": false,
+  "HBM_NMP_thermal_runs": 0,
+  "CPA_optimizer_calls": 0,
+  "new_GPU_cases": 18,
+  "old_GPU_port_telemetry_replays": 18,
+  "Prefill_recomputed": false
+}

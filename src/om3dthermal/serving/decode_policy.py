@@ -135,6 +135,8 @@ class DecodePolicyModel:
         if not 0 < context < self.workload.context_length:
             raise ValueError("context plus append exceeds reserved resident KV")
         policy = ExecutionPolicy(policy)
+        if self.placement.policy == PlacementPolicy.GPU_PORT_BALANCED and policy != ExecutionPolicy.NO_NMP:
+            raise ValueError("GPU_PORT_BALANCED is only legal for GPU execution")
         if self.context != context:
             self.dynamic.clear()
             self.context = context

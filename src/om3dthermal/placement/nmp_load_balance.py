@@ -8,6 +8,7 @@ from om3dthermal.workload.dense_decode_ledger import build_dense_decode_placemen
 
 
 class PlacementPolicy(StrEnum):
+    GPU_PORT_BALANCED = "GPU_PORT_BALANCED"
     COMPACT_FIRST_FIT = "COMPACT_FIRST_FIT"
     UNIFORM_STRIPING = "UNIFORM_STRIPING"
     BALANCED = "BALANCED"
@@ -82,6 +83,13 @@ class PhysicalResidentPlacement:
     physical clusters. Arrays describe counts, never materialized tensors.
     """
     def __init__(self, workload, floorplan, policy=PlacementPolicy.BALANCED):
+        if PlacementPolicy(policy) == PlacementPolicy.GPU_PORT_BALANCED:
+            # Start with the unchanged legal Uniform allocation. A bijection of
+            # physical lanes preserves every slot's occupancy and atom identity.
+            self.__init__(workload, floorplan, PlacementPolicy.UNIFORM_STRIPING)
+            from .gpu_port_balanced import remap_external_ports
+            remap_external_ports(self)
+            return
         try:
             self._initialize(workload, floorplan, policy)
         except ValueError as exc:

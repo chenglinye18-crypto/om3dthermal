@@ -1,0 +1,181 @@
+{
+  "old": {
+    "all": {
+      "utilization_min": 71.75540597601852,
+      "utilization_max": 96.8646837645229,
+      "utilization_geomean": 90.3959945415695,
+      "TPS_drop_min": 5.080194738753363,
+      "TPS_drop_max": 28.4148490408895,
+      "TPS_drop_geomean": 8.379569970995185,
+      "drop_from_TPS_ratio_geomean": 10.152228952916275
+    },
+    "batch": {
+      "1": {
+        "utilization_min": 71.75540597601852,
+        "utilization_max": 94.8100319126784,
+        "utilization_geomean": 87.25571642024693,
+        "TPS_drop_min": 5.5753964593381,
+        "TPS_drop_max": 28.4148490408895,
+        "TPS_drop_geomean": 10.447382233511167,
+        "drop_from_TPS_ratio_geomean": 12.947501215698987
+      },
+      "8": {
+        "utilization_min": 83.87507466422178,
+        "utilization_max": 96.8646837645229,
+        "utilization_geomean": 93.64928928900912,
+        "TPS_drop_min": 5.080194738753363,
+        "TPS_drop_max": 15.74565328274059,
+        "TPS_drop_geomean": 6.721032248018518,
+        "drop_from_TPS_ratio_geomean": 7.267199967096339
+      }
+    },
+    "model": {
+      "Llama-3.1-8B": {
+        "utilization_min": 71.75540597601852,
+        "utilization_max": 95.49320911796985,
+        "utilization_geomean": 83.33535828968746,
+        "TPS_drop_min": 5.848119352681913,
+        "TPS_drop_max": 28.4148490408895,
+        "TPS_drop_geomean": 14.518646611975347,
+        "drop_from_TPS_ratio_geomean": 16.967482963370117
+      },
+      "Llama-3.1-70B": {
+        "utilization_min": 90.55107208745873,
+        "utilization_max": 96.8646837645229,
+        "utilization_geomean": 93.12753081926049,
+        "TPS_drop_min": 5.246707601566747,
+        "TPS_drop_max": 9.625022221727997,
+        "TPS_drop_geomean": 7.417922979990409,
+        "drop_from_TPS_ratio_geomean": 7.595499659245042
+      },
+      "Llama-3.1-405B": {
+        "utilization_min": 94.48204673234954,
+        "utilization_max": 96.52780272133526,
+        "utilization_geomean": 95.1787872015915,
+        "TPS_drop_min": 5.080194738753363,
+        "TPS_drop_max": 5.686524257188397,
+        "TPS_drop_geomean": 5.463321283651436,
+        "drop_from_TPS_ratio_geomean": 5.467619060645323
+      }
+    },
+    "context": {
+      "LC20K": {
+        "utilization_min": 71.75540597601852,
+        "utilization_max": 94.91032340514167,
+        "utilization_geomean": 87.6308413967437,
+        "TPS_drop_min": 5.080194738753363,
+        "TPS_drop_max": 28.4148490408895,
+        "TPS_drop_geomean": 9.849872947734395,
+        "drop_from_TPS_ratio_geomean": 12.394550176384689
+      },
+      "LC64K": {
+        "utilization_min": 77.12000480541056,
+        "utilization_max": 95.73580575382503,
+        "utilization_geomean": 90.80562463120287,
+        "TPS_drop_min": 5.313704586925327,
+        "TPS_drop_max": 22.842838899780283,
+        "TPS_drop_geomean": 8.273518976520645,
+        "drop_from_TPS_ratio_geomean": 9.79215640294403
+      },
+      "LC126K": {
+        "utilization_min": 81.95060551661511,
+        "utilization_max": 96.8646837645229,
+        "utilization_geomean": 92.82775128053439,
+        "TPS_drop_min": 5.246707601566747,
+        "TPS_drop_max": 18.12861917819635,
+        "TPS_drop_geomean": 7.220118064602711,
+        "drop_from_TPS_ratio_geomean": 8.220328792211395
+      }
+    }
+  },
+  "new": {
+    "all": {
+      "utilization_min": 93.13253898575562,
+      "utilization_max": 99.11909655632581,
+      "utilization_geomean": 97.08105654140952,
+      "TPS_drop_min": 2.573603627295029,
+      "TPS_drop_max": 7.97775101981385,
+      "TPS_drop_geomean": 3.7603843569461968,
+      "drop_from_TPS_ratio_geomean": 3.9522892983352653
+    },
+    "batch": {
+      "1": {
+        "utilization_min": 93.13253898575562,
+        "utilization_max": 97.77961323541847,
+        "utilization_geomean": 96.16932882335611,
+        "TPS_drop_min": 2.573603627295029,
+        "TPS_drop_max": 7.97775101981385,
+        "TPS_drop_geomean": 4.130967544886838,
+        "drop_from_TPS_ratio_geomean": 4.4266217275284125
+      },
+      "8": {
+        "utilization_min": 96.52557560140876,
+        "utilization_max": 99.11909655632581,
+        "utilization_geomean": 98.00142784096683,
+        "TPS_drop_min": 2.5940925233699397,
+        "TPS_drop_max": 4.327348633315708,
+        "TPS_drop_geomean": 3.423045656572209,
+        "drop_from_TPS_ratio_geomean": 3.475602748596718
+      }
+    },
+    "model": {
+      "Llama-3.1-8B": {
+        "utilization_min": 93.13253898575562,
+        "utilization_max": 99.11909655632581,
+        "utilization_geomean": 96.3088601765061,
+        "TPS_drop_min": 2.605086150845193,
+        "TPS_drop_max": 7.97775101981385,
+        "TPS_drop_geomean": 4.46565140033764,
+        "drop_from_TPS_ratio_geomean": 4.811754728940887
+      },
+      "Llama-3.1-70B": {
+        "utilization_min": 95.82203923309639,
+        "utilization_max": 98.66252024255019,
+        "utilization_geomean": 97.00066130706126,
+        "TPS_drop_min": 3.7581020466622928,
+        "TPS_drop_max": 4.53233188376172,
+        "TPS_drop_geomean": 4.04137928808037,
+        "drop_from_TPS_ratio_geomean": 4.050998146054741
+      },
+      "Llama-3.1-405B": {
+        "utilization_min": 97.63458917267639,
+        "utilization_max": 98.52804350130998,
+        "utilization_geomean": 97.94055131533383,
+        "TPS_drop_min": 2.573603627295029,
+        "TPS_drop_max": 3.95347337863875,
+        "TPS_drop_geomean": 2.946336071155379,
+        "drop_from_TPS_ratio_geomean": 2.9853610911331985
+      }
+    },
+    "context": {
+      "LC20K": {
+        "utilization_min": 93.13253898575562,
+        "utilization_max": 97.82405151512562,
+        "utilization_geomean": 96.27652459426209,
+        "TPS_drop_min": 2.573603627295029,
+        "TPS_drop_max": 7.97775101981385,
+        "TPS_drop_geomean": 3.9883831440172313,
+        "drop_from_TPS_ratio_geomean": 4.3271085413381645
+      },
+      "LC64K": {
+        "utilization_min": 94.73511928079407,
+        "utilization_max": 98.43386765665582,
+        "utilization_geomean": 97.1913548374957,
+        "TPS_drop_min": 2.7254264128478645,
+        "TPS_drop_max": 5.983600226700913,
+        "TPS_drop_geomean": 3.719701472459162,
+        "drop_from_TPS_ratio_geomean": 3.8554889289589944
+      },
+      "LC126K": {
+        "utilization_min": 96.0374729800938,
+        "utilization_max": 99.11909655632581,
+        "utilization_geomean": 97.7812177543685,
+        "TPS_drop_min": 2.605086150845193,
+        "TPS_drop_max": 4.808489459893018,
+        "TPS_drop_geomean": 3.584196020621368,
+        "drop_from_TPS_ratio_geomean": 3.673083383120357
+      }
+    }
+  },
+  "regressions": []
+}

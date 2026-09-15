@@ -1,0 +1,32 @@
+{
+  "baseline_HEAD": "ea5aa97867214f9a73bff7563b683813a9f2a3c5",
+  "status": "DIAGNOSTIC_ONLY",
+  "policy": "GPU_PORT_BALANCED",
+  "models": 3,
+  "contexts": 3,
+  "batches": [
+    1,
+    8
+  ],
+  "P": 128,
+  "G": 32,
+  "completed_new_GPU_cases": 18,
+  "completed_old_GPU_port_telemetry_cases": 18,
+  "optional_energy_observer_abandoned_partial_cases": [
+    "70B/20K/B8",
+    "405B/64K/B8",
+    "405B/126K/B8"
+  ],
+  "Prefill": "EXACT_OLD_DIAGNOSTIC_TOTALS_REUSED",
+  "formal_replaced": false,
+  "full_pytest_run": false,
+  "related_tests_passed": 165,
+  "prechange_signature_test_passed": 1,
+  "source_sha256": {
+    "src\\om3dthermal\\placement\\nmp_load_balance.py": "920ae817e339a89b7237fed2e1bae44bddf7b034deed95d8bff8ffaf5175adc9",
+    "src\\om3dthermal\\placement\\gpu_port_balanced.py": "45aa4e97fba788a6d5bf37a3098ee9dfadf4a0bd91e6f9a26c42133b5f36da07",
+    "src\\om3dthermal\\serving\\decode_policy.py": "0eedeea1ae40541d0a40bdaa2b7eb50cf025df1acd10a454f70a921f982ca712",
+    "src\\om3dthermal\\power\\nmp_die_activity.py": "e1cc49c22245fa822ff83a000fdc3aa116d8a5aad97ba501541d7f8af18a9c57",
+    "src\\om3dthermal\\power\\batched_physical.py": "aeded3915e1cfe07bb0b561047071ba1d05d367a243af12f483b4110324a824f"
+  }
+}
