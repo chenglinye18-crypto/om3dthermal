@@ -1,0 +1,13 @@
+{
+  "benchmark_id": "formal_long_context_v3",
+  "operating_points": 18,
+  "formal_rows": 72,
+  "old_HEAD": "2b693b8a91da5e7a16efcfb04354bc4983832104",
+  "M3D_capacity_infeasible": 0,
+  "B1_wave_infeasible": 0,
+  "thermal_over_85": [],
+  "wave_selected": 7,
+  "HBM_thermal_bandwidth_TBps": 3.0865643306417803,
+  "M3D_GPU_thermal_cap_TBps": 3.3957835581187483,
+  "NMP_physical_boundary_cap_status": "UNCHANGED_FROZEN_IMPLEMENTATION"
+}

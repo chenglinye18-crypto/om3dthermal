@@ -1,0 +1,23 @@
+{
+  "model": "Llama-3.1-8B",
+  "context": "LC20K",
+  "batch": 1,
+  "path": "M3D_NMP_CPA",
+  "thermal_metric": "PEAK_DECODE_STEADY_STATE",
+  "GPU_power_W": 147.2831585259344,
+  "memory_power_W": 164.94563580629463,
+  "mapping": "DIE_GROUPED_BEOL_UNIFORM",
+  "operator_signature": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+  "Tmax_C": 60.79326769504013,
+  "hotspot_component": "gpu/FEOL",
+  "hotspot_x": 0.010595348000000001,
+  "hotspot_y": -0.0012500000000000011,
+  "hotspot_z": 0.00037179,
+  "hotspot_die": null,
+  "thermal_solve_s": 7.244810000003781,
+  "iterations": 2160,
+  "relative_residual": 0.0005187300413423078,
+  "max_temperature_update_K": 0.00824087202997958,
+  "thermal_status": "THERMAL_FEASIBLE",
+  "thermal_feasible": true
+}

@@ -1,0 +1,41 @@
+{
+  "model": "Qwen2.5-32B",
+  "parameter_count": 32763876352,
+  "official_config": {
+    "architectures": [
+      "Qwen2ForCausalLM"
+    ],
+    "attention_dropout": 0.0,
+    "bos_token_id": 151643,
+    "eos_token_id": 151643,
+    "hidden_act": "silu",
+    "hidden_size": 5120,
+    "initializer_range": 0.02,
+    "intermediate_size": 27648,
+    "max_position_embeddings": 131072,
+    "max_window_layers": 64,
+    "model_type": "qwen2",
+    "num_attention_heads": 40,
+    "num_hidden_layers": 64,
+    "num_key_value_heads": 8,
+    "rms_norm_eps": 1e-05,
+    "rope_theta": 1000000.0,
+    "sliding_window": 131072,
+    "tie_word_embeddings": false,
+    "torch_dtype": "bfloat16",
+    "transformers_version": "4.43.1",
+    "use_cache": true,
+    "use_sliding_window": false,
+    "vocab_size": 152064
+  },
+  "official_weight_bytes": 65527752704,
+  "QKV_bias_tensors": 192,
+  "sources": [
+    "https://huggingface.co/Qwen/Qwen2.5-32B/raw/main/config.json",
+    "https://huggingface.co/Qwen/Qwen2.5-32B/raw/main/model.safetensors.index.json"
+  ],
+  "config_sha256": "2c003fe40b13d2d1f372254d77177ed753176150f3d424d1b5ad22ff1d78a987",
+  "index_sha256": "487c27978b0bad77946ba1a5093acfc7747a62bd5e256d3a083345d133fc3042",
+  "audit_status": "PASS",
+  "llama31_8b_canonical_parameters": 8030261248
+}

@@ -1,0 +1,23 @@
+{
+  "model": "Llama-3.1-8B",
+  "context": "LC64K",
+  "batch": 8,
+  "path": "M3D_NMP_CPA",
+  "thermal_metric": "PEAK_DECODE_STEADY_STATE",
+  "GPU_power_W": 184.26729495320092,
+  "memory_power_W": 209.98927449177617,
+  "mapping": "DIE_GROUPED_BEOL_UNIFORM",
+  "operator_signature": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+  "Tmax_C": 71.43578822299287,
+  "hotspot_component": "gpu/FEOL",
+  "hotspot_x": 0.011095348000000001,
+  "hotspot_y": 0.0007500000000000007,
+  "hotspot_z": 0.00037179,
+  "hotspot_die": null,
+  "thermal_solve_s": 7.417273600003682,
+  "iterations": 2210,
+  "relative_residual": 0.0005459546491605909,
+  "max_temperature_update_K": 0.008398984036128819,
+  "thermal_status": "THERMAL_FEASIBLE",
+  "thermal_feasible": true
+}

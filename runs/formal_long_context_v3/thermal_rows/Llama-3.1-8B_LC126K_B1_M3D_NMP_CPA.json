@@ -1,0 +1,23 @@
+{
+  "model": "Llama-3.1-8B",
+  "context": "LC126K",
+  "batch": 1,
+  "path": "M3D_NMP_CPA",
+  "thermal_metric": "PEAK_DECODE_STEADY_STATE",
+  "GPU_power_W": 150.09740725146676,
+  "memory_power_W": 202.7995821726265,
+  "mapping": "DIE_GROUPED_BEOL_UNIFORM",
+  "operator_signature": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+  "Tmax_C": 65.5664569295181,
+  "hotspot_component": "gpu/FEOL",
+  "hotspot_x": 0.010195348000000003,
+  "hotspot_y": -0.0002500000000000002,
+  "hotspot_z": 0.00037179,
+  "hotspot_die": null,
+  "thermal_solve_s": 7.1463793000002624,
+  "iterations": 2130,
+  "relative_residual": 0.0006188880122121191,
+  "max_temperature_update_K": 0.009740510245111042,
+  "thermal_status": "THERMAL_FEASIBLE",
+  "thermal_feasible": true
+}

@@ -1,0 +1,21 @@
+schema_version: 1
+model_id: qwen25_32b
+model_spec_status: RESOLVED
+context_status: OFFICIAL_BASE_MODEL_131072
+n_param: 32763876352
+n_layers: 64
+n_heads_q: 40
+n_heads_kv: 8
+d_model: 5120
+d_ff: 27648
+vocab_size: 152064
+weight_bits: 16
+kv_bits: 16
+provenance:
+  - classification: OFFICIAL_MODEL_CONFIG
+    source: https://huggingface.co/Qwen/Qwen2.5-32B/raw/main/config.json
+    status: BASE_MODEL_NOT_INSTRUCT
+  - classification: OFFICIAL_WEIGHT_INDEX
+    source: https://huggingface.co/Qwen/Qwen2.5-32B/raw/main/model.safetensors.index.json
+    total_size_bytes: 65527752704
+    status: EXACT_BF16_PARAMETER_COUNT_INCLUDES_QKV_BIAS_AND_RMSNORM

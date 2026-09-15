@@ -1,0 +1,23 @@
+{
+  "model": "Qwen2.5-32B",
+  "context": "LC20K",
+  "batch": 8,
+  "path": "M3D_GPU",
+  "thermal_metric": "PEAK_DECODE_STEADY_STATE",
+  "GPU_power_W": 378.44743409411114,
+  "memory_power_W": 23.300717123627116,
+  "mapping": "DIE_GROUPED_BEOL_UNIFORM",
+  "operator_signature": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+  "Tmax_C": 82.8530214580345,
+  "hotspot_component": "gpu/FEOL",
+  "hotspot_x": 0.01595,
+  "hotspot_y": -0.002250000000000001,
+  "hotspot_z": 0.00037179,
+  "hotspot_die": null,
+  "thermal_solve_s": 7.687265799992019,
+  "iterations": 2290,
+  "relative_residual": 0.0005542884356337588,
+  "max_temperature_update_K": 0.007886463970934508,
+  "thermal_status": "THERMAL_FEASIBLE",
+  "thermal_feasible": true
+}

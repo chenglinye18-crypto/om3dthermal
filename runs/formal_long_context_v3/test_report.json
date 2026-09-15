@@ -1,0 +1,32 @@
+{
+  "failure_categories": [
+    "9 assertions require deleted legacy result files",
+    "1 existing v1/v2 configuration import collision (W64)",
+    "1 existing assertion expects obsolete HBM thermal bandwidth 3.297387 TB/s"
+  ],
+  "full_pytest_run": false,
+  "new_targeted": {
+    "passed": 6,
+    "failed": 0,
+    "runtime_s": 6.537
+  },
+  "public_evaluator_modified": false,
+  "related": {
+    "skipped": 8,
+    "passed": 313,
+    "runtime_s": 271.01,
+    "failed": 11
+  },
+  "physical_dependencies": {
+    "passed": 344,
+    "failed": 0,
+    "skipped": 0,
+    "runtime_s": 615.979
+  },
+  "related_total": {
+    "passed": 657,
+    "failed": 11,
+    "skipped": 8,
+    "runtime_s": 886.989
+  }
+}

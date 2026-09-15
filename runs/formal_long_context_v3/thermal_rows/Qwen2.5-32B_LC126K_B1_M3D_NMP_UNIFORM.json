@@ -1,0 +1,23 @@
+{
+  "model": "Qwen2.5-32B",
+  "context": "LC126K",
+  "batch": 1,
+  "path": "M3D_NMP_UNIFORM",
+  "thermal_metric": "PEAK_DECODE_STEADY_STATE",
+  "GPU_power_W": 141.5681442083027,
+  "memory_power_W": 230.12492978928708,
+  "mapping": "DIE_GROUPED_BEOL_UNIFORM",
+  "operator_signature": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+  "Tmax_C": 67.45156977177737,
+  "hotspot_component": "gpu/FEOL",
+  "hotspot_x": 0.010195348000000003,
+  "hotspot_y": 0.0012500000000000011,
+  "hotspot_z": 0.00037179,
+  "hotspot_die": null,
+  "thermal_solve_s": 7.2470071999996435,
+  "iterations": 2160,
+  "relative_residual": 0.0005930836419664035,
+  "max_temperature_update_K": 0.00977791174316787,
+  "thermal_status": "THERMAL_FEASIBLE",
+  "thermal_feasible": true
+}

@@ -1,0 +1,351 @@
+........................................................................ [ 21%]
+.....................................ss................................. [ 43%]
+........................................................................ [ 65%]
+................................................F..........FFFFFFFF..sss [ 86%]
+sssF.........F..............................                             [100%]
+================================== FAILURES ===================================
+____________________________ test_lc64k_definition ____________________________
+
+    def test_lc64k_definition():
+        assert CONTEXTS['LC64K']==('W64',64000,512,512)
+>       w,cw,_=legacy.inputs(MODELS[0],'W64',8,ROOT)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:26: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+name = 'Llama-3.1-8B', wid = 'W64', batch = 8
+root = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project')
+
+    def inputs(name,wid,batch,root):
+        config,ws,*_=setup(root)
+>       cw=CachedWorkload(**config['workloads'][wid])
+                            ^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'W64'
+
+src\om3dthermal\serving\workload_matrix.py:39: KeyError
+________ test_existing_hbm_performance_unchanged[1-LC20K-Llama-3.1-8B] ________
+
+m = 'Llama-3.1-8B', c = 'LC20K', b = 1
+
+    @pytest.mark.parametrize('m',MODELS[:2])
+    @pytest.mark.parametrize('c',('LC20K','LC126K'))
+    @pytest.mark.parametrize('b',(1,8))
+    def test_existing_hbm_performance_unchanged(m,c,b):
+>       old=next(r for r in read_csv(OLD/'primary_summary.csv') if r['model']==m and r['workload_id']==CONTEXTS[c][0] and int(r['batch_size'])==b and r['system']=='HBM_GPU')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+scripts\formal_long_context_support.py:96: in read_csv
+    with path.open(encoding='utf-8') as f:return list(csv.DictReader(f))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/formal_iom3d_workload_sweep_v1/primary_summary.csv')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\formal_iom3d_workload_sweep_v1\\primary_summary.csv'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+_______ test_existing_hbm_performance_unchanged[1-LC20K-Llama-3.1-70B] ________
+
+m = 'Llama-3.1-70B', c = 'LC20K', b = 1
+
+    @pytest.mark.parametrize('m',MODELS[:2])
+    @pytest.mark.parametrize('c',('LC20K','LC126K'))
+    @pytest.mark.parametrize('b',(1,8))
+    def test_existing_hbm_performance_unchanged(m,c,b):
+>       old=next(r for r in read_csv(OLD/'primary_summary.csv') if r['model']==m and r['workload_id']==CONTEXTS[c][0] and int(r['batch_size'])==b and r['system']=='HBM_GPU')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+scripts\formal_long_context_support.py:96: in read_csv
+    with path.open(encoding='utf-8') as f:return list(csv.DictReader(f))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/formal_iom3d_workload_sweep_v1/primary_summary.csv')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\formal_iom3d_workload_sweep_v1\\primary_summary.csv'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+_______ test_existing_hbm_performance_unchanged[1-LC126K-Llama-3.1-8B] ________
+
+m = 'Llama-3.1-8B', c = 'LC126K', b = 1
+
+    @pytest.mark.parametrize('m',MODELS[:2])
+    @pytest.mark.parametrize('c',('LC20K','LC126K'))
+    @pytest.mark.parametrize('b',(1,8))
+    def test_existing_hbm_performance_unchanged(m,c,b):
+>       old=next(r for r in read_csv(OLD/'primary_summary.csv') if r['model']==m and r['workload_id']==CONTEXTS[c][0] and int(r['batch_size'])==b and r['system']=='HBM_GPU')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+scripts\formal_long_context_support.py:96: in read_csv
+    with path.open(encoding='utf-8') as f:return list(csv.DictReader(f))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/formal_iom3d_workload_sweep_v1/primary_summary.csv')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\formal_iom3d_workload_sweep_v1\\primary_summary.csv'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+_______ test_existing_hbm_performance_unchanged[1-LC126K-Llama-3.1-70B] _______
+
+m = 'Llama-3.1-70B', c = 'LC126K', b = 1
+
+    @pytest.mark.parametrize('m',MODELS[:2])
+    @pytest.mark.parametrize('c',('LC20K','LC126K'))
+    @pytest.mark.parametrize('b',(1,8))
+    def test_existing_hbm_performance_unchanged(m,c,b):
+>       old=next(r for r in read_csv(OLD/'primary_summary.csv') if r['model']==m and r['workload_id']==CONTEXTS[c][0] and int(r['batch_size'])==b and r['system']=='HBM_GPU')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+scripts\formal_long_context_support.py:96: in read_csv
+    with path.open(encoding='utf-8') as f:return list(csv.DictReader(f))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/formal_iom3d_workload_sweep_v1/primary_summary.csv')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\formal_iom3d_workload_sweep_v1\\primary_summary.csv'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+________ test_existing_hbm_performance_unchanged[8-LC20K-Llama-3.1-8B] ________
+
+m = 'Llama-3.1-8B', c = 'LC20K', b = 8
+
+    @pytest.mark.parametrize('m',MODELS[:2])
+    @pytest.mark.parametrize('c',('LC20K','LC126K'))
+    @pytest.mark.parametrize('b',(1,8))
+    def test_existing_hbm_performance_unchanged(m,c,b):
+>       old=next(r for r in read_csv(OLD/'primary_summary.csv') if r['model']==m and r['workload_id']==CONTEXTS[c][0] and int(r['batch_size'])==b and r['system']=='HBM_GPU')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+scripts\formal_long_context_support.py:96: in read_csv
+    with path.open(encoding='utf-8') as f:return list(csv.DictReader(f))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/formal_iom3d_workload_sweep_v1/primary_summary.csv')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\formal_iom3d_workload_sweep_v1\\primary_summary.csv'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+_______ test_existing_hbm_performance_unchanged[8-LC20K-Llama-3.1-70B] ________
+
+m = 'Llama-3.1-70B', c = 'LC20K', b = 8
+
+    @pytest.mark.parametrize('m',MODELS[:2])
+    @pytest.mark.parametrize('c',('LC20K','LC126K'))
+    @pytest.mark.parametrize('b',(1,8))
+    def test_existing_hbm_performance_unchanged(m,c,b):
+>       old=next(r for r in read_csv(OLD/'primary_summary.csv') if r['model']==m and r['workload_id']==CONTEXTS[c][0] and int(r['batch_size'])==b and r['system']=='HBM_GPU')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+scripts\formal_long_context_support.py:96: in read_csv
+    with path.open(encoding='utf-8') as f:return list(csv.DictReader(f))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/formal_iom3d_workload_sweep_v1/primary_summary.csv')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\formal_iom3d_workload_sweep_v1\\primary_summary.csv'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+_______ test_existing_hbm_performance_unchanged[8-LC126K-Llama-3.1-8B] ________
+
+m = 'Llama-3.1-8B', c = 'LC126K', b = 8
+
+    @pytest.mark.parametrize('m',MODELS[:2])
+    @pytest.mark.parametrize('c',('LC20K','LC126K'))
+    @pytest.mark.parametrize('b',(1,8))
+    def test_existing_hbm_performance_unchanged(m,c,b):
+>       old=next(r for r in read_csv(OLD/'primary_summary.csv') if r['model']==m and r['workload_id']==CONTEXTS[c][0] and int(r['batch_size'])==b and r['system']=='HBM_GPU')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+scripts\formal_long_context_support.py:96: in read_csv
+    with path.open(encoding='utf-8') as f:return list(csv.DictReader(f))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/formal_iom3d_workload_sweep_v1/primary_summary.csv')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\formal_iom3d_workload_sweep_v1\\primary_summary.csv'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+_______ test_existing_hbm_performance_unchanged[8-LC126K-Llama-3.1-70B] _______
+
+m = 'Llama-3.1-70B', c = 'LC126K', b = 8
+
+    @pytest.mark.parametrize('m',MODELS[:2])
+    @pytest.mark.parametrize('c',('LC20K','LC126K'))
+    @pytest.mark.parametrize('b',(1,8))
+    def test_existing_hbm_performance_unchanged(m,c,b):
+>       old=next(r for r in read_csv(OLD/'primary_summary.csv') if r['model']==m and r['workload_id']==CONTEXTS[c][0] and int(r['batch_size'])==b and r['system']=='HBM_GPU')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+scripts\formal_long_context_support.py:96: in read_csv
+    with path.open(encoding='utf-8') as f:return list(csv.DictReader(f))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/formal_iom3d_workload_sweep_v1/primary_summary.csv')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\formal_iom3d_workload_sweep_v1\\primary_summary.csv'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+_______________________ test_historical_runs_preserved ________________________
+
+    def test_historical_runs_preserved():
+        from probe_attention_nmp import digest
+>       frozen=json.loads((ROOT/'runs/attention_nmp_probe_8b_w1_b8/frozen_integrity.json').read_text())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_formal_long_context.py:184: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/BaiduSyncdisk/study/PAPER/DAC 2026/Project/runs/attention_nmp_probe_8b_w1_b8/frozen_integrity.json')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\Project\\runs\\attention_nmp_probe_8b_w1_b8\\frozen_integrity.json'
+
+C:\Users\Leslie\Miniconda3\envs\om3dthermal\Lib\pathlib.py:1044: FileNotFoundError
+____________________ test_thermal_sources_and_grace_frozen ____________________
+
+    def test_thermal_sources_and_grace_frozen():
+        config,_,platform,hbm,bw=setup(ROOT)
+>       assert hbm.sustained_bandwidth_bytes_per_s==3.2973872924850354e12
+E       AssertionError: assert 3086564330641.7803 == 3297387292485.035
+E        +  where 3086564330641.7803 = ConventionalHBMBackend(architecture='conventional_hbm_2x1', capacity_bytes=144955146240.0, peak_bandwidth_bytes_per_s=...DDR4 Perlmutter reference; NOT_MULTI_RUN_TABLE_III_RESULT; NOT_H200_DDR5_DIRECT_MEASUREMENT.', parent_record_ids=())))).sustained_bandwidth_bytes_per_s
+
+tests\test_formal_iom3d_workloads.py:31: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_formal_long_context.py::test_lc64k_definition - KeyError: '...
+FAILED tests/test_formal_long_context.py::test_existing_hbm_performance_unchanged[1-LC20K-Llama-3.1-8B]
+FAILED tests/test_formal_long_context.py::test_existing_hbm_performance_unchanged[1-LC20K-Llama-3.1-70B]
+FAILED tests/test_formal_long_context.py::test_existing_hbm_performance_unchanged[1-LC126K-Llama-3.1-8B]
+FAILED tests/test_formal_long_context.py::test_existing_hbm_performance_unchanged[1-LC126K-Llama-3.1-70B]
+FAILED tests/test_formal_long_context.py::test_existing_hbm_performance_unchanged[8-LC20K-Llama-3.1-8B]
+FAILED tests/test_formal_long_context.py::test_existing_hbm_performance_unchanged[8-LC20K-Llama-3.1-70B]
+FAILED tests/test_formal_long_context.py::test_existing_hbm_performance_unchanged[8-LC126K-Llama-3.1-8B]
+FAILED tests/test_formal_long_context.py::test_existing_hbm_performance_unchanged[8-LC126K-Llama-3.1-70B]
+FAILED tests/test_formal_long_context.py::test_historical_runs_preserved - Fi...
+FAILED tests/test_formal_iom3d_workloads.py::test_thermal_sources_and_grace_frozen
+11 failed, 313 passed, 8 skipped in 271.01s (0:04:31)
+ERROR conda.cli.main_run:execute(148): `conda run python -m pytest -q tests\test_workload_demand.py tests\test_workload_capacity.py tests\test_serving_state_conservation.py tests\test_serving_resident_adapter.py tests\test_serving_residency.py tests\test_serving_performance.py tests\test_serving_experiment.py tests\test_resident_wave_admission.py tests\test_resident_wave.py tests\test_primary_execution.py tests\test_placement_serving_e2e.py tests\test_persistent_serving_closure.py tests\test_mixtral_moe_workload.py tests\test_mixed_phase_e2e.py tests\test_m3d_workload_page_demand.py tests\test_llm_prefill.py tests\test_llm_decode_workload_thermal.py tests\test_llm_decode_workload_power.py tests\test_llm_decode.py tests\test_host_offload_power.py tests\test_gh200_host_offload_rebaseline.py tests\test_formal_parallel_runtime.py tests\test_formal_long_context.py tests\test_formal_iom3d_workloads.py tests\test_formal_gpu_refresh.py tests\test_formal_e2e_benchmark.py tests\test_cached_prefix_diagnostic.py tests\test_cached_history_wave.py --junitxml=runs/formal_long_context_v3/serving_tests.xml` failed. (See above for error)

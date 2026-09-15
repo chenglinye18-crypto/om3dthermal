@@ -1,0 +1,812 @@
+[
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B1_HBM_BEST.json.gz",
+    "raw_bytes": 7703,
+    "compressed_bytes": 1868
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B1_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 7665,
+    "compressed_bytes": 1849
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B1_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 7666,
+    "compressed_bytes": 1851
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B1_M3D_GPU.json.gz",
+    "raw_bytes": 29422,
+    "compressed_bytes": 6707
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B1_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 599379,
+    "compressed_bytes": 43886
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B1_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 31191,
+    "compressed_bytes": 6792
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B32_HBM_BEST.json.gz",
+    "raw_bytes": 40407,
+    "compressed_bytes": 3544
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B32_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 17068,
+    "compressed_bytes": 2105
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B32_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 40369,
+    "compressed_bytes": 3523
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B32_M3D_GPU.json.gz",
+    "raw_bytes": 38739,
+    "compressed_bytes": 6863
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B32_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 4706497,
+    "compressed_bytes": 242973
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B32_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 40460,
+    "compressed_bytes": 6940
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B8_HBM_BEST.json.gz",
+    "raw_bytes": 9950,
+    "compressed_bytes": 1661
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B8_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 9912,
+    "compressed_bytes": 1642
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B8_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 15495,
+    "compressed_bytes": 2967
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B8_M3D_GPU.json.gz",
+    "raw_bytes": 31584,
+    "compressed_bytes": 6828
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B8_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 1541797,
+    "compressed_bytes": 107043
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC126K_B8_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 33216,
+    "compressed_bytes": 6818
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B1_HBM_BEST.json.gz",
+    "raw_bytes": 7676,
+    "compressed_bytes": 1867
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B1_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 7638,
+    "compressed_bytes": 1849
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B1_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 7639,
+    "compressed_bytes": 1851
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B1_M3D_GPU.json.gz",
+    "raw_bytes": 29373,
+    "compressed_bytes": 6739
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B1_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 602601,
+    "compressed_bytes": 46048
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B1_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 31027,
+    "compressed_bytes": 6800
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B32_HBM_BEST.json.gz",
+    "raw_bytes": 16975,
+    "compressed_bytes": 2076
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B32_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 16937,
+    "compressed_bytes": 2056
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B32_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 16938,
+    "compressed_bytes": 2056
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B32_M3D_GPU.json.gz",
+    "raw_bytes": 38747,
+    "compressed_bytes": 6970
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B32_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 4768152,
+    "compressed_bytes": 269532
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B32_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 40261,
+    "compressed_bytes": 6993
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B8_HBM_BEST.json.gz",
+    "raw_bytes": 9802,
+    "compressed_bytes": 1934
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B8_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 9764,
+    "compressed_bytes": 1913
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B8_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 9765,
+    "compressed_bytes": 1916
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B8_M3D_GPU.json.gz",
+    "raw_bytes": 31473,
+    "compressed_bytes": 6848
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B8_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 1577482,
+    "compressed_bytes": 122355
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC20K_B8_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 33106,
+    "compressed_bytes": 6741
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B1_HBM_BEST.json.gz",
+    "raw_bytes": 7672,
+    "compressed_bytes": 1868
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B1_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 7634,
+    "compressed_bytes": 1850
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B1_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 7635,
+    "compressed_bytes": 1852
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B1_M3D_GPU.json.gz",
+    "raw_bytes": 29408,
+    "compressed_bytes": 6710
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B1_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 603412,
+    "compressed_bytes": 39735
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B1_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 31110,
+    "compressed_bytes": 6794
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B32_HBM_BEST.json.gz",
+    "raw_bytes": 28835,
+    "compressed_bytes": 3364
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B32_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 17088,
+    "compressed_bytes": 2113
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B32_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 28797,
+    "compressed_bytes": 3346
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B32_M3D_GPU.json.gz",
+    "raw_bytes": 38708,
+    "compressed_bytes": 6933
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B32_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 4750683,
+    "compressed_bytes": 256337
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B32_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 40410,
+    "compressed_bytes": 6979
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B8_HBM_BEST.json.gz",
+    "raw_bytes": 9780,
+    "compressed_bytes": 1932
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B8_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 9742,
+    "compressed_bytes": 1913
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B8_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 9743,
+    "compressed_bytes": 1915
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B8_M3D_GPU.json.gz",
+    "raw_bytes": 31515,
+    "compressed_bytes": 6819
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B8_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 1575812,
+    "compressed_bytes": 121879
+  },
+  {
+    "path": "candidates\\Llama-3.1-8B_LC64K_B8_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 33166,
+    "compressed_bytes": 6859
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B1_HBM_BEST.json.gz",
+    "raw_bytes": 7683,
+    "compressed_bytes": 1855
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B1_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 7645,
+    "compressed_bytes": 1836
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B1_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 7646,
+    "compressed_bytes": 1837
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B1_M3D_GPU.json.gz",
+    "raw_bytes": 29430,
+    "compressed_bytes": 6762
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B1_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 1159441,
+    "compressed_bytes": 69367
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B1_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 31158,
+    "compressed_bytes": 6936
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B32_HBM_BEST.json.gz",
+    "raw_bytes": 102723,
+    "compressed_bytes": 3917
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B32_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 16992,
+    "compressed_bytes": 2099
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B32_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 102685,
+    "compressed_bytes": 3895
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B32_M3D_GPU.json.gz",
+    "raw_bytes": 38877,
+    "compressed_bytes": 6900
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B32_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 9286126,
+    "compressed_bytes": 432145
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B32_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 40396,
+    "compressed_bytes": 7177
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B8_HBM_BEST.json.gz",
+    "raw_bytes": 26985,
+    "compressed_bytes": 2483
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B8_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 9843,
+    "compressed_bytes": 1964
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B8_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 26947,
+    "compressed_bytes": 2465
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B8_M3D_GPU.json.gz",
+    "raw_bytes": 31570,
+    "compressed_bytes": 6877
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B8_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 3034373,
+    "compressed_bytes": 193633
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC126K_B8_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 33192,
+    "compressed_bytes": 6912
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B1_HBM_BEST.json.gz",
+    "raw_bytes": 7651,
+    "compressed_bytes": 1854
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B1_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 7613,
+    "compressed_bytes": 1835
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B1_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 7614,
+    "compressed_bytes": 1837
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B1_M3D_GPU.json.gz",
+    "raw_bytes": 29325,
+    "compressed_bytes": 6680
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B1_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 1170356,
+    "compressed_bytes": 77813
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B1_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 30898,
+    "compressed_bytes": 7035
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B32_HBM_BEST.json.gz",
+    "raw_bytes": 28869,
+    "compressed_bytes": 3341
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B32_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 16856,
+    "compressed_bytes": 2131
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B32_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 28831,
+    "compressed_bytes": 3324
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B32_M3D_GPU.json.gz",
+    "raw_bytes": 38696,
+    "compressed_bytes": 6990
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B32_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 9486120,
+    "compressed_bytes": 519897
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B32_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 40220,
+    "compressed_bytes": 7071
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B8_HBM_BEST.json.gz",
+    "raw_bytes": 9717,
+    "compressed_bytes": 1935
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B8_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 9679,
+    "compressed_bytes": 1916
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B8_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 9680,
+    "compressed_bytes": 1919
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B8_M3D_GPU.json.gz",
+    "raw_bytes": 31559,
+    "compressed_bytes": 6939
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B8_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 3120020,
+    "compressed_bytes": 233860
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC20K_B8_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 33130,
+    "compressed_bytes": 6962
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B1_HBM_BEST.json.gz",
+    "raw_bytes": 7681,
+    "compressed_bytes": 1874
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B1_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 7643,
+    "compressed_bytes": 1856
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B1_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 7644,
+    "compressed_bytes": 1858
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B1_M3D_GPU.json.gz",
+    "raw_bytes": 29404,
+    "compressed_bytes": 6725
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B1_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 1169330,
+    "compressed_bytes": 80802
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B1_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 31124,
+    "compressed_bytes": 6795
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B32_HBM_BEST.json.gz",
+    "raw_bytes": 57228,
+    "compressed_bytes": 3066
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B32_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 16918,
+    "compressed_bytes": 2102
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B32_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 57190,
+    "compressed_bytes": 3044
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B32_M3D_GPU.json.gz",
+    "raw_bytes": 38724,
+    "compressed_bytes": 7089
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B32_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 9439338,
+    "compressed_bytes": 495871
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B32_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 40275,
+    "compressed_bytes": 7004
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B8_HBM_BEST.json.gz",
+    "raw_bytes": 15555,
+    "compressed_bytes": 2250
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B8_HBM_HOST_OFFLOAD.json.gz",
+    "raw_bytes": 9828,
+    "compressed_bytes": 1978
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B8_HBM_RESIDENT_WAVE.json.gz",
+    "raw_bytes": 15517,
+    "compressed_bytes": 2232
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B8_M3D_GPU.json.gz",
+    "raw_bytes": 31569,
+    "compressed_bytes": 7005
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B8_M3D_NMP_CPA.json.gz",
+    "raw_bytes": 3114405,
+    "compressed_bytes": 231586
+  },
+  {
+    "path": "candidates\\Qwen2.5-32B_LC64K_B8_M3D_NMP_UNIFORM.json.gz",
+    "raw_bytes": 33167,
+    "compressed_bytes": 7022
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B1_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10032,
+    "compressed_bytes": 1432
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B1_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11902,
+    "compressed_bytes": 1559
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B1_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11905,
+    "compressed_bytes": 1555
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B32_M3D_GPU.jsonl.gz",
+    "raw_bytes": 9986,
+    "compressed_bytes": 1502
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B32_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11666,
+    "compressed_bytes": 1748
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B32_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11681,
+    "compressed_bytes": 1627
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B8_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10042,
+    "compressed_bytes": 1481
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B8_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11802,
+    "compressed_bytes": 1634
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC126K_B8_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11760,
+    "compressed_bytes": 1573
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B1_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10065,
+    "compressed_bytes": 1485
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B1_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11848,
+    "compressed_bytes": 1630
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B1_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11836,
+    "compressed_bytes": 1572
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B32_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10011,
+    "compressed_bytes": 1542
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B32_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11646,
+    "compressed_bytes": 1990
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B32_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11653,
+    "compressed_bytes": 1659
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B8_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10029,
+    "compressed_bytes": 1487
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B8_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11788,
+    "compressed_bytes": 1735
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC20K_B8_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11746,
+    "compressed_bytes": 1547
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B1_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10055,
+    "compressed_bytes": 1442
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B1_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11840,
+    "compressed_bytes": 1566
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B1_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11852,
+    "compressed_bytes": 1546
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B32_M3D_GPU.jsonl.gz",
+    "raw_bytes": 9973,
+    "compressed_bytes": 1525
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B32_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11342,
+    "compressed_bytes": 1833
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B32_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11657,
+    "compressed_bytes": 1647
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B8_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10014,
+    "compressed_bytes": 1476
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B8_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11754,
+    "compressed_bytes": 1862
+  },
+  {
+    "path": "checkpoints\\Llama-3.1-8B_LC64K_B8_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11733,
+    "compressed_bytes": 1644
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B1_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10038,
+    "compressed_bytes": 1435
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B1_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11822,
+    "compressed_bytes": 1676
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B1_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11805,
+    "compressed_bytes": 1656
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B32_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10019,
+    "compressed_bytes": 1497
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B32_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11669,
+    "compressed_bytes": 1837
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B32_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11629,
+    "compressed_bytes": 1655
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B8_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10005,
+    "compressed_bytes": 1475
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B8_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11708,
+    "compressed_bytes": 1633
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC126K_B8_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11675,
+    "compressed_bytes": 1552
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B1_M3D_GPU.jsonl.gz",
+    "raw_bytes": 9988,
+    "compressed_bytes": 1453
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B1_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11820,
+    "compressed_bytes": 1740
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B1_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11588,
+    "compressed_bytes": 1682
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B32_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10010,
+    "compressed_bytes": 1523
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B32_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11606,
+    "compressed_bytes": 2020
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B32_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11630,
+    "compressed_bytes": 1703
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B8_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10043,
+    "compressed_bytes": 1497
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B8_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11676,
+    "compressed_bytes": 1701
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC20K_B8_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11676,
+    "compressed_bytes": 1565
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B1_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10006,
+    "compressed_bytes": 1437
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B1_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11761,
+    "compressed_bytes": 1632
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B1_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11802,
+    "compressed_bytes": 1568
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B32_M3D_GPU.jsonl.gz",
+    "raw_bytes": 9951,
+    "compressed_bytes": 1509
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B32_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11297,
+    "compressed_bytes": 2064
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B32_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11585,
+    "compressed_bytes": 1657
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B8_M3D_GPU.jsonl.gz",
+    "raw_bytes": 10006,
+    "compressed_bytes": 1499
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B8_M3D_NMP_CPA.jsonl.gz",
+    "raw_bytes": 11409,
+    "compressed_bytes": 1836
+  },
+  {
+    "path": "checkpoints\\Qwen2.5-32B_LC64K_B8_M3D_NMP_UNIFORM.jsonl.gz",
+    "raw_bytes": 11684,
+    "compressed_bytes": 1701
+  }
+]
