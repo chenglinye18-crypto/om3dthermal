@@ -8,7 +8,7 @@ M3D_GPU: GPU_PORT_BALANCED physical operator-level data-chain and contention-awa
 
 Prefill scope: M3D_GPU uses the diagnostic's reused physical Prefill time, rather than the old formal aggregate Prefill time. Its Prefill energy is recomputed with port-balanced routing. The two NMP paths retain their frozen aggregate Prefill times and energy. Therefore this formal comparison contains that explicitly documented Prefill model difference.
 
-GPU temperatures remain 85 C THERMAL_CLOSED_DESIGN_POINT, not new workload solves. NMP temperatures remain their unchanged Decode-only steady-state results. No thermal operator was loaded or thermal sweep rerun.
+HBM temperature remains the 85 C design point. M3D_GPU temperatures now use actual Decode steady-state solves on the existing operator, with port-balanced per-die power. NMP temperatures remain unchanged. No bandwidth thermal sweep was rerun.
 
 Old formal M3D bandwidth was an aggregate closure, not a measured achieved bandwidth. The table separately labels old Uniform achieved bandwidth. NMP absolute values are unchanged; normalized NMP bars necessarily change when their HBM denominator changes.
 
@@ -89,6 +89,31 @@ Geometric means across paired operating points (not aggregate serving throughput
 
 In the om3dthermal Conda environment: python scripts/refresh_formal_gpu_results.py; python scripts/finalize_formal_long_context_v2.py; python scripts/plot_formal_long_context_v2.py. The refresh reuses completed candidates on subsequent invocations. No thermal sweep or NMP execution is dispatched.
 
-## Validation and plots
+## Prior performance-refresh validation and plots
 
 31 related tests passed. No full pytest and no thermal solver. Executed python scripts/plot_formal_long_context_v2.py: 72 rows; HBM normalization all 1; three SVG/PDF pairs generated.
+
+## Actual M3D-GPU Decode temperatures
+
+| Model | Context | B | Tmax C |
+|---|---|---:|---:|
+| Llama-3.1-8B | LC20K | 1 | 81.1888 |
+| Llama-3.1-8B | LC20K | 8 | 82.4572 |
+| Llama-3.1-8B | LC64K | 1 | 81.8209 |
+| Llama-3.1-8B | LC64K | 8 | 83.2334 |
+| Llama-3.1-8B | LC126K | 1 | 82.3216 |
+| Llama-3.1-8B | LC126K | 8 | 83.5026 |
+| Llama-3.1-70B | LC20K | 1 | 82.6751 |
+| Llama-3.1-70B | LC20K | 8 | 82.6506 |
+| Llama-3.1-70B | LC64K | 1 | 82.6768 |
+| Llama-3.1-70B | LC64K | 8 | 82.6834 |
+| Llama-3.1-70B | LC126K | 1 | 82.6982 |
+| Llama-3.1-70B | LC126K | 8 | 82.7046 |
+| Llama-3.1-405B | LC20K | 1 | 83.6820 |
+| Llama-3.1-405B | LC20K | 8 | 83.3798 |
+| Llama-3.1-405B | LC64K | 1 | 83.5976 |
+| Llama-3.1-405B | LC64K | 8 | 82.9094 |
+| Llama-3.1-405B | LC126K | 1 | 83.4828 |
+| Llama-3.1-405B | LC126K | 8 | 82.4636 |
+
+Existing FP64 GPU-PCG setup reused for all 18 RHS solves. No pytest or additional benchmark audit was run for this temperature update.

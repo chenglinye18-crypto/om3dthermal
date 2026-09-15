@@ -82,6 +82,9 @@ def main():
                     thermal_phase='DESIGN_POINT',provenance='EXISTING_85C_BANDWIDTH_THERMAL_CLOSURE',
                     thermal_status='THERMAL_CLOSED_DESIGN_POINT')
                 if refresh:t['provenance']=r['thermal_provenance']
+                actual_gpu_thermal=f.OUT/'thermal_rows_decode'/f'{key}.json'
+                if path=='M3D_GPU' and actual_gpu_thermal.exists():
+                    t=json.loads(actual_gpu_thermal.read_text(encoding='utf-8'))
             else:
                 t=json.loads((f.OUT/'thermal_rows_decode'/f'{key}.json').read_text())
                 x=json.loads((f.OUT/'spatial_decode'/f'{key}.json').read_text());projections.append(x['projection_s'])

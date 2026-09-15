@@ -60,6 +60,12 @@ def finalize_refresh(snapshot,rows,manifest):
         Prefill='M3D GPU diagnostic physical timing reused; NMP aggregate Prefill frozen',
         NMP_preservation='36/36 byte-identical candidates and unchanged canonical rows')
     if checks:manifest.update(refresh_checks=checks,pytest_run=True)
+    actual_thermal=f.OUT/'m3d_gpu_thermal_update.json'
+    if actual_thermal.exists():
+        manifest['M3D_GPU_thermal_update']=read(actual_thermal)
+        manifest['M3D_thermal_resolved']=True
+        manifest['M3D_thermal_cap_reswept']=False
+        manifest['thermal_semantics']='HBM: 85C design point; M3D_GPU and NMP: actual Decode steady-state'
     f.save(f.OUT/'formal_long_context_v2_manifest.json',manifest)
     report=['# Formal long-context v2 GPU refresh',
         '72 canonical rows; H=20K/64K/126K, P=128, G=32, B=1/8. Only HBM_GPU and M3D_GPU were refreshed. NMP results and physical artifacts are frozen.',
@@ -74,4 +80,7 @@ def finalize_refresh(snapshot,rows,manifest):
     report.extend(['## Reproduction',
         'In the om3dthermal Conda environment: python scripts/refresh_formal_gpu_results.py; python scripts/finalize_formal_long_context_v2.py; python scripts/plot_formal_long_context_v2.py. The refresh reuses completed candidates on subsequent invocations. No thermal sweep or NMP execution is dispatched.'])
     if checks:report.extend(['## Validation and plots',str(checks)])
+    if actual_thermal.exists():
+        report=[p.replace('GPU temperatures remain 85 C THERMAL_CLOSED_DESIGN_POINT, not new workload solves. NMP temperatures remain their unchanged Decode-only steady-state results. No thermal operator was loaded or thermal sweep rerun.',
+            'HBM remains an 85 C design point. M3D_GPU and NMP use actual Decode steady-state temperatures; M3D_GPU reuses the existing operator with port-balanced die power. No thermal bandwidth sweep was rerun.') for p in report]
     (f.OUT/'formal_long_context_v2_report.md').write_text('\n\n'.join(report)+'\n',encoding='utf-8')
