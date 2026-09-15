@@ -1,0 +1,19 @@
+{
+  "pages": 6,
+  "original_manuscript_unchanged": true,
+  "original_media_retained": 18,
+  "canonical_data_files_unchanged": 390,
+  "headline_and_subset_text": "PASS",
+  "placeholders": "NONE",
+  "figure_type": "SVG_EMBEDDED",
+  "body_font_size": "ORIGINAL_UNCHANGED",
+  "targeted_tests": "4 passed",
+  "full_pytest_run": false,
+  "benchmark_runs": 0,
+  "thermal_solves": 0,
+  "unique_decode_checkpoints_replayed": 1,
+  "CPA_optimizer_runs": 0,
+  "renderer": "Native Word PDF export + Poppler PNG inspection",
+  "source_docx_sha256": "2806982b775fced598b44f30b63d1e0c1fe65419da5750859dd8201b004e2bd9",
+  "output_pdf_sha256": "85898120dd9b1377c4127dc06e24393182fd064a43b1658e480c85209326b98d"
+}

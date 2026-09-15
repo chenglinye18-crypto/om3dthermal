@@ -1,0 +1,203 @@
+{
+  "source": "E:\\BaiduSyncdisk\\study\\PAPER\\DAC 2026\\conference-template-letter (1) (\u5df2\u81ea\u52a8\u6062\u590d).docx",
+  "source_sha256": "2806982b775fced598b44f30b63d1e0c1fe65419da5750859dd8201b004e2bd9",
+  "edits": [
+    {
+      "index": 5,
+      "before": "Keywords\u2014component, formatting, style, styling, insert (key words)",
+      "after": "Keywords\u2014monolithic 3D memory, orthogonal integration, IGZO, near-memory processing, long-context inference"
+    },
+    {
+      "index": 4,
+      "before": "Abstract\u2014We present IOM3D-HBM, an IGZO-based orthogonal monolithic 3D memory architecture with FEOL near-memory processing (NMP) for long-context LLM inference. IOM3D-HBM integrates 318 thin M3D memory dies around the GPU, providing 1.49 TB of local capacity while avoiding the extended thermal path of conventional vertical stacking. Reducing the M3D die thickness from 300 to 100 \u03bcm triples capacity with only a 1.2% reduction in thermally sustainable bandwidth. We further propose Distributed NMP Scheduling (DNS) to process memory-intensive Decode operations close to resident weights and KV caches, and Critical-Path-Aware Placement (CPA) to optimize their physical mapping. Across 18 Llama-3.1 workloads spanning 8B, 70B, and 405B models, DNS+CPA achieves 7.28\u00d7 geometric-mean end-to-end throughput and 4.75\u00d7 energy efficiency over an optimistic conventional HBM-on-GPU (HoG) baseline, while all NMP workloads remain below 81.4\u00b0C under an 85\u00b0C thermal limit. Further FEOL frequency scaling provides an additional 12.6% geometric-mean throughput improvement, demonstrating substantial performance headroom within the same architecture. ",
+      "after": "Abstract\u2014We present IOM3D-HBM, an IGZO-based orthogonal monolithic 3D memory architecture with FEOL near-memory processing (NMP) for long-context LLM inference. IOM3D-HBM integrates 318 thin M3D memory dies around the GPU, providing 1.49 TB of local capacity while avoiding the extended thermal path of conventional vertical stacking. Reducing the M3D die thickness from 300 to 100 \u03bcm triples capacity with only a 1.2% reduction in thermally sustainable bandwidth. We further propose Distributed NMP Scheduling (DNS) to process memory-intensive Decode operations close to resident weights and KV caches, and Critical-Path-Aware Placement (CPA) to optimize their physical mapping. Across 18 Llama-3.1 workloads spanning 8B, 70B, and 405B models, DNS+CPA achieves 7.28\u00d7 geometric-mean end-to-end throughput and 4.75\u00d7 energy efficiency over an optimistic conventional HBM-on-GPU (HoG) baseline, while all NMP workloads reach at most 81.41\u00b0C under an 85\u00b0C thermal limit. Further FEOL frequency scaling provides an additional 12.6% geometric-mean throughput improvement, demonstrating substantial performance headroom within the same architecture. "
+    },
+    {
+      "index": 9,
+      "before": "Meanwhile, IGZO-based 2T0C memory has emerged as a promising candidate for monolithic 3D integration. Its low leakage current enables long retention without an explicit storage capacitor, while its low-temperature process compatibility facilitates dense multilayer integration. More importantly, monolithic 3D integration naturally separates the memory and logic layers: high-density IGZO memory arrays can be implemented in the BEOL, while the underlying FEOL remains available for high-performance Si-based logic. Recent demonstrations have already shown the feasibility of vertically stacked IGZO 2T0C memory together with BEOL peripherals and FEOL local processing circuitry. We exploit this physical separation deliberately: the BEOL is primarily used to maximize memory density, whereas the FEOL is reserved for robust Si-based MAC and control logic. This avoids placing complex computing functions inside the emerging-memory layers while creating dedicated design space for near-memory processing directly beneath the stored data. As a result, high-density storage and efficient local computation can be tightly integrated within the same M3D die",
+      "after": "IGZO 2T0C memory combines low leakage with low-temperature sequential integration, enabling dense BEOL storage above Si logic [1]. This physical separation leaves the underlying FEOL available for local MAC, SRAM, and control. Orthogonal integration can therefore scale resident capacity while the short BEOL\u2013FEOL path supplies computation beneath the stored weights and KV cache."
+    },
+    {
+      "index": 10,
+      "before": "Based on this insight, we propose IOM3D-HBM, which combines orthogonal integration, monolithic 3D IGZO memory, and FEOL NMP for long-context LLM inference. Our contributions are threefold. ",
+      "after": "We present IOM3D-HBM, an architecture integrating orthogonal packaging, monolithic-3D IGZO memory, and underlying Si FEOL near-memory processing (NMP). Its contributions are threefold."
+    },
+    {
+      "index": 11,
+      "before": "First, we design an orthogonal M3D memory architecture that couples high-density IGZO memory with a thermally scalable package organization, enabling large resident memory capacity without continuously extending the conventional vertical heat-flow path. ",
+      "after": "First, the integrated physical hierarchy couples thermally scalable orthogonal capacity with dense BEOL storage and local Si MAC execution. Large resident weights and KV data reach FEOL computation through the local BEOL\u2013FEOL path instead of repeatedly traversing the GPU-facing interface."
+    },
+    {
+      "index": 12,
+      "before": "Second, we introduce Distributed NMP Scheduling (DNS), which keeps the compute-intensive Prefill phase on the GPU while executing memory-intensive Decode operations close to resident weights and KV caches, thereby reducing bulk data movement across the GPU-facing interface while retaining a simple MAC-centric FEOL design. ",
+      "after": "Second, architecture-aware execution and placement exploit this locality. Distributed NMP Scheduling (DNS) keeps Prefill and irregular/global Decode operators on the GPU and maps partitionable MAC operators near resident operands. Critical-Path-Aware Placement (CPA) refines uniform DNS ownership using modeled resource bottlenecks and communication contention."
+    },
+    {
+      "index": 13,
+      "before": "Third, we propose Critical-Path-Aware Placement (CPA), which identifies the physical execution bottleneck and selectively refines data and compute placement across distributed NMP resources, reducing critical-path latency and unnecessary communication. ",
+      "after": "Third, evaluation under physical and thermal constraints demonstrates 1.49 TB capacity, approximately 3.40 TB/s thermally sustainable external bandwidth, and 7.28\u00d7 E2E throughput and 4.75\u00d7 energy efficiency over conventional HBM-GPU, with NMP temperatures at most 81.41\u00b0C. A fine-grained physical execution model resolves memory service, shared communication resources, NMP execution, energy, and workload-dependent steady-state temperature."
+    },
+    {
+      "index": 14,
+      "before": "Together, these techniques transform thermally scalable memory capacity into effective data locality and end-to-end acceleration for long-context LLM inference.",
+      "after": ""
+    },
+    {
+      "index": 17,
+      "before": "With the growing demand for multi-turn conversations and long-context queries, the maximum context length supported by large language models (LLMs) has rapidly increased from a few thousand to hundreds of thousands of tokens and beyond. Long-context inference introduces two major challenges. First, the key-value (KV) cache grows linearly with the context length and must be repeatedly accessed during autoregressive decoding. For example, the KV cache of a Llama-3.1-8B model with a 128K-token context occupies approximately 16 GiB in FP16. With multiple concurrent requests, the total working set can easily exceed the capacity of conventional HBM, forcing data to spill to external memory and thereby degrading inference throughput. ",
+      "after": "The inference working set comprises model weights plus a KV cache that grows with context length and batch size. For example, Llama-3.1-8B at 128K tokens requires approximately 16 GiB of FP16 KV storage per request. Larger models, longer histories, and greater concurrency progressively exceed local HBM capacity; the evaluated workload matrix includes both HBM-resident and overflowing cases."
+    },
+    {
+      "index": 20,
+      "before": "Fig 1. (a) M3D IGZO 4F2 array. (b) Key device- and cell-level parameters of IGZO M3D.",
+      "after": "Fig. 1. Long-context inference demands: (a) model and KV-cache capacity; (b) modeled memory traffic and arithmetic intensity during Decode and Prefill."
+    },
+    {
+      "index": 23,
+      "before": "Fig. X(a) illustrates the vertically stacked M3D IGZO memory structure considered in this work. The key device- and cell-level parameters are adopted from [1], while MAT-level read-energy parameters are obtained through SPICE simulation using the corresponding device characteristics. The representative technology parameters used throughout our architecture evaluation are summarized in Fig. X(b).",
+      "after": "Fig. 2(a) illustrates the vertically stacked M3D IGZO memory structure considered in this work. The key device- and cell-level parameters are adopted from [1], while MAT-level read-energy parameters are obtained through SPICE simulation using the corresponding device characteristics. The representative technology parameters used throughout our architecture evaluation are summarized in Fig. 2(b)."
+    },
+    {
+      "index": 28,
+      "before": "Identify applicable funding agency here. If none, delete this text box.",
+      "after": ""
+    },
+    {
+      "index": "before 43",
+      "before": "",
+      "after": "The 50 ports per die are finite physical interface resources. GPU reads use nearest-port group routing with port-balanced resident ownership; NMP transfers stripe across regional ports or enter once before an intra-die broadcast. Shared-port payloads accumulate, and boundary service is the larger of aggregate payload divided by the global ceiling and the slowest port\u2019s serialization plus route startup; nominal port rates are not summed into unconstrained GPU bandwidth."
+    },
+    {
+      "index": 44,
+      "before": "We develop a fine-grained physical execution simulator for the proposed M3D memory architecture (The source code will be released upon publication.). The simulator explicitly tracks memory-service events across the physical M3D hierarchy, including different layers, clusters, service groups, and regions. Device- and circuit-level characteristics are obtained from SPICE simulations, while vertical MIVs and lateral interconnects are modeled using distributed RC networks. Each access is mapped to its corresponding physical resources and communication paths according to the organization described in Section III-B.",
+      "after": "The physical execution model maps each LLM operator to resident row/KV partitions, M3D layers, cluster service groups, and regions. Array/MIV service feeds FEOL routes, MAC tiles and SRAM, local fabrics, inter-region NoC, and GPU-facing ports. The fixed operator dependency sequence determines GPU/NMP handoff; concurrent batch requests merge demand on shared groups, tiles, links, and ports before completion times are evaluated."
+    },
+    {
+      "index": 45,
+      "before": "The simulator advances memory-service events while accounting for resource availability, shared communication paths, and concurrent accesses. Data transfers therefore contend for the corresponding memory and interconnect resources during execution, and the resulting service behavior is determined from the evolving physical execution state. The effective internal bandwidth is extracted from the amount of successfully served traffic over the simulated execution interval, yielding an average aggregate internal bandwidth of 39.15 TB/s for the proposed M3D organization.",
+      "after": "Eight memory layers serialize within each service-group lane; independent groups operate concurrently. An NMP operator takes boundary service plus NoC/reduction service plus the maximum of array, fabric, and MAC service. A GPU-side physical operator takes the maximum of array, boundary, and GPU service. Thus changing placement changes resource loads and completion time. Achieved boundary bandwidth is completed payload divided by summed boundary-active service time, excluding GPU gaps; it is distinct from nominal interface and thermal ceilings."
+    },
+    {
+      "index": 46,
+      "before": "The same execution process is used for energy accounting. Each memory and communication event accumulates the corresponding energy of array access, peripheral operation, MIV transfer, lateral data movement, and GPU-facing communication. NMP execution further accounts for MAC operations, local SRAM accesses, and inter-region communication. Thus, bandwidth, traffic, and energy are consistently obtained from the same physically resolved execution trace.",
+      "after": "Traffic and energy use the same operator activity: array/peripheral accesses, MIV and FEOL wire movement, boundary bits, MACs, SRAM accesses, and reduction events. Device/cell parameters follow published IGZO measurements [1] and the corresponding MAT SPICE extraction; interconnects use distributed RC with documented literature parameters. HBM retains its configured DreamRAM-derived physical parameters [3]; GPU service and energy retain specification-based ceilings and frozen modeling coefficients. Numerical and traffic/energy-conservation checks verify model consistency. GPU service is modeled at operator level; handoff follows dependencies and boundary transfers, without an independently calibrated software synchronization term."
+    },
+    {
+      "index": 55,
+      "before": "where Tcrit=85\u2103. We sweep the effective memory bandwidth under identical package and thermal boundary conditions and solve the corresponding steady-state temperature distribution. Unlike the interface peak bandwidth, Bthermal characterizes the bandwidth that can be continuously sustained within the thermal envelope.",
+      "after": "where Tcrit=85\u00b0C. A three-dimensional steady-state conductance model resolves material and interface thermal paths under the same package boundary conditions. Workload events determine memory, interconnect, and NMP power, grouped by die and distributed uniformly within each die\u2019s BEOL; GPU power is mapped to its FEOL. FP64 matrix-free PCG solves the spatial temperature field. The bandwidth sweep identifies the sustainable external ceiling."
+    },
+    {
+      "index": 56,
+      "before": "Fig. 5 compares the thermal scalability of conventional HBM stacking and IOM3D-HBM. Increasing conventional HBM from 12-Hi to 24-Hi approximately doubles the memory capacity, but reduces Bthermal from 3.08 TB/s to 1.76 TB/s, a degradation of about 36%. In contrast, the 300 \u03bcm and 100 \u03bcm IOM3D configurations sustain 3.44 TB/s and 3.40 TB/s, respectively. Reducing the M3D die thickness from 300 \u03bcm to 100 \u03bcm enables approximately 3\u00d7 higher capacity, while reducing the thermal bandwidth by only about 1.2%. These results demonstrate that the orthogonal organization enables memory capacity to scale with minimal degradation in thermally sustainable bandwidth.",
+      "after": "Fig. 5 compares thermal scalability. Doubling conventional HBM from 12-Hi to 24-Hi reduces sustainable bandwidth from 3.09 to 1.96 TB/s (36.5%). The 300-\u00b5m and 100-\u00b5m IOM3D configurations sustain 3.44 and 3.40 TB/s, respectively: thinning triples capacity with only a 1.2% bandwidth reduction."
+    },
+    {
+      "index": 62,
+      "before": "Long-context Decode repeatedly accesses model weights and the growing KV cache, resulting in substantial data movement between the memory subsystem and the GPU. Since these bulk data are already distributed and resident across the M3D memory dies, we introduce Distributed NMP Scheduling (DNS) to exploit their locality and execute memory-intensive Decode operations close to where the data are stored.",
+      "after": "DNS exploits resident weight and KV locality through a fixed heterogeneous execution policy (Fig. 6)."
+    },
+    {
+      "index": 64,
+      "before": "As illustrated in Fig. 6, DNS distributes the major memory-intensive Decode computation according to the physical memory partitions, allowing the corresponding FEOL MAC resources to consume resident weights and KV entries locally. The GPU remains responsible for the operators and coordination functions that benefit from its more flexible execution resources. Compared with conventional GPU-side Decode, this organization converts repeated bulk memory\u2013GPU transfers into local memory accesses while retaining the programmability of the GPU for complex operations. DNS initially distributes data and computation uniformly across the available NMP resources; Section IV-C further refines this baseline through CPA to account for workload-dependent physical bottlenecks and communication costs.",
+      "after": "Uniform DNS establishes initial data and compute ownership. CPA then refines legal NMP placements to account for topology-dependent contention and communication; it does not change operator assignment between GPU and NMP."
+    },
+    {
+      "index": 67,
+      "before": "DNS determines which Decode operations are executed by NMP, while their physical placement across memory regions and NMP tiles still affects execution efficiency. Uniform placement provides balanced resource usage but may introduce contention or unnecessary communication on the actual critical path. We therefore propose Critical-Path-Aware Placement (CPA) to refine the placement of NMP-resident data and computation according to the modeled execution bottleneck.",
+      "after": "CPA refines uniform DNS placement because communication and shared-resource contention depend on physical topology. Its objective minimizes modeled Decode latency over legal resident-data and tile mappings:"
+    },
+    {
+      "index": 68,
+      "before": "Let  denote a legal placement of data partitions and their associated NMP computation. CPA minimizes the modeled Decode latency,",
+      "after": ""
+    },
+    {
+      "index": 70,
+      "before": "subject to the physical capacity and resource constraints of each memory region,",
+      "after": "subject to per-region memory capacity and tile-resource limits,"
+    },
+    {
+      "index": 72,
+      "before": "subject to memory-capacity, tile-resource, and placement constraints. Starting from the uniform DNS placement, CPA identifies the dominant physical bottleneck, generates legal coarse-grained remappings around it, and re-evaluates each candidate using the physical execution model. A remapping is accepted only if it reduces end-to-end Decode latency, and the process terminates when no further improvement is found. Although latency is the optimization objective, the reduced contention and communication can also improve energy efficiency and thermal behavior.",
+      "after": "CPA identifies the dominant physical component, proposes legal coarse-grained resident or tile remappings, and re-evaluates candidates with the same complete contention-aware physical stage model rather than a placement-cost surrogate. Concurrent request demand is included; paired KV ownership and endpoint/append checks are preserved. Only latency-improving moves are accepted. Search stops when no qualifying move remains or the bounded refinement budget is exhausted; the implementation uses one resident pass and at most two tile-refinement rounds per operator."
+    },
+    {
+      "index": 73,
+      "before": "Algorithm 1. Critical-Path-Aware Placement (CPA)Require: Workload W, NMP architecture H, Uniform placement P0Output: Optimized placement P*1: P \u2190 P02: repeat4:        Rcrit \u2190 IdentifyCriticalStage(W, H, P)5:        C \u2190 GenerateLegalRemappings(P, Scrit)6:        P' \u2190 arg minP'\u2208C EvaluateLatency(W, H, P')9:        if T(P') < T(P) then10:               P \u2190 P'11:      else12:               break18: until convergence         19: return P",
+      "after": ""
+    },
+    {
+      "index": 74,
+      "before": "CPA preserves the DNS execution policy and only refines the physical placement of NMP-resident data and computation. Although Decode latency is used as the optimization objective, the resulting reduction in contention and communication also improves energy efficiency and thermal behavior, as evaluated in Section V.",
+      "after": ""
+    },
+    {
+      "index": 80,
+      "before": "This optimistic assumption favors the conventional HoG baseline, since practical HBM bandwidth can be further reduced by workload-dependent utilization and memory-access behavior. In contrast, M3D-GPU, DNS, and DNS+CPA are evaluated using their actual workload-driven execution traces, so their effective bandwidth and throughput naturally reflect physical resource occupancy, service utilization, concurrent accesses, and communication contention. When the HoG working set exceeds local HBM capacity, the remaining data are accessed from sufficiently provisioned Grace LPDDR5X memory through a 416.34-GB/s NVLink-C2C link with 5.3-pJ/bit transfer energy. M3D-GPU retains GPU-side execution using IOM3D-HBM, while DNS enables distributed NMP execution with uniform placement and DNS+CPA further applies the proposed CPA. We report end-to-end throughput, energy efficiency, and peak temperature.",
+      "after": "HBM-GPU uses the closed local bandwidth. On overflow, it accesses sufficiently provisioned Grace LPDDR5X through the frozen 416.34-GB/s NVLink-C2C path with 5.3-pJ/bit transfer energy. M3D-GPU retains GPU execution with port-balanced physical memory service; DNS uses uniform NMP placement and DNS+CPA refines that placement. These M3D paths retain their canonical Prefill and Decode accounting. E2E throughput includes the incremental Prefill and all 32 growing-context Decode steps; temperatures use Decode steady-state power."
+    },
+    {
+      "index": 85,
+      "before": "Performance. Fig. 7 compares the normalized end-to-end throughput across all evaluated workloads. M3D-GPU achieves a geometric-mean speedup of 2.31\u00d7 over HBM-GPU by increasing local memory capacity and avoiding external-memory accesses in capacity-constrained cases. Unlike the HBM baseline, whose bandwidth is operated at the thermally closed Bthermal, M3D-GPU, DNS and DNS+CPA throughput is determined by workload-specific memory utilization and physical service behavior, and therefore does not assume that the available M3D bandwidth is fully utilized. Enabling DNS increases the geometric-mean speedup to 6.68\u00d7, demonstrating the benefit of consuming resident weights and KV-cache data directly with distributed NMP resources. CPA further increases the speedup to 7.28\u00d7, with a maximum of 47.98\u00d7, and provides an additional 1.09\u00d7 geometric-mean improvement over DNS.",
+      "after": "Performance. Fig. 7 reports per-case HBM-normalized E2E throughput. Geometric-mean improvements are 2.31\u00d7 for M3D-GPU, 6.68\u00d7 for DNS, and 7.28\u00d7 for DNS+CPA (maximum 47.98\u00d7); CPA adds 1.09\u00d7 over DNS. The capacity audit identifies five HBM-resident cases, all 8B configurations except LC126K/B8. Within this subset, DNS and CPA achieve 2.77\u00d7 and 3.07\u00d7 over HBM-GPU, and 2.67\u00d7 and 2.96\u00d7 over M3D-GPU. The corresponding M3D-GPU/HBM-GPU ratio is 1.04\u00d7, separating NMP locality from capacity spill avoidance. The 13 overflow cases yield 10.15\u00d7 CPA/HBM-GPU and 3.23\u00d7 CPA/M3D-GPU."
+    },
+    {
+      "index": "before 86",
+      "before": "",
+      "after": "At LC20K, HBM-GPU/M3D-GPU/CPA throughput (tokens/s) is 169.28/171.38/619.96 for 8B/B1, 65.77/118.06/171.76 for 70B/B8, and 0.600/3.920/28.785 for 405B/B1. CPA mean TPOT is 1.441/37.914/27.075 ms, respectively; one Decode step emits B tokens."
+    },
+    {
+      "index": "before 100",
+      "before": "",
+      "after": "PHYSICAL_EXECUTION_FIGURE_PLACEHOLDER"
+    },
+    {
+      "index": "before 100",
+      "before": "",
+      "after": "Fig. 11. Physical Decode Execution Anatomy: Llama-3.1-8B, LC20K, B=1, M3D_NMP_CPA, Decode step 1 (context 20,128), layer 0. (a) Reconstructed dependency-ordered operator intervals, placed in the lane of their dominant service component; these are not individual resource occupancy intervals. (b) Resource service divided by the maximum resource service of each operator; black boxes mark maxima. NoC includes reduction and GPU denotes its modeled local service. Sub-0.1-\u00b5s operators are retained in (a) and omitted from (b)."
+    },
+    {
+      "index": "before 100",
+      "before": "",
+      "after": "The single-step replay in Fig. 11 matches the canonical 1.441094-ms checkpoint; layer 0 occupies 43.844 \u00b5s. Q/K/V and FFN Down are array-dominated, QK and FFN Gate/Up are fabric-dominated, while AV is dominated by NoC/reduction. GPU Softmax and cross-die AV reduction separate NMP stages. The service balance changes across operators even within one layer."
+    },
+    {
+      "index": 96,
+      "before": "Fig. 10. Normalized end-to-end throughput under FEOL frequency scaling, with thermally infeasible configurations Tmax>85\u2103\u2218marked by crosses.",
+      "after": "Fig. 10. Normalized end-to-end throughput under FEOL frequency scaling, with thermally infeasible configurations Tmax>85\u00b0C marked by crosses."
+    },
+    {
+      "index": 102,
+      "before": "",
+      "after": ""
+    },
+    {
+      "index": 103,
+      "before": "",
+      "after": ""
+    },
+    {
+      "index": "before 104",
+      "before": "",
+      "after": "REFERENCES"
+    },
+    {
+      "index": 104,
+      "before": "[1]W. Tang et al., \"30 Mb/mm<sup>2</sup>/layer 3D eDRAM Computing-in-Memory with Embedded BEOL Peripherals and Local Layer-wise Calibration based on First-Demonstrated Vertically-stacked CAA-IGZO 4F<sup>2</sup> 2T0C Cell,\" 2023: IEEE, doi: 10.1109/iedm45741.2023.10413756. [Online]. Available: https://dx.doi.org/10.1109/IEDM45741.2023.10413756",
+      "after": "[1]W. Tang et al., \"30 Mb/mm\u00b2/layer 3D eDRAM Computing-in-Memory with Embedded BEOL Peripherals and Local Layer-wise Calibration based on First-Demonstrated Vertically-stacked CAA-IGZO 4F\u00b2 2T0C Cell,\" 2023: IEEE, doi: 10.1109/iedm45741.2023.10413756."
+    },
+    {
+      "index": 105,
+      "before": "[2]Y. Mitarai et al., \"3D Orthogonal Die Stacking Technology for DRAM-on-GPU Integration Using Contactless Die-to-Die Interface,\" 2026: IEEE, pp. 1-3, doi: 10.1109/vlsitechnologyandcir65830.2026.11577466. [Online]. Available: https://dx.doi.org/10.1109/VLSITechnologyandCir65830.2026.11577466",
+      "after": "[2]Y. Mitarai et al., \"3D Orthogonal Die Stacking Technology for DRAM-on-GPU Integration Using Contactless Die-to-Die Interface,\" 2026: IEEE, pp. 1-3, doi: 10.1109/vlsitechnologyandcir65830.2026.11577466."
+    },
+    {
+      "index": 106,
+      "before": "[3]V. Cai, J. Zhou, D. Brooks, and G. Y. Wei, \"DreamRAM: A Fine-Grained Configurable Design Space Modeling Tool for Custom 3D Die-Stacked DRAM,\" in 2026 Design, Automation & Test in Europe Conference (DATE), 20-22 April 2026 2026, pp. 1-7, doi: 10.23919/DATE69613.2026.11539402. ",
+      "after": "[3]V. Cai, J. Zhou, D. Brooks, and G. Y. Wei, \"DreamRAM: A Fine-Grained Configurable Design Space Modeling Tool for Custom 3D Die-Stacked DRAM,\" in 2026 Design, Automation & Test in Europe Conference (DATE), 20-22 April 2026 2026, pp. 1-7, doi: 10.23919/DATE69613.2026.11539402. "
+    }
+  ],
+  "CPA_original_words": 263,
+  "CPA_revised_words": 109
+}
