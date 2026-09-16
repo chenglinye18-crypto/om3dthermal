@@ -100,6 +100,8 @@ def test_separate_clean_vector_figures():
         assert "Zoom into" not in svg
     e2e_svg = (OUT / "e2e_timeline.svg").read_text(encoding="utf-8")
     decode_svg = (OUT / "decode_execution_timeline.svg").read_text(encoding="utf-8")
+    assert ">HoG</text>" in e2e_svg
+    assert ">HBM</text>" not in e2e_svg
     assert e2e_svg.count("E2E =") == 4
     assert "938.1 µs" in decode_svg
     assert "439.2 µs" in decode_svg

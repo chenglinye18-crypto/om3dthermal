@@ -64,7 +64,7 @@ L 0 3.5
       </g>
      </g>
      <g id="text_1">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: middle" x="54.81" y="139.469547" transform="rotate(-0 54.81 139.469547)">0</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="54.81" y="140.162906" transform="rotate(-0 54.81 140.162906)">0</text>
      </g>
     </g>
     <g id="xtick_2">
@@ -84,7 +84,7 @@ L 137.801116 35.532
       </g>
      </g>
      <g id="text_2">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: middle" x="137.801116" y="139.469547" transform="rotate(-0 137.801116 139.469547)">200</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="137.801116" y="140.162906" transform="rotate(-0 137.801116 140.162906)">200</text>
      </g>
     </g>
     <g id="xtick_3">
@@ -104,7 +104,7 @@ L 220.792232 35.532
       </g>
      </g>
      <g id="text_3">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: middle" x="220.792232" y="139.469547" transform="rotate(-0 220.792232 139.469547)">400</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="220.792232" y="140.162906" transform="rotate(-0 220.792232 140.162906)">400</text>
      </g>
     </g>
     <g id="xtick_4">
@@ -124,7 +124,7 @@ L 303.783347 35.532
       </g>
      </g>
      <g id="text_4">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: middle" x="303.783347" y="139.469547" transform="rotate(-0 303.783347 139.469547)">600</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="303.783347" y="140.162906" transform="rotate(-0 303.783347 140.162906)">600</text>
      </g>
     </g>
     <g id="xtick_5">
@@ -144,7 +144,7 @@ L 386.774463 35.532
       </g>
      </g>
      <g id="text_5">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: middle" x="386.774463" y="139.469547" transform="rotate(-0 386.774463 139.469547)">800</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="386.774463" y="140.162906" transform="rotate(-0 386.774463 140.162906)">800</text>
      </g>
     </g>
     <g id="xtick_6">
@@ -164,11 +164,11 @@ L 469.765579 35.532
       </g>
      </g>
      <g id="text_6">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: middle" x="469.765579" y="139.469547" transform="rotate(-0 469.765579 139.469547)">1000</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="469.765579" y="140.162906" transform="rotate(-0 469.765579 140.162906)">1000</text>
      </g>
     </g>
     <g id="text_7">
-     <text style="font-weight: 700; font-size: 8.6px; font-family: 'Times New Roman'; text-anchor: middle" x="284.49" y="151.068461" transform="rotate(-0 284.49 151.068461)">Time from layer start (µs)</text>
+     <text style="font-weight: 700; font-size: 9.6px; font-family: 'Times New Roman'; text-anchor: middle" x="284.49" y="152.655453" transform="rotate(-0 284.49 152.655453)">Time from layer start (µs)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
@@ -194,7 +194,7 @@ L -3.5 0
       </g>
      </g>
      <g id="text_8">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="55.765963" transform="rotate(-0 51.31 55.765963)">M3D-GPU</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="56.112643" transform="rotate(-0 51.31 56.112643)">M3D-GPU</text>
      </g>
     </g>
     <g id="ytick_2">
@@ -209,7 +209,7 @@ L -3.5 0
       </g>
      </g>
      <g id="text_9">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="85.750773" transform="rotate(-0 51.31 85.750773)">DNS</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="86.097453" transform="rotate(-0 51.31 86.097453)">DNS</text>
      </g>
     </g>
     <g id="ytick_3">
@@ -224,7 +224,7 @@ L -3.5 0
       </g>
      </g>
      <g id="text_10">
-      <text style="font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="115.735584" transform="rotate(-0 51.31 115.735584)">CPA</text>
+      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="116.082263" transform="rotate(-0 51.31 116.082263)">CPA</text>
      </g>
     </g>
    </g>
@@ -379,7 +379,7 @@ z
     </g>
    </g>
    <g id="text_11">
-    <text style="font-weight: 700; font-size: 7.4px; font-family: 'Times New Roman'; text-anchor: start" x="451.105322" y="54.630465" transform="rotate(-0 451.105322 54.630465)">938.1 µs</text>
+    <text style="font-weight: 700; font-size: 8.4px; font-family: 'Times New Roman'; text-anchor: start" x="451.105322" y="54.861178" transform="rotate(-0 451.105322 54.861178)">938.1 µs</text>
    </g>
    <g id="PolyCollection_11">
     <defs>
@@ -525,7 +525,7 @@ z
     </g>
    </g>
    <g id="text_12">
-    <text style="font-weight: 700; font-size: 7.4px; font-family: 'Times New Roman'; text-anchor: start" x="244.054541" y="84.615275" transform="rotate(-0 244.054541 84.615275)">439.2 µs</text>
+    <text style="font-weight: 700; font-size: 8.4px; font-family: 'Times New Roman'; text-anchor: start" x="244.054541" y="84.845988" transform="rotate(-0 244.054541 84.845988)">439.2 µs</text>
    </g>
    <g id="PolyCollection_22">
     <defs>
@@ -671,204 +671,204 @@ z
     </g>
    </g>
    <g id="text_13">
-    <text style="font-weight: 700; font-size: 7.4px; font-family: 'Times New Roman'; text-anchor: start" x="221.900056" y="114.600086" transform="rotate(-0 221.900056 114.600086)">385.8 µs</text>
+    <text style="font-weight: 700; font-size: 8.4px; font-family: 'Times New Roman'; text-anchor: start" x="221.900056" y="114.830798" transform="rotate(-0 221.900056 114.830798)">385.8 µs</text>
    </g>
    <g id="text_14">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="134.066199" y="54.169039" transform="rotate(-0 134.066199 54.169039)">QK</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="134.066199" y="54.399752" transform="rotate(-0 134.066199 54.399752)">QK</text>
     </g>
    </g>
    <g id="text_15">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="201.808946" y="54.169039" transform="rotate(-0 201.808946 54.169039)">S</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="201.808946" y="54.399752" transform="rotate(-0 201.808946 54.399752)">S</text>
     </g>
    </g>
    <g id="text_16">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="269.551693" y="54.169039" transform="rotate(-0 269.551693 54.169039)">AV</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="269.551693" y="54.399752" transform="rotate(-0 269.551693 54.399752)">AV</text>
     </g>
    </g>
    <g id="text_17">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="336.949733" y="54.169039" transform="rotate(-0 336.949733 54.169039)">O</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="336.949733" y="54.399752" transform="rotate(-0 336.949733 54.399752)">O</text>
     </g>
    </g>
    <g id="text_18">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="357.493529" y="54.170569" transform="rotate(-0 357.493529 54.170569)">G</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="357.493529" y="54.401565" transform="rotate(-0 357.493529 54.401565)">G</text>
     </g>
    </g>
    <g id="text_19">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="392.089481" y="54.169039" transform="rotate(-0 392.089481 54.169039)">U</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="392.089481" y="54.399752" transform="rotate(-0 392.089481 54.399752)">U</text>
     </g>
    </g>
    <g id="text_20">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="426.80016" y="54.169039" transform="rotate(-0 426.80016 54.169039)">D</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="426.80016" y="54.399752" transform="rotate(-0 426.80016 54.399752)">D</text>
     </g>
    </g>
    <g id="text_21">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="62.262794" y="54.076754" transform="rotate(-0 62.262794 54.076754)">QKV</text>
+     <text style="font-weight: 700; font-size: 6px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="62.262794" y="54.307467" transform="rotate(-0 62.262794 54.307467)">QKV</text>
     </g>
    </g>
    <g id="text_22">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="85.001412" y="84.15385" transform="rotate(-0 85.001412 84.15385)">QK</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="85.001412" y="84.384563" transform="rotate(-0 85.001412 84.384563)">QK</text>
     </g>
    </g>
    <g id="text_23">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="98.177546" y="84.15385" transform="rotate(-0 98.177546 84.15385)">S</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="98.177546" y="84.384563" transform="rotate(-0 98.177546 84.384563)">S</text>
     </g>
    </g>
    <g id="text_24">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="126.222146" y="84.15385" transform="rotate(-0 126.222146 84.15385)">AV</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="126.222146" y="84.384563" transform="rotate(-0 126.222146 84.384563)">AV</text>
     </g>
    </g>
    <g id="text_25">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="152.974297" y="84.15385" transform="rotate(-0 152.974297 84.15385)">R</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="152.974297" y="84.384563" transform="rotate(-0 152.974297 84.384563)">R</text>
     </g>
    </g>
    <g id="text_26">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="159.885352" y="84.15385" transform="rotate(-0 159.885352 84.15385)">O</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="159.885352" y="84.384563" transform="rotate(-0 159.885352 84.384563)">O</text>
     </g>
    </g>
    <g id="text_27">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="169.92802" y="84.155379" transform="rotate(-0 169.92802 84.155379)">G</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="169.92802" y="84.386375" transform="rotate(-0 169.92802 84.386375)">G</text>
     </g>
    </g>
    <g id="text_28">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="180.650687" y="84.15385" transform="rotate(-0 180.650687 84.15385)">U</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="180.650687" y="84.384563" transform="rotate(-0 180.650687 84.384563)">U</text>
     </g>
    </g>
    <g id="text_29">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="211.595363" y="84.15385" transform="rotate(-0 211.595363 84.15385)">D</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="211.595363" y="84.384563" transform="rotate(-0 211.595363 84.384563)">D</text>
     </g>
    </g>
    <g id="text_30">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="65.049928" y="84.061564" transform="rotate(-0 65.049928 84.061564)">QKV</text>
+     <text style="font-weight: 700; font-size: 6px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="65.049928" y="84.292277" transform="rotate(-0 65.049928 84.292277)">QKV</text>
     </g>
    </g>
    <g id="text_31">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="82.849731" y="114.13866" transform="rotate(-0 82.849731 114.13866)">QK</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="82.849731" y="114.369373" transform="rotate(-0 82.849731 114.369373)">QK</text>
     </g>
    </g>
    <g id="text_32">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="95.741754" y="114.13866" transform="rotate(-0 95.741754 114.13866)">S</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="95.741754" y="114.369373" transform="rotate(-0 95.741754 114.369373)">S</text>
     </g>
    </g>
    <g id="text_33">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="119.941924" y="114.13866" transform="rotate(-0 119.941924 114.13866)">AV</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="119.941924" y="114.369373" transform="rotate(-0 119.941924 114.369373)">AV</text>
     </g>
    </g>
    <g id="text_34">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="142.849646" y="114.13866" transform="rotate(-0 142.849646 114.13866)">R</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="142.849646" y="114.369373" transform="rotate(-0 142.849646 114.369373)">R</text>
     </g>
    </g>
    <g id="text_35">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="148.826975" y="114.13866" transform="rotate(-0 148.826975 114.13866)">O</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="148.826975" y="114.369373" transform="rotate(-0 148.826975 114.369373)">O</text>
     </g>
    </g>
    <g id="text_36">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="157.637658" y="114.140189" transform="rotate(-0 157.637658 114.140189)">G</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="157.637658" y="114.371185" transform="rotate(-0 157.637658 114.371185)">G</text>
     </g>
    </g>
    <g id="text_37">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="167.762618" y="114.13866" transform="rotate(-0 167.762618 114.13866)">U</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="167.762618" y="114.369373" transform="rotate(-0 167.762618 114.369373)">U</text>
     </g>
    </g>
    <g id="text_38">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="193.924363" y="114.13866" transform="rotate(-0 193.924363 114.13866)">D</text>
+     <text style="font-weight: 700; font-size: 6.4px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="193.924363" y="114.369373" transform="rotate(-0 193.924363 114.369373)">D</text>
     </g>
    </g>
    <g id="text_39">
     <g clip-path="url(#pe0960bd341)">
-     <text style="font-weight: 700; font-size: 5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="64.116143" y="114.046375" transform="rotate(-0 64.116143 114.046375)">QKV</text>
+     <text style="font-weight: 700; font-size: 6px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="64.116143" y="114.277087" transform="rotate(-0 64.116143 114.277087)">QKV</text>
     </g>
    </g>
    <g id="legend_1">
     <g id="patch_7">
-     <path d="M 159.964875 26.550574
-L 168.244875 26.550574
-L 168.244875 21.510574
-L 159.964875 21.510574
+     <path d="M 142.669719 25.434753
+L 152.099719 25.434753
+L 152.099719 19.694753
+L 142.669719 19.694753
 z
 " style="fill: #5c87b2; stroke: #303030; stroke-width: 0.4; stroke-linejoin: miter"/>
     </g>
     <g id="text_40">
-     <text style="font-weight: 700; font-size: 7.2px; font-family: 'Times New Roman'; text-anchor: start" x="174.004875" y="26.550574" transform="rotate(-0 174.004875 26.550574)">Array+MIV</text>
+     <text style="font-weight: 700; font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: start" x="158.659719" y="25.434753" transform="rotate(-0 158.659719 25.434753)">Array+MIV</text>
     </g>
     <g id="patch_8">
-     <path d="M 217.602 26.550574
-L 225.882 26.550574
-L 225.882 21.510574
-L 217.602 21.510574
+     <path d="M 208.312 25.434753
+L 217.742 25.434753
+L 217.742 19.694753
+L 208.312 19.694753
 z
 " style="fill: #c77b47; stroke: #303030; stroke-width: 0.4; stroke-linejoin: miter"/>
     </g>
     <g id="text_41">
-     <text style="font-weight: 700; font-size: 7.2px; font-family: 'Times New Roman'; text-anchor: start" x="231.642" y="26.550574" transform="rotate(-0 231.642 26.550574)">MAC</text>
+     <text style="font-weight: 700; font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: start" x="224.302" y="25.434753" transform="rotate(-0 224.302 25.434753)">MAC</text>
     </g>
     <g id="patch_9">
-     <path d="M 254.741625 26.550574
-L 263.021625 26.550574
-L 263.021625 21.510574
-L 254.741625 21.510574
+     <path d="M 250.609906 25.434753
+L 260.039906 25.434753
+L 260.039906 19.694753
+L 250.609906 19.694753
 z
 " style="fill: #8a70a8; stroke: #303030; stroke-width: 0.4; stroke-linejoin: miter"/>
     </g>
     <g id="text_42">
-     <text style="font-weight: 700; font-size: 7.2px; font-family: 'Times New Roman'; text-anchor: start" x="268.781625" y="26.550574" transform="rotate(-0 268.781625 26.550574)">Fabric</text>
+     <text style="font-weight: 700; font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: start" x="266.599906" y="25.434753" transform="rotate(-0 266.599906 25.434753)">Fabric</text>
     </g>
     <g id="patch_10">
-     <path d="M 295.079625 26.550574
-L 303.359625 26.550574
-L 303.359625 21.510574
-L 295.079625 21.510574
+     <path d="M 296.550406 25.434753
+L 305.980406 25.434753
+L 305.980406 19.694753
+L 296.550406 19.694753
 z
 " style="fill: #a789bd; stroke: #303030; stroke-width: 0.4; stroke-linejoin: miter"/>
     </g>
     <g id="text_43">
-     <text style="font-weight: 700; font-size: 7.2px; font-family: 'Times New Roman'; text-anchor: start" x="309.119625" y="26.550574" transform="rotate(-0 309.119625 26.550574)">NoC</text>
+     <text style="font-weight: 700; font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: start" x="312.540406" y="25.434753" transform="rotate(-0 312.540406 25.434753)">NoC</text>
     </g>
     <g id="patch_11">
-     <path d="M 329.023125 26.550574
-L 337.303125 26.550574
-L 337.303125 21.510574
-L 329.023125 21.510574
+     <path d="M 335.208281 25.434753
+L 344.638281 25.434753
+L 344.638281 19.694753
+L 335.208281 19.694753
 z
 " style="fill: #d0a53e; stroke: #303030; stroke-width: 0.4; stroke-linejoin: miter"/>
     </g>
     <g id="text_44">
-     <text style="font-weight: 700; font-size: 7.2px; font-family: 'Times New Roman'; text-anchor: start" x="343.063125" y="26.550574" transform="rotate(-0 343.063125 26.550574)">Boundary</text>
+     <text style="font-weight: 700; font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: start" x="351.198281" y="25.434753" transform="rotate(-0 351.198281 25.434753)">Boundary</text>
     </g>
     <g id="patch_12">
-     <path d="M 379.7775 26.550574
-L 388.0575 26.550574
-L 388.0575 21.510574
-L 379.7775 21.510574
+     <path d="M 393.011875 25.434753
+L 402.441875 25.434753
+L 402.441875 19.694753
+L 393.011875 19.694753
 z
 " style="fill: #4d9584; stroke: #303030; stroke-width: 0.4; stroke-linejoin: miter"/>
     </g>
     <g id="text_45">
-     <text style="font-weight: 700; font-size: 7.2px; font-family: 'Times New Roman'; text-anchor: start" x="393.8175" y="26.550574" transform="rotate(-0 393.8175 26.550574)">GPU</text>
+     <text style="font-weight: 700; font-size: 8.2px; font-family: 'Times New Roman'; text-anchor: start" x="409.001875" y="25.434753" transform="rotate(-0 409.001875 25.434753)">GPU</text>
     </g>
    </g>
   </g>
