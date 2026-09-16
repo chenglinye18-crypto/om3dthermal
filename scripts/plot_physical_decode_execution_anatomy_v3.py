@@ -15,7 +15,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.patches import Patch, Rectangle
+from matplotlib.patches import ConnectionPatch, Patch, Rectangle
 import numpy as np
 
 
@@ -46,6 +46,7 @@ PATHS = (
 )
 
 PATH_LABEL = dict(PATHS)
+M3D_PATHS = PATHS[1:]
 PLACEMENTS = {
     "M3D_GPU": "GPU_PORT_BALANCED",
     "M3D_NMP_UNIFORM": "UNIFORM_STRIPING",
@@ -67,8 +68,8 @@ SHORT_LABELS = {
 }
 
 TIMELINE_CATEGORY = {
-    "ARRAY": "HBM/Array",
-    "HBM_MEMORY": "HBM/Array",
+    "ARRAY": "Array+MIV",
+    "HBM_MEMORY": "Array+MIV",
     "MAC": "MAC",
     "LOCAL_FABRIC": "Fabric",
     "INTER_REGION_NOC": "NoC",
@@ -76,12 +77,19 @@ TIMELINE_CATEGORY = {
     "GPU_COMPUTE": "GPU",
 }
 CATEGORY_COLORS = {
-    "HBM/Array": "#5C87B2",
+    "Array+MIV": "#5C87B2",
     "MAC": "#C77B47",
     "Fabric": "#8A70A8",
     "NoC": "#A789BD",
     "Boundary": "#D0A53E",
     "GPU": "#4D9584",
+}
+
+PHASE_COLORS = {
+    "Queue": "#E1E3E5",
+    "Admission": "#D29A62",
+    "Prefill": "#7398BE",
+    "Decode": "#5B9A85",
 }
 
 
@@ -329,23 +337,110 @@ def flattened_timeline(timelines: dict[str, list[dict]]) -> list[dict]:
     return rows
 
 
-def latency_summary(timelines: dict[str, list[dict]], hbm: dict) -> list[dict]:
+def decode_layer_rows(timelines: dict[str, list[dict]]) -> list[dict]:
+    rows = []
+    for path, _ in M3D_PATHS:
+        for order, item in enumerate(timelines[path]):
+            rows.append(
+                {
+                    "path": path,
+                    "path_label": item["path_label"],
+                    "order": order,
+                    "operator": item["operator"],
+                    "display_operator": item["display_operator"],
+                    "executor": item["executor"],
+                    "start_us": item["start_s"] * 1e6,
+                    "end_us": item["end_s"] * 1e6,
+                    "duration_us": item["duration_s"] * 1e6,
+                    "dominant_resource": item["dominant_resource"],
+                    "dominant_category": item["dominant_category"],
+                    "timeline_semantics": item["exact_or_reconstructed"],
+                }
+            )
+    return rows
+
+
+def latency_summary(timelines: dict[str, list[dict]]) -> list[dict]:
     latencies = {
-        path: rows[-1]["end_s"] - rows[0]["start_s"]
-        for path, rows in timelines.items()
+        path: timelines[path][-1]["end_s"] - timelines[path][0]["start_s"]
+        for path, _ in M3D_PATHS
     }
-    reference = latencies["HBM_BEST"]
+    gpu = latencies["M3D_GPU"]
+    dns = latencies["M3D_NMP_UNIFORM"]
     return [
         {
             "path": path,
             "path_label": label,
             "layer_latency_us": latencies[path] * 1e6,
-            "speedup_vs_HBM_layer": reference / latencies[path],
-            "selected_HBM_policy": hbm["selected_HBM_policy"],
-            "timeline_semantics": timelines[path][0]["exact_or_reconstructed"],
+            "relative_to_M3D_GPU": gpu / latencies[path],
+            "relative_to_DNS": dns / latencies[path],
+            "timeline_semantics": "exact",
         }
-        for path, label in PATHS
+        for path, label in M3D_PATHS
     ]
+
+
+def e2e_timeline() -> list[dict]:
+    rows = []
+    hbm = candidate("HBM_BEST")
+    assert hbm["selected_HBM_policy"] == "HBM_RESIDENT_WAVE"
+    assert sum(hbm["wave_sizes"]) == BATCH
+    for wave in hbm["waves"]:
+        assert len(wave["steps"]) == 32
+        cursor = 0.0
+        phases = (
+            ("Queue", float(wave["queue_delay"])),
+            ("Admission", float(wave["admission_s"])),
+            ("Prefill", float(wave["prefill_s"])),
+            ("Decode", float(wave["decode_s"])),
+        )
+        for phase, duration in phases:
+            if duration <= 0:
+                continue
+            rows.append(
+                {
+                    "path": "HBM_BEST",
+                    "path_label": "HBM",
+                    "wave": wave["wave"],
+                    "wave_batch": wave["batch"],
+                    "phase": phase,
+                    "start_s": cursor,
+                    "end_s": cursor + duration,
+                    "duration_s": duration,
+                    "source": f"runs/formal_long_context_v3/candidates/{TAG}_HBM_BEST.json",
+                    "timing_semantics": "EXACT_CANONICAL_SCHEDULER",
+                }
+            )
+            cursor += duration
+        assert math.isclose(cursor, float(wave["queue_delay"]) + float(wave["admission_s"])
+                            + float(wave["prefill_s"]) + float(wave["decode_s"]), rel_tol=1e-12)
+    assert math.isclose(max(row["end_s"] for row in rows if row["path"] == "HBM_BEST"),
+                        float(hbm["E2E_s"]), rel_tol=1e-12)
+
+    for path, label in M3D_PATHS:
+        result = candidate(path)
+        prefill = float(result["prefill"]["latency_s"])
+        decode = float(result["decode_s"])
+        assert math.isclose(prefill + decode, float(result["E2E_s"]), rel_tol=1e-12)
+        for phase, start, end in (
+            ("Prefill", 0.0, prefill),
+            ("Decode", prefill, prefill + decode),
+        ):
+            rows.append(
+                {
+                    "path": path,
+                    "path_label": label,
+                    "wave": 0,
+                    "wave_batch": BATCH,
+                    "phase": phase,
+                    "start_s": start,
+                    "end_s": end,
+                    "duration_s": end - start,
+                    "source": f"runs/formal_long_context_v3/candidates/{TAG}_{path}.json",
+                    "timing_semantics": "EXACT_CANONICAL_PHASE_CLOSURE",
+                }
+            )
+    return rows
 
 
 def configure_plot() -> None:
@@ -377,163 +472,160 @@ def apply_fonts(axis) -> None:
         tick.set_fontsize(size)
 
 
-def plot(timelines: dict[str, list[dict]], summary: list[dict], matrix: list[dict]) -> None:
+def plot(e2e: list[dict], timelines: dict[str, list[dict]], summary: list[dict]) -> None:
     configure_plot()
-    fig = plt.figure(figsize=(7.25, 3.35))
-    grid = fig.add_gridspec(1, 2, width_ratios=(1.72, 1.0), wspace=0.31)
-    axis = fig.add_subplot(grid[0, 0])
-    heat = fig.add_subplot(grid[0, 1])
-    y_positions = {path: 3 - index for index, (path, _) in enumerate(PATHS)}
+    fig = plt.figure(figsize=(7.25, 5.05))
+    grid = fig.add_gridspec(2, 1, height_ratios=(0.39, 0.61), hspace=0.50)
+    upper = fig.add_subplot(grid[0, 0])
+    lower = fig.add_subplot(grid[1, 0])
+
+    upper_y = {"HBM_BEST": 3.3, "M3D_GPU": 2.1, "M3D_NMP_UNIFORM": 1.05, "M3D_NMP_CPA": 0.0}
+    e2e_lookup = {path: float(candidate(path)["E2E_s"]) for path, _ in PATHS}
+    for row in e2e:
+        path = row["path"]
+        y = upper_y[path]
+        height = 0.30 if path == "HBM_BEST" else 0.52
+        if path == "HBM_BEST":
+            y += 0.18 if int(row["wave"]) == 0 else -0.18
+        start = float(row["start_s"])
+        width = float(row["duration_s"])
+        upper.broken_barh(
+            [(start, width)],
+            (y - height / 2, height),
+            facecolor=PHASE_COLORS[row["phase"]],
+            edgecolor="#404040",
+            linewidth=0.35,
+            hatch="///" if row["phase"] == "Admission" else None,
+            zorder=3,
+        )
+        if width >= 0.14:
+            label = {"Queue": "Wait", "Admission": "Adm."}.get(row["phase"], row["phase"])
+            upper.text(start + width / 2, y, label, ha="center", va="center",
+                       color="#222222" if row["phase"] == "Queue" else "white",
+                       fontproperties=v2.font(6.5, bold=True), clip_on=True, zorder=4)
+
+    upper.text(0.015, upper_y["HBM_BEST"] + 0.37, "W1", ha="left", va="center",
+               fontproperties=v2.font(6.4, bold=True))
+    upper.text(0.015, upper_y["HBM_BEST"] - 0.37, "W2", ha="left", va="center",
+               fontproperties=v2.font(6.4, bold=True))
+    maximum_e2e = max(e2e_lookup.values())
+    for path, label in PATHS:
+        y = upper_y[path]
+        upper.text(e2e_lookup[path] + maximum_e2e * 0.018, y,
+                   f"E2E = {e2e_lookup[path]:.2f} s",
+                   ha="left", va="center", fontproperties=v2.font(7.1, bold=True))
+    upper.set_yticks([upper_y[path] for path, _ in PATHS], ["HBM\n(B4+B4)", "M3D-GPU", "DNS", "CPA"])
+    upper.set_xlim(0, maximum_e2e * 1.16)
+    upper.set_ylim(-0.48, 3.85)
+    upper.set_xlabel("Time from request arrival (s)", fontproperties=v2.font(8.2, bold=True))
+    upper.set_title("(a) End-to-end serving execution", fontproperties=v2.font(9.0, bold=True), pad=6)
+    upper.grid(axis="x", color="#D0D0D0", linestyle=(0, (3, 2)), linewidth=0.45, zorder=0)
+    apply_fonts(upper)
+    upper.legend(
+        handles=[Patch(facecolor=color, edgecolor="#404040", linewidth=0.35,
+                       hatch="///" if phase == "Admission" else None, label=phase)
+                 for phase, color in PHASE_COLORS.items()],
+        loc="upper center", bbox_to_anchor=(0.5, -0.25), ncol=4, frameon=False,
+        prop=v2.font(7.0, bold=True), handlelength=1.35, columnspacing=1.0,
+    )
+
+    decode_start = min(float(row["start_s"]) for row in e2e
+                       if row["path"] != "HBM_BEST" and row["phase"] == "Decode")
+    decode_end = max(float(row["end_s"]) for row in e2e
+                     if row["path"] != "HBM_BEST" and row["phase"] == "Decode")
+    zoom_box = Rectangle((decode_start, -0.34), decode_end - decode_start, 2.78,
+                         fill=False, edgecolor="#555555", linewidth=0.7,
+                         linestyle=(0, (3, 2)), zorder=5)
+    upper.add_patch(zoom_box)
+    upper.text((decode_start + decode_end) / 2, 2.51, "Zoom into one Decode layer",
+               ha="center", va="bottom", fontproperties=v2.font(6.7, bold=True), color="#444444")
+
     latency_lookup = {row["path"]: float(row["layer_latency_us"]) for row in summary}
     max_latency = max(latency_lookup.values())
-
-    for path, _ in PATHS:
-        y = y_positions[path]
+    lower_y = {"M3D_GPU": 2, "M3D_NMP_UNIFORM": 1, "M3D_NMP_CPA": 0}
+    for path, _ in M3D_PATHS:
+        y = lower_y[path]
         for row in timelines[path]:
             start_us = row["start_s"] * 1e6
             width_us = row["duration_s"] * 1e6
-            axis.broken_barh(
-                [(start_us, width_us)],
-                (y - 0.29, 0.58),
-                facecolor=CATEGORY_COLORS[row["dominant_category"]],
-                edgecolor="white",
-                linewidth=0.45,
-                zorder=3,
-            )
-            if path == "HBM_BEST":
-                label = "Aggregate"
-            else:
-                label = row["display_operator"]
+            lower.broken_barh([(start_us, width_us)], (y - 0.28, 0.56),
+                              facecolor=CATEGORY_COLORS[row["dominant_category"]],
+                              edgecolor="white", linewidth=0.45, zorder=3)
             if row["operator"] not in {"Q", "K", "V"} and width_us >= 7:
-                axis.text(
-                    start_us + width_us / 2,
-                    y,
-                    label,
-                    ha="center",
-                    va="center",
-                    color="white",
-                    fontproperties=v2.font(5.2, bold=True),
-                    clip_on=True,
-                    zorder=4,
-                )
+                lower.text(start_us + width_us / 2, y, row["display_operator"],
+                           ha="center", va="center", color="white",
+                           fontproperties=v2.font(5.4, bold=True), clip_on=True, zorder=4)
+        qkv = timelines[path][:3]
+        lower.text((qkv[0]["start_s"] + qkv[-1]["end_s"]) * 0.5e6, y, "QKV",
+                   ha="center", va="center", color="white",
+                   fontproperties=v2.font(5.0, bold=True), clip_on=True, zorder=4)
+        for left, right in zip(timelines[path], timelines[path][1:]):
+            if left["executor"] != right["executor"]:
+                x = right["start_s"] * 1e6
+                lower.plot((x, x), (y - 0.34, y + 0.34), color="#333333",
+                           linestyle=(0, (2, 2)), linewidth=0.55, zorder=2)
+        lower.text(latency_lookup[path] + max_latency * 0.018, y,
+                   f"{latency_lookup[path]:.1f} µs", ha="left", va="center",
+                   fontproperties=v2.font(7.1, bold=True))
 
-        if path != "HBM_BEST":
-            qkv = timelines[path][:3]
-            assert [row["operator"] for row in qkv] == ["Q", "K", "V"]
-            qkv_start = qkv[0]["start_s"] * 1e6
-            qkv_end = qkv[-1]["end_s"] * 1e6
-            axis.text(
-                (qkv_start + qkv_end) / 2,
-                y,
-                "QKV",
-                ha="center",
-                va="center",
-                color="white",
-                fontproperties=v2.font(4.9, bold=True),
-                clip_on=True,
-                zorder=4,
-            )
+    lower.set_yticks([lower_y[path] for path, _ in M3D_PATHS], [label for _, label in M3D_PATHS])
+    lower.set_xlim(0, max_latency * 1.17)
+    lower.set_ylim(-0.58, 2.58)
+    lower.set_xlabel("Time from layer start (µs)", fontproperties=v2.font(8.4, bold=True))
+    lower.set_title("(b) Physical Decode execution anatomy", fontproperties=v2.font(9.0, bold=True), pad=7)
+    lower.grid(axis="x", color="#D0D0D0", linestyle=(0, (3, 2)), linewidth=0.45, zorder=0)
+    lower.text(max_latency * 0.01, -0.48,
+               "S: Softmax   R: AV Reduce   G/U/D: Gate/Up/Down",
+               ha="left", va="center", fontproperties=v2.font(6.2))
+    apply_fonts(lower)
+    resource_handles = [Patch(facecolor=color, edgecolor="#303030", linewidth=0.4, label=category)
+                        for category, color in CATEGORY_COLORS.items()]
+    resource_handles.append(Line2D([0], [0], color="#333333", linestyle=(0, (2, 2)),
+                                   linewidth=0.6, label="GPU–NMP handoff"))
+    lower.legend(handles=resource_handles, loc="upper center", bbox_to_anchor=(0.5, -0.20),
+                 ncol=4, frameon=False, prop=v2.font(6.9, bold=True),
+                 handlelength=1.25, columnspacing=0.85)
 
-        if path != "HBM_BEST":
-            for left, right in zip(timelines[path], timelines[path][1:]):
-                if left["executor"] != right["executor"]:
-                    x = right["start_s"] * 1e6
-                    axis.plot(
-                        (x, x),
-                        (y - 0.34, y + 0.34),
-                        color="#333333",
-                        linestyle=(0, (2, 2)),
-                        linewidth=0.55,
-                        zorder=2,
-                    )
-        axis.text(
-            latency_lookup[path] + max_latency * 0.018,
-            y,
-            f"{latency_lookup[path]:.1f} µs",
-            ha="left",
-            va="center",
-            fontproperties=v2.font(7.0, bold=True),
-        )
+    fig.add_artist(ConnectionPatch(xyA=(decode_start, -0.34), coordsA=upper.transData,
+                                   xyB=(0.05, 1.02), coordsB=lower.transAxes,
+                                   color="#777777", linestyle=(0, (3, 2)), linewidth=0.55))
+    fig.add_artist(ConnectionPatch(xyA=(decode_end, -0.34), coordsA=upper.transData,
+                                   xyB=(0.95, 1.02), coordsB=lower.transAxes,
+                                   color="#777777", linestyle=(0, (3, 2)), linewidth=0.55))
 
-    axis.set_yticks(
-        [y_positions[path] for path, _ in PATHS],
-        [label for _, label in PATHS],
-    )
-    axis.set_xlim(0, max_latency * 1.18)
-    axis.set_ylim(-0.58, 3.58)
-    axis.set_xlabel("Time from layer start (µs)", fontproperties=v2.font(8.4, bold=True))
-    axis.set_title("(a) Cross-configuration Decode execution", fontproperties=v2.font(8.8, bold=True), pad=7)
-    axis.grid(axis="x", color="#D0D0D0", linestyle=(0, (3, 2)), linewidth=0.45, zorder=0)
-    axis.text(
-        max_latency * 0.01,
-        -0.48,
-        "S: Softmax   R: AV Reduce   G/U/D: Gate/Up/Down",
-        ha="left",
-        va="center",
-        fontproperties=v2.font(6.2),
-    )
-    apply_fonts(axis)
-
-    handles = [
-        Patch(facecolor=color, edgecolor="#303030", linewidth=0.4, label=category)
-        for category, color in CATEGORY_COLORS.items()
-    ]
-    handles.append(
-        Line2D([0], [0], color="#333333", linestyle=(0, (2, 2)), linewidth=0.6,
-               label="GPU–NMP handoff")
-    )
-    axis.legend(
-        handles=handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.20),
-        ncol=4,
-        frameon=False,
-        prop=v2.font(6.8, bold=True),
-        handlelength=1.25,
-        columnspacing=0.75,
-    )
-
-    cpa = timelines["M3D_NMP_CPA"]
-    lookup = {(int(row["order"]), row["resource"]): row for row in matrix}
-    values = np.asarray(
-        [
-            [float(lookup[(index, resource)]["normalized_service"]) for resource in v2.RESOURCES]
-            for index in range(len(cpa))
-        ]
-    )
-    image = heat.imshow(values, vmin=0, vmax=1, cmap="YlGnBu", aspect="auto", interpolation="nearest")
-    heat.set_yticks(range(len(cpa)), [v2.DISPLAY_NAMES.get(row["operator"], row["operator"]) for row in cpa])
-    heat.set_xticks(range(6), ["Array+MIV", "MAC", "Fabric", "NoC", "Boundary", "GPU"],
-                    rotation=32, ha="right", rotation_mode="anchor")
-    heat.tick_params(length=0, labelsize=7.1)
-    for index, row in enumerate(cpa):
-        column = v2.RESOURCES.index(row["dominant_resource"])
-        heat.add_patch(Rectangle((column - 0.49, index - 0.49), 0.98, 0.98,
-                                 fill=False, edgecolor="black", linewidth=0.9))
-    heat.set_title("(b) CPA resource-service decomposition", fontproperties=v2.font(8.8, bold=True), pad=7)
-    apply_fonts(heat)
-    colorbar = fig.colorbar(image, ax=heat, fraction=0.046, pad=0.035, ticks=(0, 0.5, 1))
-    colorbar.set_label("Normalized service", fontproperties=v2.font(7.8, bold=True), labelpad=3)
-    apply_fonts(colorbar.ax)
-
-    fig.subplots_adjust(left=0.075, right=0.94, top=0.89, bottom=0.25)
+    fig.subplots_adjust(left=0.115, right=0.97, top=0.95, bottom=0.14)
     for extension in ("svg", "pdf"):
         metadata = {"Date": None} if extension == "svg" else {"CreationDate": None, "ModDate": None}
-        fig.savefig(OUT / f"figure.{extension}", metadata=metadata)
+        target = OUT / f"figure.{extension}"
+        try:
+            fig.savefig(target, metadata=metadata)
+        except PermissionError:
+            target = OUT / f"figure_new.{extension}"
+            print(f"WARNING: locked output; saving {target}", flush=True)
+            fig.savefig(target, metadata=metadata)
     svg = OUT / "figure.svg"
     svg.write_text("\n".join(line.rstrip() for line in svg.read_text(encoding="utf-8").splitlines()) + "\n",
                    encoding="utf-8")
     plt.close(fig)
 
 
-def validate(timelines: dict[str, list[dict]], summary: list[dict], matrix: list[dict]) -> None:
+def validate(e2e: list[dict], timelines: dict[str, list[dict]],
+             summary: list[dict], matrix: list[dict]) -> None:
     assert set(timelines) == {path for path, _ in PATHS}
-    for path, rows in timelines.items():
+    for path, _ in M3D_PATHS:
+        rows = timelines[path]
         assert rows[0]["start_s"] == 0.0
         assert all(left["start_s"] < right["start_s"] for left, right in zip(rows, rows[1:]))
         latency = rows[-1]["end_s"] - rows[0]["start_s"]
         recorded = next(row for row in summary if row["path"] == path)
         assert math.isclose(latency * 1e6, float(recorded["layer_latency_us"]), rel_tol=1e-12)
+    for path, _ in PATHS:
+        expected = float(candidate(path)["E2E_s"])
+        actual = max(float(row["end_s"]) for row in e2e if row["path"] == path)
+        assert math.isclose(actual, expected, rel_tol=1e-12)
+    hbm = candidate("HBM_BEST")
+    assert sum(hbm["wave_sizes"]) == BATCH
+    assert all(len(wave["steps"]) == 32 for wave in hbm["waves"])
     grouped = {}
     for row in matrix:
         grouped.setdefault(row["operator"], []).append(row)
@@ -548,20 +640,20 @@ def validate(timelines: dict[str, list[dict]], summary: list[dict], matrix: list
 
 def write_docs(hbm: dict, summary: list[dict], sources: dict[str, dict]) -> None:
     caption = (
-        "Physical Decode execution anatomy for Qwen2.5-32B at 64K context and B=8. "
-        "(a) Layer-level operator critical-path comparison across HBM-GPU, M3D-GPU, DNS, "
-        "and CPA using a shared absolute-time axis. The HBM bar is an aggregate-only "
-        "mean-layer reference from the canonical active-wave Decode step; the other rows "
-        "use exact operator intervals. Blocks are colored by their dominant execution/service "
-        "resource, and dashed markers indicate GPU–NMP dependency handoffs. The HBM row shows "
-        "active-wave B=4 layer execution; inter-wave queuing is accounted for in E2E latency "
-        "but is not shown here. (b) CPA per-operator physical-resource service normalized as "
-        "T_hat(o,r)=T(o,r)/max_r' T(o,r'); black boxes indicate the dominant resource."
+        "Cross-scale execution view for Qwen2.5-32B with 64K cached context and B=8. "
+        "(a) End-to-end serving timelines for the selected conventional-HBM policy, M3D-GPU, "
+        "DNS, and CPA. All requests arrive at t=0; the capacity-constrained HBM resident waves "
+        "execute serially, and cached history is admitted once before incremental Prefill and "
+        "Decode for each nonresident wave. (b) Exact physical execution of one representative "
+        "Decode layer for M3D-GPU, DNS, and CPA at the same B=8 workload. Operator intervals "
+        "are colored by the dominant physical service resource, and dashed markers indicate "
+        "GPU–NMP dependency handoffs. The two panels use different time scales."
     )
     (OUT / "caption.txt").write_text(caption + "\n", encoding="utf-8")
     latency_lines = "\n".join(
         f"- {row['path_label']}: {float(row['layer_latency_us']):.3f} us, "
-        f"{float(row['speedup_vs_HBM_layer']):.3f}x vs the HBM aggregate mean-layer reference."
+        f"{float(row['relative_to_M3D_GPU']):.3f}x relative to M3D-GPU and "
+        f"{float(row['relative_to_DNS']):.3f}x relative to DNS."
         for row in summary
     )
     source_lines = "\n".join(
@@ -575,19 +667,17 @@ Fixed workload: Qwen2.5-32B, LC64K, B=8, Decode step 0 (context 64128), layer 0,
 
 ## HBM policy and provenance
 
-`HBM_BEST` selects `{hbm['selected_HBM_policy']}` with safe resident batch {hbm['safe_resident_batch']} and waves `{hbm['wave_sizes']}`. The HBM evaluator has no operator scheduler. Its row is therefore an aggregate-only active-wave reference: the canonical first Decode-step latency for B={hbm['active_wave_batch']} divided by 64 layers. It is not split into invented operator intervals. Request-level wave queuing remains represented only in the formal E2E metrics.
+Panel (a) is a system-level E2E timeline from the formal candidate rows. `HBM_BEST` selects `{hbm['selected_HBM_policy']}` with safe resident batch {hbm['safe_resident_batch']} and waves `{hbm['wave_sizes']}`. Wave 1 starts with resident historical KV. Wave 2 waits for Wave 1, admits historical KV once, then performs the same cached-history incremental Prefill and 32-step growing Decode. Historical H=64K is never recomputed as a full Prefill. The M3D rows use their exact canonical `prefill.latency_s`, `decode_s`, and `E2E_s` phase closure.
 
 {source_lines}
 
-M3D-GPU and DNS are deterministic single-step replays using their canonical placement policies and are checked against their frozen checkpoints. CPA is loaded from the existing nominal-frequency serialized cache; the CPA optimizer is not rerun. All four rows align their layer reference to x=0 and retain absolute microsecond durations without per-row normalization.
+Panel (b) is a single-layer physical execution zoom at Decode step 0, context 64128, layer 0, active B=8, and nominal 1.0 GHz. M3D-GPU and DNS are deterministic single-step replays using their canonical placement policies and are checked against frozen checkpoints. CPA is loaded from the existing serialized cache; the CPA optimizer is not rerun. The three rows align layer start to x=0 and retain absolute microsecond durations without per-row normalization.
 
 ## Representative layer latency
 
 {latency_lines}
 
-These ratios are single-layer anatomy ratios, not end-to-end throughput speedups.
-
-The right panel retains the v2 CPA matrix exactly: `T_norm(o,r)=T(o,r)/max_r T(o,r)`. Each row maximum is 1 and the black outline marks `argmax_r`. `AV_REDUCTION` remains `AV Reduce` because it is an independently scheduled GPU stage.
+These ratios are single-layer anatomy ratios, not end-to-end throughput speedups. Panel (a) and Panel (b) use different time scales; Panel (b) is a logical zoom rather than an equal-scale crop. The prior CPA operator-resource matrix and resource-diversity audit remain in this directory as provenance artifacts but are not shown in the default figure.
 
 No formal benchmark, thermal solve, frequency sweep, or placement optimizer is run, and no canonical formal result is modified.
 """
@@ -605,8 +695,11 @@ def main() -> None:
         timelines[path], sources[path] = replay_iom3d(path)
     timelines["M3D_NMP_CPA"], sources["M3D_NMP_CPA"], matrix = replay_cpa()
 
-    summary = latency_summary(timelines, hbm)
-    validate(timelines, summary, matrix)
+    e2e = e2e_timeline()
+    summary = latency_summary(timelines)
+    validate(e2e, timelines, summary, matrix)
+    v2.write_csv(OUT / "e2e_timeline.csv", e2e)
+    v2.write_csv(OUT / "decode_layer_timeline.csv", decode_layer_rows(timelines))
     v2.write_csv(OUT / "timeline_all_paths.csv", flattened_timeline(timelines))
     v2.write_csv(OUT / "timeline_provenance.csv", provenance_rows(timelines, sources))
     v2.write_csv(OUT / "layer_latency_summary.csv", summary)
@@ -624,6 +717,10 @@ def main() -> None:
             "selected_HBM_policy": hbm["selected_HBM_policy"],
             "HBM_timeline_semantics": "aggregate-only",
             "M3D_timeline_semantics": "exact",
+            "panel_a_semantics": "SYSTEM_LEVEL_EXACT_CANONICAL_E2E",
+            "panel_b_semantics": "SINGLE_LAYER_EXACT_SIMULATED_START_END",
+            "incremental_prefill_tokens": 128,
+            "generated_tokens": 32,
             "per_row_time_normalization": False,
             "benchmark_runs": 0,
             "thermal_runs": 0,
@@ -632,7 +729,10 @@ def main() -> None:
         },
     )
     write_docs(hbm, summary, sources)
-    plot(timelines, summary, matrix)
+    plot(e2e, timelines, summary)
+    (OUT / "resource_diversity_summary.csv").write_bytes(
+        (ROOT / "runs/physical_decode_execution_anatomy_v2/resource_diversity_summary.csv").read_bytes()
+    )
 
     after = v2.formal_hashes()
     assert before == after
@@ -640,7 +740,9 @@ def main() -> None:
         OUT / "formal_v3_preservation.json",
         {"status": "BYTE_IDENTICAL", "file_count": len(before), "sha256": before},
     )
-    print(json.dumps({"HBM": hbm, "latencies": summary}, indent=2))
+    print(json.dumps({"HBM": hbm, "E2E": {
+        path: candidate(path)["E2E_s"] for path, _ in PATHS
+    }, "layer_latencies": summary}, indent=2))
     print(f"formal_long_context_v3 byte-identical: {len(before)} files")
 
 

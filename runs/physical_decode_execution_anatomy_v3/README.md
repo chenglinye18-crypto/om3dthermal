@@ -4,24 +4,21 @@ Fixed workload: Qwen2.5-32B, LC64K, B=8, Decode step 0 (context 64128), layer 0,
 
 ## HBM policy and provenance
 
-`HBM_BEST` selects `HBM_RESIDENT_WAVE` with safe resident batch 4 and waves `[4, 4]`. The HBM evaluator has no operator scheduler. Its row is therefore an aggregate-only active-wave reference: the canonical first Decode-step latency for B=4 divided by 64 layers. It is not split into invented operator intervals. Request-level wave queuing remains represented only in the formal E2E metrics.
+Panel (a) is a system-level E2E timeline from the formal candidate rows. `HBM_BEST` selects `HBM_RESIDENT_WAVE` with safe resident batch 4 and waves `[4, 4]`. Wave 1 starts with resident historical KV. Wave 2 waits for Wave 1, admits historical KV once, then performs the same cached-history incremental Prefill and 32-step growing Decode. Historical H=64K is never recomputed as a full Prefill. The M3D rows use their exact canonical `prefill.latency_s`, `decode_s`, and `E2E_s` phase closure.
 
 - HBM-GPU: aggregate-only; validation `PASS_AGGREGATE_STEP_CLOSURE`; optimizer runs 0.
 - M3D-GPU: exact; validation `PASS`; optimizer runs 0.
 - DNS: exact; validation `PASS`; optimizer runs 0.
 - CPA: exact; validation `PASS`; optimizer runs 0.
 
-M3D-GPU and DNS are deterministic single-step replays using their canonical placement policies and are checked against their frozen checkpoints. CPA is loaded from the existing nominal-frequency serialized cache; the CPA optimizer is not rerun. All four rows align their layer reference to x=0 and retain absolute microsecond durations without per-row normalization.
+Panel (b) is a single-layer physical execution zoom at Decode step 0, context 64128, layer 0, active B=8, and nominal 1.0 GHz. M3D-GPU and DNS are deterministic single-step replays using their canonical placement policies and are checked against frozen checkpoints. CPA is loaded from the existing serialized cache; the CPA optimizer is not rerun. The three rows align layer start to x=0 and retain absolute microsecond durations without per-row normalization.
 
 ## Representative layer latency
 
-- HBM-GPU: 664.232 us, 1.000x vs the HBM aggregate mean-layer reference.
-- M3D-GPU: 938.144 us, 0.708x vs the HBM aggregate mean-layer reference.
-- DNS: 439.173 us, 1.512x vs the HBM aggregate mean-layer reference.
-- CPA: 385.783 us, 1.722x vs the HBM aggregate mean-layer reference.
+- M3D-GPU: 938.144 us, 1.000x relative to M3D-GPU and 0.468x relative to DNS.
+- DNS: 439.173 us, 2.136x relative to M3D-GPU and 1.000x relative to DNS.
+- CPA: 385.783 us, 2.432x relative to M3D-GPU and 1.138x relative to DNS.
 
-These ratios are single-layer anatomy ratios, not end-to-end throughput speedups.
-
-The right panel retains the v2 CPA matrix exactly: `T_norm(o,r)=T(o,r)/max_r T(o,r)`. Each row maximum is 1 and the black outline marks `argmax_r`. `AV_REDUCTION` remains `AV Reduce` because it is an independently scheduled GPU stage.
+These ratios are single-layer anatomy ratios, not end-to-end throughput speedups. Panel (a) and Panel (b) use different time scales; Panel (b) is a logical zoom rather than an equal-scale crop. The prior CPA operator-resource matrix and resource-diversity audit remain in this directory as provenance artifacts but are not shown in the default figure.
 
 No formal benchmark, thermal solve, frequency sweep, or placement optimizer is run, and no canonical formal result is modified.
