@@ -87,3 +87,20 @@ def test_formal_v3_is_preserved():
     value = json.loads((OUT / "formal_v3_preservation.json").read_text())
     assert value["status"] == "BYTE_IDENTICAL"
     assert value["file_count"] > 0
+
+
+def test_separate_clean_vector_figures():
+    for stem in ("e2e_timeline", "decode_execution_timeline"):
+        assert (OUT / f"{stem}.pdf").is_file()
+        svg = (OUT / f"{stem}.svg").read_text(encoding="utf-8")
+        assert "Times New Roman" in svg
+        assert "(a)" not in svg
+        assert "(b)" not in svg
+        assert "GPU–NMP handoff" not in svg
+        assert "Zoom into" not in svg
+    e2e_svg = (OUT / "e2e_timeline.svg").read_text(encoding="utf-8")
+    decode_svg = (OUT / "decode_execution_timeline.svg").read_text(encoding="utf-8")
+    assert e2e_svg.count("E2E =") == 4
+    assert "938.1 µs" in decode_svg
+    assert "439.2 µs" in decode_svg
+    assert "385.8 µs" in decode_svg
