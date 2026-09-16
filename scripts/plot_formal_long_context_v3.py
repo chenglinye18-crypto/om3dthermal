@@ -16,12 +16,14 @@ CONTEXTS=('LC20K','LC64K','LC126K')
 BATCHES=(1,8,32)
 CASES=[(m,c,b) for m in MODELS for c in CONTEXTS for b in BATCHES]
 # Match the compact, continuous single-column layout used by the final v2 plot.
-MODEL_STRIDE=6.6
-LOCAL_CENTERS=(0.,.55,1.10,1.75,2.30,2.85,3.50,4.05,4.60)
+MODEL_STRIDE=4.75
+# Keep B1/B8/B32 tight, give the three context groups clearer separation,
+# and leave only one context-sized gap between the two model groups.
+LOCAL_CENTERS=(0.,.40,.80,1.70,2.10,2.50,3.40,3.80,4.20)
 CENTERS=[mi*MODEL_STRIDE+x for mi in range(2) for x in LOCAL_CENTERS]
-BAR_WIDTH=.13
-MODEL_BOUNDARIES=(-.48,5.08,11.68)
-CONTEXT_BOUNDARIES=(1.42,3.17,8.02,9.77)
+BAR_WIDTH=.09
+MODEL_BOUNDARIES=(-.40,4.475,9.35)
+CONTEXT_BOUNDARIES=(1.25,2.95,6.00,7.70)
 
 
 def load(name):
@@ -72,10 +74,10 @@ def main():
             ax.bar([x+(i-1.5)*BAR_WIDTH for x in CENTERS],values,width=BAR_WIDTH,color=color,edgecolor='#303030',linewidth=.45,hatch=hatch,zorder=3)
         ax.set_xlim(MODEL_BOUNDARIES[0],MODEL_BOUNDARIES[-1]);ax.set_xticks(CENTERS,[f'B{b}' for _,_,b in CASES])
         transform=ax.get_xaxis_transform()
-        for mi,model in enumerate(('8B','32B')):
-            for center,context in zip((.55,2.30,4.05),('20K','64K','126K')):
+        for mi,model in enumerate(('Llama-3.1-8B','Qwen2.5-32B')):
+            for center,context in zip((.40,2.10,3.80),('20K','64K','126K')):
                 ax.text(mi*MODEL_STRIDE+center,-.20,context,ha='center',va='top',transform=transform,fontsize=7)
-            ax.text(mi*MODEL_STRIDE+2.30,-.30,model,ha='center',va='top',transform=transform,fontsize=8.5,fontweight='bold')
+            ax.text(mi*MODEL_STRIDE+2.10,-.30,model,ha='center',va='top',transform=transform,fontsize=7.2,fontweight='bold')
         for x in CONTEXT_BOUNDARIES:ax.plot([x,x],[0,-.175],transform=transform,clip_on=False,color='#444444',linewidth=.5)
         for x in MODEL_BOUNDARIES:ax.plot([x,x],[0,-.265],transform=transform,clip_on=False,color='#303030',linewidth=.85)
         decorate(ax)
