@@ -1,0 +1,30 @@
+{
+  "model": "Qwen2.5-32B",
+  "context": "LC64K",
+  "batch": 8,
+  "decode_step_zero_based": 0,
+  "decode_context": 64128,
+  "layer_zero_based": 0,
+  "CPA_frequency_GHz": 1.0,
+  "selected_HBM_policy": "HBM_RESIDENT_WAVE",
+  "HBM_timeline_semantics": "aggregate-only",
+  "M3D_timeline_semantics": "exact",
+  "per_row_time_normalization": false,
+  "benchmark_runs": 0,
+  "thermal_runs": 0,
+  "optimizer_runs": 0,
+  "HBM_details": {
+    "selected_HBM_policy": "HBM_RESIDENT_WAVE",
+    "safe_resident_batch": 4,
+    "wave_sizes": [
+      4,
+      4
+    ],
+    "active_wave_batch": 4,
+    "active_decode_step_s": 0.04251087490430415,
+    "aggregate_mean_layer_s": 0.0006642324203797523,
+    "aggregate_compute_s": 0.0005983718283577564,
+    "aggregate_memory_s": 0.04251087490430415,
+    "aggregate_dominant_resource": "HBM_MEMORY"
+  }
+}
