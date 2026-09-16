@@ -1,0 +1,10 @@
+{
+  "model": "Llama-3.1-8B",
+  "context": "LC64K",
+  "batch": 8,
+  "placement_frequency_ghz": 1.0,
+  "optimizer_runs": 1,
+  "nominal_first_step_consistency": "PASS",
+  "elapsed_s": 314.79721099999733,
+  "array_service_sha256": "e041e4736726d63d6c1dae4aa880c2aec8dc03a9fe1a5c18e938d10491830ba8"
+}

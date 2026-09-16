@@ -1,0 +1,25 @@
+{
+  "baseline_commit": "b2586083763478103013dc15cbaaa4e8f4f4f376",
+  "frequencies_ghz": [
+    1.0,
+    1.25,
+    1.5,
+    2.0,
+    2.5,
+    3.0
+  ],
+  "new_runs": 90,
+  "nominal_rows_reused": 18,
+  "workload_matrix": "formal_long_context_v3",
+  "voltage_model": "CONSTANT_VOLTAGE_EXISTING_EVENT_ENERGY",
+  "placement": "REBUILD_ONCE_AT_1GHZ_THEN_FREEZE",
+  "frequency_model_source": "scripts/run_cpa_frequency_sweep.py:set_frequency",
+  "cache": "F:\\om3dthermal_cache\\cpa_feol_frequency_sweep_v3",
+  "prefill": "EXACT_V3_NOMINAL_REUSE",
+  "thermal": "DECODE_STEADY_STATE",
+  "old_sweep_values_reused": 0,
+  "host_offload": "PRESERVED_IN_V3_UNCHANGED",
+  "completed_new_runs": 90,
+  "total_points": 108,
+  "sanity_checks": "PASS"
+}

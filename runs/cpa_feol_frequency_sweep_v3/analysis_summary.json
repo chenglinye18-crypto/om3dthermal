@@ -1,0 +1,37 @@
+{
+  "Llama-3.1-8B": {
+    "cases": 9,
+    "throughput_headroom_geomean": 1.1689020459928472,
+    "energy_efficiency_geomean": 1.0398645236153696,
+    "selected_frequency_distribution": {
+      "3.0": 6,
+      "1.5": 3
+    }
+  },
+  "Qwen2.5-32B": {
+    "cases": 9,
+    "throughput_headroom_geomean": 1.1421052651081156,
+    "energy_efficiency_geomean": 1.0331564497309036,
+    "selected_frequency_distribution": {
+      "3.0": 3,
+      "2.0": 1,
+      "1.5": 4,
+      "1.25": 1
+    }
+  },
+  "ALL": {
+    "cases": 18,
+    "throughput_headroom_geomean": 1.15542597388326,
+    "energy_efficiency_geomean": 1.0365050600067385,
+    "selected_frequency_distribution": {
+      "3.0": 9,
+      "1.5": 7,
+      "2.0": 1,
+      "1.25": 1
+    }
+  },
+  "total_points": 108,
+  "new_runs": 90,
+  "infeasible_points": 27,
+  "nonmonotonic_transitions": 0
+}

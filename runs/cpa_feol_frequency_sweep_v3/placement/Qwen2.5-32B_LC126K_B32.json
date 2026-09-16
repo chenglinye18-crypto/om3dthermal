@@ -1,0 +1,10 @@
+{
+  "model": "Qwen2.5-32B",
+  "context": "LC126K",
+  "batch": 32,
+  "placement_frequency_ghz": 1.0,
+  "optimizer_runs": 1,
+  "nominal_first_step_consistency": "PASS",
+  "elapsed_s": 7387.487384799999,
+  "array_service_sha256": "e041e4736726d63d6c1dae4aa880c2aec8dc03a9fe1a5c18e938d10491830ba8"
+}

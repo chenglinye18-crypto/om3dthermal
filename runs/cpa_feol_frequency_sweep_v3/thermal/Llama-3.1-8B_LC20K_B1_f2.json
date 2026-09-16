@@ -1,0 +1,17 @@
+{
+  "Tmax_C": 63.22392988455573,
+  "hotspot_component": "gpu/FEOL",
+  "hotspot_x": 0.010595348000000001,
+  "hotspot_y": -0.0012500000000000011,
+  "hotspot_z": 0.00037179,
+  "hotspot_die": null,
+  "thermal_solve_s": 7.223830299990368,
+  "iterations": 2160,
+  "relative_residual": 0.0005489103851779146,
+  "max_temperature_update_K": 0.008773633343291306,
+  "thermal_status": "THERMAL_FEASIBLE",
+  "thermal_feasible": true,
+  "operator_reused": true,
+  "physical_signature": "2fcecd86ccbe1599b61790bab556d55d334ecb78086df9888d84bc638a674dcd",
+  "phase": "DECODE_ONLY"
+}

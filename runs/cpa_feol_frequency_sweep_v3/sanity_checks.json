@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "new_runs": 90,
+  "nominal_rows": 18,
+  "baseline_and_legacy_byte_identical": true,
+  "prefill_reused": true,
+  "fixed_array_boundary_gpu": true,
+  "fixed_dynamic_event_energy": true,
+  "traffic_conservation": true,
+  "energy_conservation": true
+}

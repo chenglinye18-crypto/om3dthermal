@@ -1,0 +1,1188 @@
+{
+  "steps": [
+    {
+      "context": 126128,
+      "latency_s": 0.0950754094601934,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027961044712726688,
+        "MAC": 0.027474373333333336,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053048997301285,
+        "GPU_COMPUTE": 0.011529359386666653
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011529359386666653
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.0806063735869198
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15799473904581773,
+      "noc_max_link_utilization": 0.02986990378960541,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122015444992.0,
+      "boundary_bytes": 137782853632.0
+    },
+    {
+      "context": 126129,
+      "latency_s": 0.09507557410333074,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027961049413505464,
+        "MAC": 0.027474373333333336,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053058634948346,
+        "GPU_COMPUTE": 0.01152942765333331
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.01152942765333331
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060646996339038
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15799536862152117,
+      "noc_max_link_utilization": 0.029869852063652464,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122023833600.0,
+      "boundary_bytes": 137783181312.0
+    },
+    {
+      "context": 126130,
+      "latency_s": 0.09507576541313481,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027961092906683162,
+        "MAC": 0.027474480000000003,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053068272595403,
+        "GPU_COMPUTE": 0.01152949591999997
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.01152949591999997
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.0806065930065276
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15799595388063223,
+      "noc_max_link_utilization": 0.029869791960054865,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122032222208.0,
+      "boundary_bytes": 137783508992.0
+    },
+    {
+      "context": 126131,
+      "latency_s": 0.0950759332483028,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027961309182776443,
+        "MAC": 0.02747450666666667,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053077910242465,
+        "GPU_COMPUTE": 0.011529564186666643
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011529564186666643
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060669257502912
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15799657814737855,
+      "noc_max_link_utilization": 0.02986973923165789,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122040610816.0,
+      "boundary_bytes": 137783836672.0
+    },
+    {
+      "context": 126132,
+      "latency_s": 0.09507631122477346,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027961309182776443,
+        "MAC": 0.02747472,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040530875478895195,
+        "GPU_COMPUTE": 0.011529632453333303
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011529632453333303
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060700228483304
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15799685320045584,
+      "noc_max_link_utilization": 0.029869620484322523,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122048999424.0,
+      "boundary_bytes": 137784164352.0
+    },
+    {
+      "context": 126133,
+      "latency_s": 0.09507650253457743,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796130918314257,
+        "MAC": 0.027474746666666668,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053097185536582,
+        "GPU_COMPUTE": 0.011529700719999994
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011529700719999994
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060712532797033
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15799743845204237,
+      "noc_max_link_utilization": 0.029869560381656907,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122057388032.0,
+      "boundary_bytes": 137784492032.0
+    },
+    {
+      "context": 126134,
+      "latency_s": 0.09507666717771464,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027961314724809238,
+        "MAC": 0.027474773333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040531068231836366,
+        "GPU_COMPUTE": 0.011529768986666654
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011529768986666654
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.0806072217044409
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1579980680158334,
+      "noc_max_link_utilization": 0.029869508656893366,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122065776640.0,
+      "boundary_bytes": 137784819712.0
+    },
+    {
+      "context": 126135,
+      "latency_s": 0.0950768318208519,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796131749564257,
+        "MAC": 0.027474773333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053116460830698,
+        "GPU_COMPUTE": 0.011529837253333328
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011529837253333328
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.0806073180809114
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15799869757744392,
+      "noc_max_link_utilization": 0.029869456932308948,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122074165248.0,
+      "boundary_bytes": 137785147392.0
+    },
+    {
+      "context": 126136,
+      "latency_s": 0.09507699646398925,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796131749564257,
+        "MAC": 0.027474773333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053126098477754,
+        "GPU_COMPUTE": 0.011529905519999988
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011529905519999988
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060741445738207
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1579993271368739,
+      "noc_max_link_utilization": 0.029869405207903644,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122082553856.0,
+      "boundary_bytes": 137785475072.0
+    },
+    {
+      "context": 126137,
+      "latency_s": 0.09507716110712641,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796131749564257,
+        "MAC": 0.027474773333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053135736124815,
+        "GPU_COMPUTE": 0.011529973786666644
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011529973786666644
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060751083385267
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1579999566941238,
+      "noc_max_link_utilization": 0.029869353483677537,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122090942464.0,
+      "boundary_bytes": 137785802752.0
+    },
+    {
+      "context": 126138,
+      "latency_s": 0.09507737908359706,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796131749564257,
+        "MAC": 0.027474853333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.0405314537377187,
+        "GPU_COMPUTE": 0.011530042053333304
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530042053333304
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060766054365656
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1580004976193001,
+      "noc_max_link_utilization": 0.029869285004547004,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122099331072.0,
+      "boundary_bytes": 137786130432.0
+    },
+    {
+      "context": 126139,
+      "latency_s": 0.09507757039340106,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796131749564257,
+        "MAC": 0.02747496,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053155011418932,
+        "GPU_COMPUTE": 0.011530110319999978
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530110319999978
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060778358679382
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800108285698028,
+      "noc_max_link_utilization": 0.029869224903231455,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122107719680.0,
+      "boundary_bytes": 137786458112.0
+    },
+    {
+      "context": 126140,
+      "latency_s": 0.09507792405320668,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027961353847140075,
+        "MAC": 0.027475333333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040531646490659864,
+        "GPU_COMPUTE": 0.011530178586666637
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530178586666637
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060806897993297
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800139829706808,
+      "noc_max_link_utilization": 0.029869113799162045,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122116108288.0,
+      "boundary_bytes": 137786785792.0
+    },
+    {
+      "context": 126141,
+      "latency_s": 0.09507825977967739,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796170851344062,
+        "MAC": 0.027475600000000003,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053174286713049,
+        "GPU_COMPUTE": 0.011530246853333329
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530246853333329
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060833643973686
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800174353654997,
+      "noc_max_link_utilization": 0.029869008329707913,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122124496896.0,
+      "boundary_bytes": 137787113472.0
+    },
+    {
+      "context": 126142,
+      "latency_s": 0.0950784621728145,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962058058492525,
+        "MAC": 0.02747570666666667,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040531839243601035,
+        "GPU_COMPUTE": 0.011530315119999988
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530315119999988
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.0806084705662075
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800231034790968,
+      "noc_max_link_utilization": 0.029868944747670927,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122132885504.0,
+      "boundary_bytes": 137787441152.0
+    },
+    {
+      "context": 126143,
+      "latency_s": 0.09507869400308562,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962399431424735,
+        "MAC": 0.027475866666666668,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053193562007165,
+        "GPU_COMPUTE": 0.011530383386666662
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530383386666662
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060863412981188
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800282823788528,
+      "noc_max_link_utilization": 0.029868871918257024,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122141274112.0,
+      "boundary_bytes": 137787768832.0
+    },
+    {
+      "context": 126144,
+      "latency_s": 0.09507885864622301,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962410934809983,
+        "MAC": 0.027475893333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053203199654222,
+        "GPU_COMPUTE": 0.011530451653333322
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530451653333322
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060873050628253
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800345777783203,
+      "noc_max_link_utilization": 0.029868820195877804,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122149662720.0,
+      "boundary_bytes": 137788096512.0
+    },
+    {
+      "context": 126145,
+      "latency_s": 0.09507907662269349,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962410934809983,
+        "MAC": 0.027475946666666667,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040532128373012836,
+        "GPU_COMPUTE": 0.011530519919999978
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530519919999978
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060888021608643
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1580039986853244,
+      "noc_max_link_utilization": 0.02986875171919255,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122158051328.0,
+      "boundary_bytes": 137788424192.0
+    },
+    {
+      "context": 126146,
+      "latency_s": 0.09507926793249744,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962410934809983,
+        "MAC": 0.027475973333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053222474948339,
+        "GPU_COMPUTE": 0.011530588186666638
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530588186666638
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.0806090032592237
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800458390551134,
+      "noc_max_link_utilization": 0.029868691620023095,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122166439936.0,
+      "boundary_bytes": 137788751872.0
+    },
+    {
+      "context": 126147,
+      "latency_s": 0.09507943257563478,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962410934809983,
+        "MAC": 0.027476,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040532321125954104,
+        "GPU_COMPUTE": 0.011530656453333312
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530656453333312
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060909963569428
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800521343861787,
+      "noc_max_link_utilization": 0.02986863989826831,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122174828544.0,
+      "boundary_bytes": 137789079552.0
+    },
+    {
+      "context": 126148,
+      "latency_s": 0.09507959721877197,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962413084635096,
+        "MAC": 0.027476,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053241750242463,
+        "GPU_COMPUTE": 0.011530724719999972
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530724719999972
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060919601216489
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1580058429695444,
+      "noc_max_link_utilization": 0.0298685881766927,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122183217152.0,
+      "boundary_bytes": 137789407232.0
+    },
+    {
+      "context": 126149,
+      "latency_s": 0.09507981519524261,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962413084635096,
+        "MAC": 0.027476053333333333,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053251387889517,
+        "GPU_COMPUTE": 0.011530792986666663
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530792986666663
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060934572196879
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800638386736657,
+      "noc_max_link_utilization": 0.029868519701071242,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122191605760.0,
+      "boundary_bytes": 137789734912.0
+    },
+    {
+      "context": 126150,
+      "latency_s": 0.0950800598383799,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962415364525248,
+        "MAC": 0.027476133333333333,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.0405326102553658,
+        "GPU_COMPUTE": 0.011530861253333323
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530861253333323
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.0806095220984394
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800688044723393,
+      "noc_max_link_utilization": 0.029868442848696743,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122199994368.0,
+      "boundary_bytes": 137790062592.0
+    },
+    {
+      "context": 126151,
+      "latency_s": 0.09508027781521639,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962460869118393,
+        "MAC": 0.02747624,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053270663183643,
+        "GPU_COMPUTE": 0.011530929519999997
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530929519999997
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060967180860944
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1580074213394379,
+      "noc_max_link_utilization": 0.029868374373626706,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122208382976.0,
+      "boundary_bytes": 137790390272.0
+    },
+    {
+      "context": 126152,
+      "latency_s": 0.0950805224583539,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.027962460869118393,
+        "MAC": 0.027476346666666665,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040532803008306965,
+        "GPU_COMPUTE": 0.011530997786666657
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011530997786666657
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060984818508002
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800791791421934,
+      "noc_max_link_utilization": 0.029868297521999997,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122216771584.0,
+      "boundary_bytes": 137790717952.0
+    },
+    {
+      "context": 126153,
+      "latency_s": 0.09508068710149126,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796246086948452,
+        "MAC": 0.027476426666666665,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.0405328993847775,
+        "GPU_COMPUTE": 0.011531066053333313
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011531066053333313
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08060994456155067
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800854743324635,
+      "noc_max_link_utilization": 0.029868245801610068,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122225160192.0,
+      "boundary_bytes": 137791045632.0
+    },
+    {
+      "context": 126154,
+      "latency_s": 0.0950808517446282,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796246086948452,
+        "MAC": 0.027476426666666665,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040532995761248136,
+        "GPU_COMPUTE": 0.011531134319999973
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011531134319999973
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08061004093802117
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15800917695009387,
+      "noc_max_link_utilization": 0.029868194081399388,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122233548800.0,
+      "boundary_bytes": 137791373312.0
+    },
+    {
+      "context": 126155,
+      "latency_s": 0.09508101638776573,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796246086948452,
+        "MAC": 0.027476426666666665,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.040533092137718774,
+        "GPU_COMPUTE": 0.011531202586666647
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011531202586666647
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08061013731449179
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1580098064647603,
+      "noc_max_link_utilization": 0.029868142361367644,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122241937408.0,
+      "boundary_bytes": 137791700992.0
+    },
+    {
+      "context": 126156,
+      "latency_s": 0.09508120769756936,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796246536931152,
+        "MAC": 0.027476479999999998,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053318851418931,
+        "GPU_COMPUTE": 0.011531270853333307
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011531270853333307
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08061026035762907
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1580103916613229,
+      "noc_max_link_utilization": 0.02986808226465044,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122250326016.0,
+      "boundary_bytes": 137792028672.0
+    },
+    {
+      "context": 126157,
+      "latency_s": 0.09508139900737336,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796246536931152,
+        "MAC": 0.027476533333333334,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053328489065984,
+        "GPU_COMPUTE": 0.011531339119999998
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011531339119999998
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08061038340076628
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15801097685553006,
+      "noc_max_link_utilization": 0.029868022168174965,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122258714624.0,
+      "boundary_bytes": 137792356352.0
+    },
+    {
+      "context": 126158,
+      "latency_s": 0.09508164365051071,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796246536931152,
+        "MAC": 0.02747664,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.04053338126713047,
+        "GPU_COMPUTE": 0.011531407386666657
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011531407386666657
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08061055977723688
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.15801147341530797,
+      "noc_max_link_utilization": 0.029867945318360754,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122267103232.0,
+      "boundary_bytes": 137792684032.0
+    },
+    {
+      "context": 126159,
+      "latency_s": 0.09508183496031454,
+      "component_sums": {
+        "ARRAY": 0.018778637039082474,
+        "LOCAL_FABRIC": 0.02796246536931152,
+        "MAC": 0.02747672,
+        "INTER_REGION_NOC": 0.012687828598666762,
+        "EXTERNAL_BOUNDARY": 0.0405334776436011,
+        "GPU_COMPUTE": 0.011531475653333331
+      },
+      "bottlenecks": {
+        "ARRAY": {
+          "count": 129,
+          "time_s": 1.425135141503284e-05
+        },
+        "GPU_COMPUTE": {
+          "count": 514,
+          "time_s": 0.011531475653333331
+        },
+        "EXTERNAL_BOUNDARY": {
+          "count": 538,
+          "time_s": 0.08061068282037413
+        },
+        "MAC": {
+          "count": 39,
+          "time_s": 0.002925425135192353
+        }
+      },
+      "noc_s": 0.007975721932000112,
+      "NMP_average_utilization": 0.1580120586046557,
+      "noc_max_link_utilization": 0.029867885222436413,
+      "max_external_port_utilization": 0.9876682477736689,
+      "fabric_region_peak_Bps": 95993909533.45334,
+      "local_array_bytes": 1122275491840.0,
+      "boundary_bytes": 137793011712.0
+    }
+  ]
+}
