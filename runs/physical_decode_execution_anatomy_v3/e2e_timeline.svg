@@ -64,7 +64,7 @@ L 0 3.5
       </g>
      </g>
      <g id="text_1">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="54.81" y="137.390906" transform="rotate(-0 54.81 137.390906)">0.0</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="54.81" y="138.638953" transform="rotate(-0 54.81 138.638953)">0.0</text>
      </g>
     </g>
     <g id="xtick_2">
@@ -84,7 +84,7 @@ L 117.671933 33.12
       </g>
      </g>
      <g id="text_2">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="117.671933" y="137.390906" transform="rotate(-0 117.671933 137.390906)">0.5</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="117.671933" y="138.638953" transform="rotate(-0 117.671933 138.638953)">0.5</text>
      </g>
     </g>
     <g id="xtick_3">
@@ -104,7 +104,7 @@ L 180.533866 33.12
       </g>
      </g>
      <g id="text_3">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="180.533866" y="137.390906" transform="rotate(-0 180.533866 137.390906)">1.0</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="180.533866" y="138.638953" transform="rotate(-0 180.533866 138.638953)">1.0</text>
      </g>
     </g>
     <g id="xtick_4">
@@ -124,7 +124,7 @@ L 243.3958 33.12
       </g>
      </g>
      <g id="text_4">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="243.3958" y="137.390906" transform="rotate(-0 243.3958 137.390906)">1.5</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="243.3958" y="138.638953" transform="rotate(-0 243.3958 138.638953)">1.5</text>
      </g>
     </g>
     <g id="xtick_5">
@@ -144,7 +144,7 @@ L 306.257733 33.12
       </g>
      </g>
      <g id="text_5">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="306.257733" y="137.390906" transform="rotate(-0 306.257733 137.390906)">2.0</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="306.257733" y="138.638953" transform="rotate(-0 306.257733 138.638953)">2.0</text>
      </g>
     </g>
     <g id="xtick_6">
@@ -164,7 +164,7 @@ L 369.119666 33.12
       </g>
      </g>
      <g id="text_6">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="369.119666" y="137.390906" transform="rotate(-0 369.119666 137.390906)">2.5</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="369.119666" y="138.638953" transform="rotate(-0 369.119666 138.638953)">2.5</text>
      </g>
     </g>
     <g id="xtick_7">
@@ -184,7 +184,7 @@ L 431.981599 33.12
       </g>
      </g>
      <g id="text_7">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="431.981599" y="137.390906" transform="rotate(-0 431.981599 137.390906)">3.0</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="431.981599" y="138.638953" transform="rotate(-0 431.981599 138.638953)">3.0</text>
      </g>
     </g>
     <g id="xtick_8">
@@ -204,11 +204,11 @@ L 494.843532 33.12
       </g>
      </g>
      <g id="text_8">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: middle" x="494.843532" y="137.390906" transform="rotate(-0 494.843532 137.390906)">3.5</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="494.843532" y="138.638953" transform="rotate(-0 494.843532 138.638953)">3.5</text>
      </g>
     </g>
     <g id="text_9">
-     <text style="font-weight: 700; font-size: 9.6px; font-family: 'Times New Roman'; text-anchor: middle" x="284.49" y="149.883453" transform="rotate(-0 284.49 149.883453)">Time from request arrival (s)</text>
+     <text style="font-weight: 700; font-size: 11px; font-family: 'Times New Roman'; text-anchor: middle" x="284.49" y="152.468914" transform="rotate(-0 284.49 152.468914)">Time from request arrival (s)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
@@ -234,7 +234,7 @@ L -3.5 0
       </g>
      </g>
      <g id="text_10">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="47.7243" transform="rotate(-0 51.31 47.7243)">HoG</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="48.348323" transform="rotate(-0 51.31 48.348323)">HoG</text>
      </g>
     </g>
     <g id="ytick_2">
@@ -249,7 +249,7 @@ L -3.5 0
       </g>
      </g>
      <g id="text_11">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="74.066253" transform="rotate(-0 51.31 74.066253)">M3D-GPU</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="74.690277" transform="rotate(-0 51.31 74.690277)">M3D-GPU</text>
      </g>
     </g>
     <g id="ytick_3">
@@ -264,7 +264,7 @@ L -3.5 0
       </g>
      </g>
      <g id="text_12">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="97.115462" transform="rotate(-0 51.31 97.115462)">DNS</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="97.739486" transform="rotate(-0 51.31 97.739486)">DNS</text>
      </g>
     </g>
     <g id="ytick_4">
@@ -279,7 +279,7 @@ L -3.5 0
       </g>
      </g>
      <g id="text_13">
-      <text style="font-size: 9.2px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="120.164672" transform="rotate(-0 51.31 120.164672)">CPA</text>
+      <text style="font-size: 11px; font-family: 'Times New Roman'; text-anchor: end" x="51.31" y="120.788695" transform="rotate(-0 51.31 120.788695)">CPA</text>
      </g>
     </g>
    </g>
@@ -460,111 +460,61 @@ z
     </g>
    </g>
    <g id="text_14">
-    <text style="font-weight: 700; font-size: 8.4px; font-family: 'Times New Roman'; text-anchor: start" x="451.105322" y="46.472835" transform="rotate(-0 451.105322 46.472835)">E2E = 3.10 s</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; text-anchor: start" x="451.105322" y="46.841975" transform="rotate(-0 451.105322 46.841975)">E2E = 3.10 s</text>
    </g>
    <g id="text_15">
-    <text style="font-weight: 700; font-size: 8.4px; font-family: 'Times New Roman'; text-anchor: start" x="332.256495" y="72.814788" transform="rotate(-0 332.256495 72.814788)">E2E = 2.15 s</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; text-anchor: start" x="332.256495" y="73.183929" transform="rotate(-0 332.256495 73.183929)">E2E = 2.15 s</text>
    </g>
    <g id="text_16">
-    <text style="font-weight: 700; font-size: 8.4px; font-family: 'Times New Roman'; text-anchor: start" x="201.334451" y="95.863998" transform="rotate(-0 201.334451 95.863998)">E2E = 1.11 s</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; text-anchor: start" x="201.334451" y="96.233138" transform="rotate(-0 201.334451 96.233138)">E2E = 1.11 s</text>
    </g>
    <g id="text_17">
-    <text style="font-weight: 700; font-size: 8.4px; font-family: 'Times New Roman'; text-anchor: start" x="187.931631" y="118.913207" transform="rotate(-0 187.931631 118.913207)">E2E = 1.00 s</text>
-   </g>
-   <g id="text_18">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="153.796804" y="42.3139" transform="rotate(-0 153.796804 42.3139)">Decode</text>
-    </g>
-   </g>
-   <g id="text_19">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #222222" x="147.06575" y="50.21861" transform="rotate(-0 147.06575 50.21861)">Wait</text>
-    </g>
-   </g>
-   <g id="text_20">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="249.454068" y="50.216486" transform="rotate(-0 249.454068 50.216486)">Adm.</text>
-    </g>
-   </g>
-   <g id="text_21">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="358.573438" y="50.216486" transform="rotate(-0 358.573438 50.216486)">Decode</text>
-    </g>
-   </g>
-   <g id="text_22">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="68.272106" y="72.609271" transform="rotate(-0 68.272106 72.609271)">Prefill</text>
-    </g>
-   </g>
-   <g id="text_23">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="203.491761" y="72.607147" transform="rotate(-0 203.491761 72.607147)">Decode</text>
-    </g>
-   </g>
-   <g id="text_24">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="68.272106" y="95.65848" transform="rotate(-0 68.272106 95.65848)">Prefill</text>
-    </g>
-   </g>
-   <g id="text_25">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="138.030738" y="95.656356" transform="rotate(-0 138.030738 95.656356)">Decode</text>
-    </g>
-   </g>
-   <g id="text_26">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="68.272106" y="118.707689" transform="rotate(-0 68.272106 118.707689)">Prefill</text>
-    </g>
-   </g>
-   <g id="text_27">
-    <g clip-path="url(#pcf3fdd295b)">
-     <text style="font-weight: 700; font-size: 7.5px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="131.329329" y="118.705565" transform="rotate(-0 131.329329 118.705565)">Decode</text>
-    </g>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; text-anchor: start" x="187.931631" y="119.282348" transform="rotate(-0 187.931631 119.282348)">E2E = 1.00 s</text>
    </g>
    <g id="legend_1">
     <g id="patch_7">
-     <path d="M 175.329797 22.580025
-L 186.939797 22.580025
-L 186.939797 16.560025
-L 175.329797 16.560025
+     <path d="M 157.559531 21.017877
+L 171.059531 21.017877
+L 171.059531 14.017877
+L 157.559531 14.017877
 z
 " style="fill: #e1e3e5; stroke: #404040; stroke-width: 0.35; stroke-linejoin: miter"/>
     </g>
-    <g id="text_28">
-     <text style="font-weight: 700; font-size: 8.6px; font-family: 'Times New Roman'; text-anchor: start" x="193.819797" y="22.580025" transform="rotate(-0 193.819797 22.580025)">Queue</text>
+    <g id="text_18">
+     <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; text-anchor: start" x="179.059531" y="21.017877" transform="rotate(-0 179.059531 21.017877)">Queue</text>
     </g>
     <g id="patch_8">
-     <path d="M 228.458984 22.580025
-L 240.068984 22.580025
-L 240.068984 16.560025
-L 228.458984 16.560025
+     <path d="M 219.337656 21.017877
+L 232.837656 21.017877
+L 232.837656 14.017877
+L 219.337656 14.017877
 z
 " style="fill: #d29a62; stroke: #404040; stroke-width: 0.35; stroke-linejoin: miter"/>
     </g>
-    <g id="text_29">
-     <text style="font-weight: 700; font-size: 8.6px; font-family: 'Times New Roman'; text-anchor: start" x="246.948984" y="22.580025" transform="rotate(-0 246.948984 22.580025)">Admission</text>
+    <g id="text_19">
+     <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; text-anchor: start" x="240.837656" y="21.017877" transform="rotate(-0 240.837656 21.017877)">Admission</text>
     </g>
     <g id="patch_9">
-     <path d="M 296.411078 22.580025
-L 308.021078 22.580025
-L 308.021078 16.560025
-L 296.411078 16.560025
+     <path d="M 298.351719 21.017877
+L 311.851719 21.017877
+L 311.851719 14.017877
+L 298.351719 14.017877
 z
 " style="fill: #7398be; stroke: #404040; stroke-width: 0.35; stroke-linejoin: miter"/>
     </g>
-    <g id="text_30">
-     <text style="font-weight: 700; font-size: 8.6px; font-family: 'Times New Roman'; text-anchor: start" x="314.901078" y="22.580025" transform="rotate(-0 314.901078 22.580025)">Prefill</text>
+    <g id="text_20">
+     <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; text-anchor: start" x="319.851719" y="21.017877" transform="rotate(-0 319.851719 21.017877)">Prefill</text>
     </g>
     <g id="patch_10">
-     <path d="M 348.414203 22.580025
-L 360.024203 22.580025
-L 360.024203 16.560025
-L 348.414203 16.560025
+     <path d="M 358.820469 21.017877
+L 372.320469 21.017877
+L 372.320469 14.017877
+L 358.820469 14.017877
 z
 " style="fill: #5b9a85; stroke: #404040; stroke-width: 0.35; stroke-linejoin: miter"/>
     </g>
-    <g id="text_31">
-     <text style="font-weight: 700; font-size: 8.6px; font-family: 'Times New Roman'; text-anchor: start" x="366.904203" y="22.580025" transform="rotate(-0 366.904203 22.580025)">Decode</text>
+    <g id="text_21">
+     <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; text-anchor: start" x="380.320469" y="21.017877" transform="rotate(-0 380.320469 21.017877)">Decode</text>
     </g>
    </g>
   </g>

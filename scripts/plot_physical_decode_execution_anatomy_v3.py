@@ -452,7 +452,7 @@ def configure_plot() -> None:
     plt.rcParams.update(
         {
             "font.family": v2.TNR.get_name(),
-            "font.size": 9.2,
+            "font.size": 11.0,
             "axes.linewidth": 0.65,
             "xtick.direction": "in",
             "ytick.direction": "in",
@@ -522,20 +522,6 @@ def plot_e2e(e2e: list[dict]) -> None:
             linewidth=0.35,
             zorder=3,
         )
-        if width >= 0.14:
-            label = {"Queue": "Wait", "Admission": "Adm."}.get(row["phase"], row["phase"])
-            axis.text(
-                start + width / 2,
-                y,
-                label,
-                ha="center",
-                va="center",
-                color="#222222" if row["phase"] == "Queue" else "white",
-                fontproperties=v2.font(7.5, bold=True),
-                clip_on=True,
-                zorder=4,
-            )
-
     maximum_e2e = max(e2e_lookup.values())
     for path, _ in PATHS:
         axis.text(
@@ -544,7 +530,7 @@ def plot_e2e(e2e: list[dict]) -> None:
             f"E2E = {e2e_lookup[path]:.2f} s",
             ha="left",
             va="center",
-            fontproperties=v2.font(8.4, bold=True),
+            fontproperties=v2.font(10.0, bold=True),
         )
     axis.set_yticks(
         [row_y[path] for path, _ in PATHS],
@@ -552,7 +538,7 @@ def plot_e2e(e2e: list[dict]) -> None:
     )
     axis.set_xlim(0, maximum_e2e * 1.18)
     axis.set_ylim(-0.48, 3.82)
-    axis.set_xlabel("Time from request arrival (s)", fontproperties=v2.font(9.6, bold=True))
+    axis.set_xlabel("Time from request arrival (s)", fontproperties=v2.font(11.0, bold=True))
     axis.grid(axis="x", color="#D0D0D0", linestyle=(0, (3, 2)), linewidth=0.45, zorder=0)
     apply_fonts(axis)
     axis.legend(
@@ -564,7 +550,7 @@ def plot_e2e(e2e: list[dict]) -> None:
         bbox_to_anchor=(0.5, 1.01),
         ncol=4,
         frameon=False,
-        prop=v2.font(8.6, bold=True),
+        prop=v2.font(10.0, bold=True),
         handlelength=1.35,
         columnspacing=1.25,
     )
@@ -599,7 +585,7 @@ def plot_decode(timelines: dict[str, list[dict]], summary: list[dict]) -> None:
                     ha="center",
                     va="center",
                     color="white",
-                    fontproperties=v2.font(6.4, bold=True),
+                    fontproperties=v2.font(7.5, bold=True),
                     clip_on=True,
                     zorder=4,
                 )
@@ -611,7 +597,7 @@ def plot_decode(timelines: dict[str, list[dict]], summary: list[dict]) -> None:
             ha="center",
             va="center",
             color="white",
-            fontproperties=v2.font(6.0, bold=True),
+            fontproperties=v2.font(7.0, bold=True),
             clip_on=True,
             zorder=4,
         )
@@ -621,7 +607,7 @@ def plot_decode(timelines: dict[str, list[dict]], summary: list[dict]) -> None:
             f"{latency_lookup[path]:.1f} µs",
             ha="left",
             va="center",
-            fontproperties=v2.font(8.4, bold=True),
+            fontproperties=v2.font(10.0, bold=True),
         )
 
     axis.set_yticks(
@@ -630,7 +616,7 @@ def plot_decode(timelines: dict[str, list[dict]], summary: list[dict]) -> None:
     )
     axis.set_xlim(0, max_latency * 1.18)
     axis.set_ylim(-0.58, 2.58)
-    axis.set_xlabel("Time from layer start (µs)", fontproperties=v2.font(9.6, bold=True))
+    axis.set_xlabel("Time from layer start (µs)", fontproperties=v2.font(11.0, bold=True))
     axis.grid(axis="x", color="#D0D0D0", linestyle=(0, (3, 2)), linewidth=0.45, zorder=0)
     apply_fonts(axis)
     axis.legend(
@@ -642,7 +628,7 @@ def plot_decode(timelines: dict[str, list[dict]], summary: list[dict]) -> None:
         bbox_to_anchor=(0.5, 1.01),
         ncol=len(CATEGORY_COLORS),
         frameon=False,
-        prop=v2.font(8.2, bold=True),
+        prop=v2.font(9.2, bold=True),
         handlelength=1.15,
         columnspacing=0.82,
     )
