@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="262.8pt" height="172.8pt" viewBox="0 0 262.8 172.8" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 172.8
+L 262.8 172.8
+L 262.8 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 9.0666 130.8096
+L 78.9714 130.8096
+L 78.9714 36.9792
+L 9.0666 36.9792
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #e4edf3; stroke: #343434; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 183.8286 130.8096
+L 253.7334 130.8096
+L 253.7334 36.9792
+L 183.8286 36.9792
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #eee6ef; stroke: #343434; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 19.053 79.488
+L 31.536 79.488
+L 31.536 70.416
+L 19.053 70.416
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #6687a0; stroke: #343434; stroke-width: 0.45; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 36.5292 79.488
+L 49.0122 79.488
+L 49.0122 70.416
+L 36.5292 70.416
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #6687a0; stroke: #343434; stroke-width: 0.45; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 54.0054 79.488
+L 66.4884 79.488
+L 66.4884 70.416
+L 54.0054 70.416
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #6687a0; stroke: #343434; stroke-width: 0.45; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 19.053 92.7072
+L 31.536 92.7072
+L 31.536 83.6352
+L 19.053 83.6352
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #6687a0; stroke: #343434; stroke-width: 0.45; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 36.5292 92.7072
+L 49.0122 92.7072
+L 49.0122 83.6352
+L 36.5292 83.6352
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #6687a0; stroke: #343434; stroke-width: 0.45; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 54.0054 92.7072
+L 66.4884 92.7072
+L 66.4884 83.6352
+L 54.0054 83.6352
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #6687a0; stroke: #343434; stroke-width: 0.45; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 191.06874 88.56
+L 246.49326 88.56
+L 246.49326 69.6384
+L 191.06874 69.6384
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #806589; stroke: #343434; stroke-width: 0.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 191.06874 116.5536
+L 246.49326 116.5536
+L 246.49326 94.7808
+L 191.06874 94.7808
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #dccce1; stroke: #343434; stroke-width: 0.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 180.079601 67.5648
+Q 131.398435 67.5648 84.506123 67.5648
+" clip-path="url(#pa8aa2d2df4)" style="fill: none; stroke: #cb9454; stroke-width: 1.6; stroke-linecap: round"/>
+    <path d="M 88.506123 69.5648
+L 84.506123 67.5648
+L 88.506123 65.5648
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #cb9454; stroke: #cb9454; stroke-width: 1.6; stroke-linecap: round"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 180.079601 82.08
+Q 131.398435 82.08 84.506123 82.08
+" clip-path="url(#pa8aa2d2df4)" style="fill: none; stroke: #cb9454; stroke-width: 1.6; stroke-linecap: round"/>
+    <path d="M 88.506123 84.08
+L 84.506123 82.08
+L 88.506123 80.08
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #cb9454; stroke: #cb9454; stroke-width: 1.6; stroke-linecap: round"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 180.079601 96.5952
+Q 131.398435 96.5952 84.506123 96.5952
+" clip-path="url(#pa8aa2d2df4)" style="fill: none; stroke: #cb9454; stroke-width: 1.6; stroke-linecap: round"/>
+    <path d="M 88.506123 98.5952
+L 84.506123 96.5952
+L 88.506123 94.5952
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #cb9454; stroke: #cb9454; stroke-width: 1.6; stroke-linecap: round"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 82.720399 110.0736
+Q 131.401565 110.0736 179.0765 110.0736
+" clip-path="url(#pa8aa2d2df4)" style="fill: none; stroke: #cb9454; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 175.4765 108.2736
+L 179.0765 110.0736
+L 175.4765 111.8736
+z
+" clip-path="url(#pa8aa2d2df4)" style="fill: #cb9454; stroke: #cb9454; stroke-width: 0.9; stroke-linecap: round"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'Times New Roman'; text-anchor: middle" x="44.019" y="52.970353" transform="rotate(-0 44.019 52.970353)">GPU</text>
+   </g>
+   <g id="text_2">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'Times New Roman'; text-anchor: middle" x="218.781" y="52.966955" transform="rotate(-0 218.781 52.966955)">HBM</text>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 10px; font-family: 'Times New Roman'; text-anchor: middle" x="44.019" y="116.349295" transform="rotate(-0 44.019 116.349295)">Compute</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 9px; font-family: 'Times New Roman'; text-anchor: middle; fill: #ffffff" x="218.781" y="81.252696" transform="rotate(-0 218.781 81.252696)">Model Weights</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 9px; font-family: 'Times New Roman'" transform="translate(202.782797 103.050257)">Growing</text>
+    <text style="font-size: 9px; font-family: 'Times New Roman'" transform="translate(199.9935 112.591136)">KV Cache</text>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Times New Roman'" transform="translate(96.235313 40.067205)">Repeated Weight /</text>
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Times New Roman'" transform="translate(107.025469 49.453924)">KV Transfer</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; fill: #894e43" transform="translate(100.022656 128.941517)">GPU–Memory</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Times New Roman'; fill: #894e43" transform="translate(108.626563 139.371205)">Bottleneck</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 9px; font-family: 'Times New Roman'; text-anchor: middle" x="131.4" y="156.809496" transform="rotate(-0 131.4 156.809496)">Autoregressive Decode</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pa8aa2d2df4">
+   <rect x="6.57" y="6.912" width="249.66" height="155.52"/>
+  </clipPath>
+ </defs>
+</svg>
