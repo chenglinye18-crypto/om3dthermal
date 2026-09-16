@@ -31,8 +31,8 @@ TNR.set_family('Times New Roman')
 TNR.set_weight('normal')
 TNR_BOLD.set_family('Times New Roman')
 TNR_BOLD.set_weight('bold')
-TNR_BOLD_8 = TNR_BOLD.copy()
-TNR_BOLD_8.set_size(8)
+TNR_BOLD_LEGEND = TNR_BOLD.copy()
+TNR_BOLD_LEGEND.set_size(8.8)
 
 
 def bold_font(size):
@@ -46,7 +46,7 @@ def bold_font(size):
 # ============================================================
 
 STYLES = (
-    ('HBM_BEST', 'HBM', '#B8BEC5', '///'),
+    ('HBM_BEST', 'HoG', '#B8BEC5', '///'),
     ('M3D_GPU', 'M3D-GPU', '#6C98C4', ''),
     ('M3D_NMP_UNIFORM', '+DNS', '#E6B65C', '..'),
     ('M3D_NMP_CPA', '+CPA', '#4A998B', '\\\\\\\\'),
@@ -289,6 +289,7 @@ def grouped_xaxis(ax):
         CENTERS,
         [f'B{b}' for _, _, b in CASES]
     )
+    ax.tick_params(axis='x', labelsize=9)
 
     transform = ax.get_xaxis_transform()
 
@@ -307,7 +308,7 @@ def grouped_xaxis(ax):
             ha='center',
             va='top',
             transform=transform,
-            fontproperties=bold_font(7.2),
+            fontproperties=bold_font(8.0),
             clip_on=False
         )
 
@@ -326,7 +327,7 @@ def grouped_xaxis(ax):
             ha='center',
             va='top',
             transform=transform,
-            fontproperties=bold_font(8.3),
+            fontproperties=bold_font(9.2),
             clip_on=False
         )
 
@@ -419,12 +420,12 @@ def main():
     metrics = (
         (
             'tokens_per_s',
-            'Normalized E2E Throughput',
+            'Normalized Throughput',
             'fig_normalized_throughput'
         ),
         (
             'tokens_per_J',
-            'Normalized E2E Energy Efficiency',
+            'Normalized Energy Efficiency',
             'fig_normalized_energy_efficiency'
         ),
         (
@@ -644,7 +645,7 @@ def main():
             columnspacing=1.4,
             labelspacing=0.35,
             borderaxespad=0,
-            prop=TNR_BOLD_8
+            prop=TNR_BOLD_LEGEND
         )
 
         generated_files.extend(save(fig, name))
@@ -758,7 +759,7 @@ def main():
                 )
                 for r in overflow
             ],
-            fontsize=6.2
+            fontsize=7.0
         )
 
         ax.set_ylabel(
@@ -784,7 +785,7 @@ def main():
         loc='upper center',
         ncol=2,
         frameon=False,
-        prop=TNR_BOLD_8
+        prop=TNR_BOLD_LEGEND
     )
 
     generated_files.extend(save(fig, 'fig_hbm_overflow_policy'))
