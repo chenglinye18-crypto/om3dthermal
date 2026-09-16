@@ -1,0 +1,10 @@
+{
+  "formal_data_modified": false,
+  "formal_files": 417,
+  "benchmark_runs": 0,
+  "thermal_runs": 0,
+  "CPA_runs": 0,
+  "capacity_linear_scaling": "PASS",
+  "prefill_canonical_ledger": "PASS",
+  "AI_unit_closure": "PASS"
+}

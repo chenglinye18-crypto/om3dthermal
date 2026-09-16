@@ -1,0 +1,11 @@
+# Long-context background Fig. 1 v2
+
+Fig.1 data are derived from the same model/workload definitions used by the new formal benchmark.
+
+Capacity: Llama-3.1-8B and Qwen2.5-32B, H=126000, P=128, G=32, B={1,8,32}. Weights and final KV(H+P+G) are copied from formal_long_context_v3/capacity_audit.csv. Decimal GB = 1e9 bytes. This figure shows the major persistent working-set components; formal capacity preflight additionally includes workspace/runtime state. H200 usable capacity is taken from the same audit and checked against the canonical resolved backend. Resident/overflow in capacity_data.csv refers to persistent components; formal_fit preserves the complete preflight verdict. At 126K, 8B B8 already slightly overflows; it must not be represented as resident.
+
+AI: B=1 for all four series (8B=Llama-3.1-8B; 32B=Qwen2.5-32B), H={20000,64000,126000}, P=128, G=32. Prefill AI = canonical incremental-prefill total_flops / total_memory_bytes, using evaluate_cached_prefix_incremental_prefill, with H cached and only P new tokens projected. Prefill values are checked against saved M3D_GPU candidate ledgers. Decode AI = sum of canonical evaluate_llm_decode FLOPs across G steps / sum of read+write bytes across G steps, contexts H+P+j. This is semantic local-memory traffic, not remote offload or physical duplicated traffic. Both phases use the same formal model specs via run_formal_long_context_v3.inputs, including the exact Llama parameter override. No model parameters are guessed.
+
+Ridge: effective Prefill compute from gpu_package_h200_reference.yaml divided by canonical thermal-closed HBM bandwidth in no_nmp_geometry_sensitivity_v2/thermal_limits.csv, the same bandwidth used by run_formal_long_context_v3.hbm. Both Prefill compute families use 700 TFLOP/s. Decode separately uses the configured 989.5 TFLOP/s dense peak ceiling; this distinction is preserved in ridge_point.json. The effective ridge is a GPU roofline reference, not a claim that Prefill must be compute-bound. Lines connect three sampled contexts only as a guide to the eye. Actual AI values and ridge-side findings must be reported without adjusting the workload.
+
+Outputs are separate vector PDF/SVG, Times New Roman, no panel titles. AI legend uses two compact rows to remain readable at single-column width. Benchmark runs=0; thermal runs=0; CPA runs=0. Canonical data are read-only.

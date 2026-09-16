@@ -1,0 +1,9 @@
+{
+  "effective_compute_FLOP_s": 700000000000000.0,
+  "effective_HBM_bytes_s": 3086564330641.7803,
+  "AI_ridge_FLOP_per_byte": 226.78937647622303,
+  "decode_compute_ceiling_FLOP_s": 989500000000000.0,
+  "compute_source": "configs/platform/gpu_package_h200_reference.yaml: gpu_prefill_compute",
+  "bandwidth_source": "runs/no_nmp_geometry_sensitivity_v2/thermal_limits.csv: conventional_hbm_2x1",
+  "definition": "Effective Prefill GPU roofline; Decode evaluator separately uses configured dense peak ceiling"
+}
