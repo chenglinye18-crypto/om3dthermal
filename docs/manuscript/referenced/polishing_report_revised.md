@@ -36,3 +36,9 @@
 - 图中 HoG 与正文 HBM-GPU 的基线命名，以及 Qwen 126K 配置的具体依据需作者确认。
 
 交付：DAC2027V1_polished_revised.docx、DAC2027V1_polished_revised.pdf。本版另存，避免覆盖正在使用的旧润色稿。
+
+## 2026-11-18 引用补全
+
+在保守润色修正版基础上生成 `DAC2027V1_polished_revised_cited.docx` 及 PDF。II-C 两处正文 [X] 已补为 Mitarai 等 VLSI 2026 的 EndNote 动态引用 [22]，复用既有文献记录，编号与参考文献表不变。将两处实验验证措辞改为中性的 discussed 表述，保留 100 µm、8 Gb/s/ch、0.5 pJ/bit 及原段落逻辑，不展开预测/实测区别。
+
+核对原文：本地 T8.1_Wednesday_Mitarai_0021.pdf，第 1 页及第 3 页 Table I；DOI https://doi.org/10.1109/VLSITechnologyandCir65830.2026.11577466 。两处之外所有段落 XML、图片、公式和分节设置均一致；原有引用域均保留。Word 导出仍为 7 页，PDF 第 1、3–7 页逐像素一致，第 2 页已目视检查。图 3 内 GPU 参数的另一处 [X] 属于不同来源，未用这篇论文替代，图片未修改。
